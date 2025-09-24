@@ -1,0 +1,15 @@
+import logging
+
+class QtPlainTextEditHandler(logging.Handler):
+    """Logging handler that sends log records to a QPlainTextEdit."""
+
+    def __init__(self, target, formatter=None):
+        super().__init__()
+        self._target = target
+        if formatter:
+            self.setFormatter(formatter)
+
+    def emit(self, record):
+        msg = self.format(record)
+        if hasattr(self._target, "appendPlainText"):
+            self._target.appendPlainText(msg)
