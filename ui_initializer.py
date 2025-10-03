@@ -27,21 +27,29 @@ class UIInitializer:
 
         # File Actions
         mw.load_MAT_action = QAction("&Import MAT files")
-        mw.importDOTmot_action = QAction("&Importar DOT .mot")
+        mw.importXMLmot_action = QAction("&Import XML file")
+        mw.exportXMLmot_action = QAction("&Export XML file")
         mw.exitAction = QAction("&Exit")
 
         mw.file_menu.addAction(mw.load_MAT_action)
+        mw.file_menu.addAction(mw.importXMLmot_action)
+        mw.file_menu.addSeparator()
+        mw.file_menu.addAction(mw.exportXMLmot_action) 
         mw.file_menu.addSeparator()
         mw.file_menu.addAction(mw.exitAction)
 
         mw.load_MAT_action.setShortcut(QKeySequence("Ctrl+L"))
+        mw.importXMLmot_action.setShortcut(QKeySequence("Ctrl+X"))
+        mw.exportXMLmot_action.setShortcut(QKeySequence("Ctrl+E"))
         mw.exitAction.setShortcut(QKeySequence("Ctrl+Q"))
 
         mw.load_MAT_action.triggered.connect(mw.load_mat_files)
+        mw.importXMLmot_action.triggered.connect(mw.importXML_file)
+        mw.exportXMLmot_action.triggered.connect(mw.exportXML_file)
         mw.exitAction.triggered.connect(mw.close)
 
-        mw.importDOTmot_action.triggered.connect(
-            lambda: mw.plot_controller.load_dot_mot())
+        # mw.importDOTmot_action.triggered.connect(
+        #     lambda: mw.plot_controller.load_dot_mot())
 
 
 def setup(main_window, plot_controller):

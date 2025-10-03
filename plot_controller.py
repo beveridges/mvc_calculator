@@ -1,28 +1,16 @@
 # -*- coding: utf-8 -*-
 # utilities/plot_controller.py
 
-"""
-PlotController
---------------
-Owns the Matplotlib canvas embedded in a Qt container and draws:
-- the MOT data trace
-- the “upper” (arriba) coloured bands + red line
-- the “lower” (abajo) coloured bands + red line
-
-This file **does not** wire unrelated app buttons. It only connects
-signals that affect the plot and the band widgets that live on the
-same tab.
-"""
-
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-import matplotlib.patches as patches
-import pandas as pd
+from matplotlib.widgets import SpanSelector
+from matplotlib.backend_bases import MouseButton
 
-from PyQt5.QtCore import QSignalBlocker
-from PyQt5.QtWidgets import QFileDialog, QMessageBox, QVBoxLayout
+import numpy as np
 
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QRadioButton, QButtonGroup, QVBoxLayout
 
 class PlotController:
     def __init__(self, parent=None, container=None, main_window=None):
@@ -30,7 +18,6 @@ class PlotController:
         self.main_window = main_window
 
         fig = Figure(figsize=(5, 4))
-        self.ax = fig.add_subplot(111)
         self.canvas = FigureCanvas(fig)
         self.toolbar = NavigationToolbar(self.canvas, container)
 
@@ -46,479 +33,434 @@ class PlotController:
         self.canvas.setVisible(False)
         self.toolbar.setVisible(False)
 
-        # runtime state
-        self.mot_data = None
-        self.x_min = None
-        self.x_max = None
-        self.SAVE_INITIAL_minnX = None
-        self.SAVE_INITIAL_maxxX = None
-        self.SAVE_INITIAL_minnY = None
-        self.SAVE_INITIAL_maxxY = None
+        # Runtime state
+        self.axes = []
+        self._span = None
+        self._press_cid = None
+        self._draw_cid = None
+        self._active_row = 0
+        self._selections = {}
+        self._patches = {}
+        self._overlay_items = []   # [{ax, widget, label, radio, row_index}]
+        self._row_group = None
 
-        # convenience
-        self.overlays_alpha = 0.35  # use same alpha for top/bottom so colours match
+        # Cache for export
+        self._data = None
+        self._labels = None
 
     @property
     def mw(self):
         return self.main_window
     
     
-    # ---------- Axis spinboxes → apply ----------
-    # def apply_x_limits(self):
-    #     x_min = self.mw.dsb_x_axis_min.value()
-    #     x_max = self.mw.dsb_x_axis_max.value()
-    #     self.set_x_limits(x_min, x_max)
-
-    # def apply_y_limits(self):
-    #     y_min = self.mw.dsb_y_axis_min.value()
-    #     y_max = self.mw.dsb_y_axis_max.value()
-    #     self.set_y_limits(y_min, y_max)
-    #     if self.mw.tgl_arriba_rDa.isChecked():
-    #         self.rango_de_articulacion_arriba_limite()
-    #     if self.mw.tgl_abajo_rDa.isChecked():
-    #         self.rango_de_articulacion_abajo_limite()
-
     def bind_ui_controls(self):
-        mw = self.mw
+        """No-op placeholder kept for compatibility with main.py.
+        Add signal/slot hookups here if you need them later.
+        """
+        return
+    
+    def detect_bursts_with_energy(self, fs: int, min_silence: float = 0.080, min_sound: float = 0.200):
+        """
+        Run energy-detection on the ACTIVE row (self._active_row) of the current tab
+        and visualize up to 3 detected bursts as orange spans.
+    
+        Assumes self._data (2D: rows x samples) was set by plot_mat_arrays.
+        """
+        # sanity
+        if not hasattr(self, "_data") or self._data is None:
+            raise RuntimeError("No data cached in PlotController. Plot a file first.")
+        if not hasattr(self, "axes") or not self.axes:
+            raise RuntimeError("No axes present to draw on.")
+        row = int(getattr(self, "_active_row", 0))
+        if row < 0 or row >= self._data.shape[0]:
+            raise RuntimeError(f"Active row {row} out of range.")
+    
+        x = self._data[row, :].astype(float).ravel()
+        if x.size == 0:
+            raise RuntimeError("Active row contains no samples.")
+    
+        # ---- NumPy port of MATLAB energyDetection ----
+        # energy & moving average over 'min_silence' window
+        energy = np.abs(x) ** 2
+        L = max(1, int(round(min_silence * fs)))
+        b = np.ones(L, dtype=float) / L
+        moving_ave = np.convolve(energy, b, mode="same")
+        ma_max = moving_ave.max() if moving_ave.size else 1.0
+        if ma_max > 0:
+            moving_ave = moving_ave / ma_max
+    
+        # threshold to get initial mask
+        mask = np.ones(x.size, dtype=np.uint8)
+        mask[moving_ave < 0.010] = 0
+    
+        # enforce minimum sound length
+        min_sound_samples = max(1, int(round(min_sound * fs)))
+        run = 0
+        for i in range(mask.size):
+            if mask[i]:
+                run += 1
+            else:
+                if 0 < run < min_sound_samples:
+                    mask[i - run:i] = 0
+                run = 0
+        if 0 < run < min_sound_samples:
+            mask[mask.size - run:mask.size] = 0
+    
+        # ---- Convert mask → contiguous (start,end) intervals in sample indices
+        intervals = []
+        i = 0
+        n = mask.size
+        while i < n:
+            if mask[i] == 1:
+                j = i + 1
+                while j < n and mask[j] == 1:
+                    j += 1
+                # interval spans [i, j-1] → we’ll use [i, j) in plotting
+                intervals.append((int(i), int(j)))
+                i = j
+            else:
+                i += 1
+    
+        # ---- Paint the first three intervals as spans on the ACTIVE row
+        # ensure selection containers exist
+        if not hasattr(self, "_selections") or not hasattr(self, "_patches"):
+            self._selections = {k: [] for k in range(len(self.axes))}
+            self._patches    = {k: [] for k in range(len(self.axes))}
+    
+        # clear any existing spans on this row
+        for p in list(self._patches[row]):
+            try:
+                p.remove()
+            except Exception:
+                pass
+        self._patches[row].clear()
+        self._selections[row].clear()
+    
+        ax = self.axes[row]
+        # lock X limits so they don't creep
+        x0, x1 = ax.get_xlim()
+        for (lo, hi) in intervals[:3]:
+            # draw as [lo, hi) in sample index coords
+            patch = ax.axvspan(lo, hi, color="orange", alpha=0.30)
+            self._patches[row].append(patch)
+            self._selections[row].append((lo, hi))
+        ax.set_xlim(x0, x1)
+    
+        # keep bolding on the active row & redraw
+        for i_ax, a in enumerate(self.axes):
+            lw = 2.2 if i_ax == row else 0.8
+            for sp in a.spines.values():
+                sp.set_linewidth(lw)
+    
+        self.canvas.draw_idle()
 
-        # # Column selector → replot
-        # mw.cbx_imported_mot_y.currentTextChanged.connect(
-        #     self.plot_spinbox_changed)
 
-        # # Title + legend text/size
-        # mw.led_titulo_text.textEdited.connect(
-        #     lambda: self.set_title(
-        #         mw.led_titulo_text.text(), mw.spb_titulo_text_size.value())
-        # )
-        # mw.spb_titulo_text_size.valueChanged.connect(
-        #     lambda: self.set_title(
-        #         mw.led_titulo_text.text(), mw.spb_titulo_text_size.value())
-        # )
-        # mw.led_legend_text.textEdited.connect(
-        #     lambda: self.set_legend(
-        #         mw.led_legend_text.text(), mw.spb_legend_text_size.value())
-        # )
-        # mw.spb_legend_text_size.valueChanged.connect(
-        #     lambda: self.set_legend(
-        #         mw.led_legend_text.text(), mw.spb_legend_text_size.value())
-        # )
+    # ---------------------- PUBLIC: plot MAT arrays ----------------------
+    def plot_mat_arrays(self, data, labels, max_rows=6, source_path=None):
+        """
+        Plot stacked EMG rows and build big Qt radios+labels in the TOP-RIGHT
+        of each subplot. EMG order is axes order: axes[0] (top) == EMG 1.
+        Left-drag on ACTIVE row creates spans (max 3). Shift+Left removes nearest.
+        """
+        self._data = data
+        self._labels = labels
+        self._source_path = source_path
 
-        # # Styling
-        # mw.spb_thickness_of_line.valueChanged.connect(
-        #     lambda: self.set_line_thickness(mw.spb_thickness_of_line.value())
-        # )
-        # mw.spb_label_size.valueChanged.connect(
-        #     lambda: self.set_label_font_size(mw.spb_label_size.value())
-        # )
-        # mw.spb_tick_size.valueChanged.connect(
-        #     lambda: self.set_tick_font_size(mw.spb_tick_size.value())
-        # )
+        nrows = min(int(max_rows), int(data.shape[0]))
+        npts  = int(data.shape[1])
+        x = np.arange(npts)
+        xlim = (0, npts - 1)
 
-        # # Axis spinboxes
-        # mw.dsb_x_axis_min.valueChanged.connect(self.apply_x_limits)
-        # mw.dsb_x_axis_max.valueChanged.connect(self.apply_x_limits)
-        # mw.dsb_y_axis_min.valueChanged.connect(self.apply_y_limits)
-        # mw.dsb_y_axis_max.valueChanged.connect(self.apply_y_limits)
+        # --- figure & axes ---
+        fig = self.canvas.figure
+        fig.clear()
 
-        # # Reset axis
-        # mw.btn_reset_x_axis.clicked.connect(self.reset_x_axis)
-        # mw.btn_reset_y_axis.clicked.connect(self.reset_y_axis)
+        axes = fig.subplots(nrows, 1, sharex=True)
+        if not isinstance(axes, (list, np.ndarray)):
+            axes = [axes]
+        self.axes = list(axes)  # axes[0] is TOP
 
-        # # Upper range spinboxes + toggle + reset
-        # mw.RdAa_min.valueChanged.connect(self.update_RdAa_limite_bounds)
-        # mw.RdAa_max.valueChanged.connect(self.update_RdAa_limite_bounds)
-        # mw.RdAa_limite.valueChanged.connect(
-        #     self.rango_de_articulacion_arriba_limite)
-        # mw.tgl_arriba_rDa.toggled.connect(self.toggle_upper_overlay)
+        # === Add super title here ===
+        import os
+        if hasattr(self, "_source_path"):
+            fname = os.path.basename(self._source_path)
+        else:
+            fname = "EMG Signals"
+        fig.suptitle(fname, fontsize=12, fontweight="bold", ha="center")
+                # --- draw traces; lock X across rows; strip ticks/labels completely ---
         
-        # mw.btn_reset_arriba.clicked.connect(self.reset_rdaa_defaults)
-        # mw.btn_reset_abajo.clicked.connect(self.reset_rdaab_defaults)
+        def _strip(ax):
+            ax.set_title(""); ax.set_xlabel(""); ax.set_ylabel("")
+            ax.set_xticks([]); ax.set_yticks([])
+            ax.tick_params(which='both', bottom=False, top=False, left=False, right=False,
+                           labelbottom=False, labelleft=False)
 
-        # # Lower range spinboxes + toggle
-        # mw.RdAaB_min.valueChanged.connect(self.update_RdAaB_limite_bounds)
-        # mw.RdAaB_max.valueChanged.connect(self.update_RdAaB_limite_bounds)
-        # mw.RdAaB_limite.valueChanged.connect(
-        #     self.rango_de_articulacion_abajo_limite)
-        # mw.tgl_abajo_rDa.toggled.connect(self.toggle_lower_overlay)
+        for i, ax in enumerate(self.axes):
+            ax.plot(x, data[i, :], lw=1.0, zorder=1)
+            ax.set_xlim(xlim)                     # lock X
+            ax.autoscale(enable=False, axis='x')  # never change X on autoscale
+            ax.relim()
+            ax.autoscale_view(scalex=False, scaley=True)  # only Y may change
+            ax.grid(True, which="both", linestyle="--", alpha=0.6, zorder=0)
+            _strip(ax)
 
-        # mw.dsb_y_axis_max.valueChanged.connect(
-        #     lambda v: mw.RdAa_max.setValue(v))
-        # mw.RdAa_max.valueChanged.connect(
-        #     lambda v: mw.dsb_y_axis_max.setValue(v))
+        # fig.subplots_adjust(left=0.06, right=0.985, top=0.985, bottom=0.06, hspace=0.12) ORIGINAL
+        fig.subplots_adjust(left=0.02, right=0.985, top=0.985, bottom=0.06, hspace=0.15) 
 
-        # mw.dsb_y_axis_min.valueChanged.connect(
-        #     lambda v: mw.RdAaB_min.setValue(v))
-        # mw.RdAaB_min.valueChanged.connect(
-        #     lambda v: mw.dsb_y_axis_min.setValue(v))
-        
-        
-        
+        # --- build Qt overlay radios+labels in TOP-RIGHT (EMG 1 at top) ---
+        self._build_qt_overlays(self.axes, labels)
 
+        # --- reset selections per row ---
+        self._selections = {i: [] for i in range(nrows)}
+        self._patches    = {i: [] for i in range(nrows)}
 
-    # ---------- Init / enable UI ----------
-    def initialize_graph_sizes(self):
-        self.mw.spb_thickness_of_line.setMaximum(6)
-        self.mw.spb_thickness_of_line.setMinimum(1)
-        self.mw.spb_thickness_of_line.setValue(2)
-
-    def initialize_plotting_widgets(self):
-        for gb in [
-            "_graficando_variables_",
-            "_graficando_tab_",
-            "_limites_de_eje_",
-            "_limites_de_rango_",
-        ]:
-            if hasattr(self.mw, gb):
-                getattr(self.mw, gb).setEnabled(True)
-                getattr(self.mw, gb).setStyleSheet(
-                    "QGroupBox::title{ color: black}")
-
-    def load_dot_mot(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self.mw, "Select MAT files", "", "MAT files (*.mat)"
-        )
-        if file_path:
-            self.load_and_prepare_mot_file(file_path)
-
-    def load_and_prepare_mot_file(self, path):
+        # --- toolbar: leave any pan/zoom so drags reach selector ---
         try:
-            # Avoid pandas regex warning by using engine='python'
-            df = pd.read_csv(path, skiprows=6, sep=r'\t+', engine='python')
-        except Exception as e:
-            QMessageBox.critical(
-                self.mw, "Error", f"No se pudo leer el archivo:\n{e}")
-            return
+            self.toolbar.mode = ""
+        except Exception:
+            pass
 
-        self.mot_data = df
+        # --- selection creation (left-drag) ---
+        def onselect(xmin, xmax):
+            if xmin == xmax:
+                return
+            if len(self._selections[self._active_row]) >= 3:
+                return
+            lo, hi = sorted([xmin, xmax])
+            p = self.axes[self._active_row].axvspan(lo, hi, color="orange", alpha=0.30)
+            self._selections[self._active_row].append((lo, hi))
+            self._patches[self._active_row].append(p)
+            self.canvas.draw_idle()
 
-        # enable the whole tab & groups
-        self.initialize_plotting_widgets()
-        self.initialize_graph_sizes()
+        # --- deletion (Shift + Left click near/inside span) ---
+        def px_to_data_x(ax, px):
+            bb = ax.get_window_extent()
+            if bb.width <= 0:
+                return 0.0
+            x0, x1 = ax.get_xlim()
+            return (x1 - x0) / bb.width * px
 
-        # Populate Y column combo (ignore 'time')
-        valid_cols = [c for c in df.columns if c.lower() !=
-                      "time" and df[c].notna().any()]
-        if not valid_cols:
-            QMessageBox.warning(self.mw, "Archivo inválido",
-                                "El archivo MOT no contiene datos válidos para graficar.")
-            return
+        def shift_held(event) -> bool:
+            ge = getattr(event, "guiEvent", None)
+            if ge is not None:
+                try:
+                    return bool(ge.modifiers() & Qt.ShiftModifier)
+                except Exception:
+                    pass
+            key = (getattr(event, "key", "") or "").lower()
+            return "shift" in key
 
-        cbx = self.mw.cbx_imported_mot_y
-        blocker = QSignalBlocker(cbx)
-        cbx.clear()
-        cbx.addItems(sorted(valid_cols))
-        del blocker
-        cbx.setCurrentIndex(0)
+        def on_mouse_press(event):
+            # only act on active row for deletion
+            ax = self.axes[self._active_row]
+            if event.inaxes is not ax:
+                return
+            if event.button is not MouseButton.LEFT or not shift_held(event):
+                return
+            if event.xdata is None:
+                return
 
-        # First plot
-        self.plot_mot(df, cbx.currentText())
+            x_click = float(event.xdata)
+            tol = px_to_data_x(ax, 6.0)  # ~6px tolerance
+
+            best_idx, best_dist = None, None
+            for j, (lo, hi) in enumerate(self._selections[self._active_row]):
+                dist = 0.0 if lo <= x_click <= hi else min(abs(x_click - lo), abs(x_click - hi))
+                if dist <= tol and (best_dist is None or dist < best_dist):
+                    best_dist, best_idx = dist, j
+
+            if best_idx is not None:
+                self._patches[self._active_row][best_idx].remove()
+                self._patches[self._active_row].pop(best_idx)
+                self._selections[self._active_row].pop(best_idx)
+                self.canvas.draw_idle()
+
+        # connect (replace old handler if any)
+        if self._press_cid:
+            try: self.canvas.mpl_disconnect(self._press_cid)
+            except Exception: pass
+        self._press_cid = self.canvas.mpl_connect("button_press_event", on_mouse_press)
+
+        # attach span to current active row (default 0)
+        def reattach_selector(ax_target):
+            return SpanSelector(
+                ax_target, onselect, direction="horizontal",
+                useblit=True, props=dict(alpha=0.3, facecolor="orange"),
+                interactive=True, button=MouseButton.LEFT
+            )
+
+        self._set_active_row(int(getattr(self, "_active_row", 0)), reattach_cb=reattach_selector)
+
+        # show
         self.canvas.setVisible(True)
         self.toolbar.setVisible(True)
-
-
-
-    # ---------- Core plotting ----------
-    def plot_mot(self, df: pd.DataFrame, y_col: str):
-        self.ax.clear()
-
-        # X range
-        x = df["time"] if "time" in df.columns else df.index
-        y = df[y_col].astype(float)
-        self.ax.plot(x, y, linewidth=self.mw.spb_thickness_of_line.value())
-
-        # Save initial limits (for Reset buttons)
-        self.SAVE_INITIAL_minnX, self.SAVE_INITIAL_maxxX = self.ax.get_xlim()
-        self.SAVE_INITIAL_minnY, self.SAVE_INITIAL_maxxY = self.ax.get_ylim()
-
-        # Update spinboxes to reflect the plotted range
-        self.update_axis_limit_widgets()
-
-        # Compute defaults for **upper** band = top 2/5 of Y
-        y_min, y_max = self.SAVE_INITIAL_minnY, self.SAVE_INITIAL_maxxY
-        y_rng = y_max - y_min if y_max > y_min else 1.0
-
-        rdaa_min = y_max - (2.0/5.0) * y_rng
-        rdaa_lim = (y_max + rdaa_min) / 2.0
-
-        self.mw.RdAa_max.setValue(y_max)
-        self.mw.RdAa_min.setValue(rdaa_min)
-        self.mw.RdAa_limite.setValue(rdaa_lim)
-
-        # Defaults for **lower** band = bottom 2/5 of Y
-        rdaab_max = y_min + (2.0/5.0) * y_rng
-        rdaab_lim = (y_min + rdaab_max) / 2.0
-
-        self.mw.RdAaB_min.setValue(y_min)
-        self.mw.RdAaB_max.setValue(rdaab_max)
-        self.mw.RdAaB_limite.setValue(rdaab_lim)
-
-        # Draw overlays if toggles are on
-        if self.mw.tgl_arriba_rDa.isChecked():
-            self.rango_de_articulacion_arriba_limite()
-        if self.mw.tgl_abajo_rDa.isChecked():
-            self.rango_de_articulacion_abajo_limite()
-
-        # Titles / legend / grid
-        self.mw.led_titulo_text.setText(y_col)
-        self.mw.led_legend_text.setText(y_col)
-        self.reapply_plot_settings()
         self.canvas.draw_idle()
 
-    def plot_spinbox_changed(self):
-        col = self.mw.cbx_imported_mot_y.currentText()
-        if not col or self.mot_data is None or col not in self.mot_data.columns:
-            return
-        self.plot_mot(self.mot_data, col)
+    # ---------------------- overlays (Qt) ----------------------
+    def _build_qt_overlays(self, axes, labels):
+        """
+        Create one QWidget per subplot, parented to the canvas, with:
+        [ Label "EMG n" ]  [ BIG QRadioButton ]
+        Positioned at the TOP-RIGHT of each axes; EMG 1 is the TOP subplot.
+        """
+        # clear old overlays
+        for itm in self._overlay_items:
+            try: itm["widget"].deleteLater()
+            except Exception: pass
+        self._overlay_items = []
 
-    # ---------- Overlays (upper) ----------
-    def toggle_upper_overlay(self, checked: bool):
-        if checked:
-            self.rango_de_articulacion_arriba_limite()
-        else:
-            self.remove_overlay_by_name("arriba")
+        # fresh exclusive group
+        if self._row_group:
+            try: self._row_group.idClicked.disconnect(self._on_row_clicked)
+            except Exception: pass
+        self._row_group = QButtonGroup(self.canvas)
+        self._row_group.setExclusive(True)
+        self._row_group.idClicked.connect(self._on_row_clicked)
+
+        # big styles
+        radio_style = """
+            QRadioButton::indicator { width: 18px; height: 18px; }
+            QRadioButton::indicator:unchecked {
+                border: 3px solid black; border-radius: 13px; background: white;
+            }
+            QRadioButton::indicator:checked {
+                border: 3px solid black; border-radius: 13px; background: #3daee9;
+            }
+        """
+        label_style = """
+            QLabel {
+                font-size: 18px; font-weight: 700; color: black;
+                background: rgba(255,255,255,230);
+                border-radius: 6px; padding: 2px 10px;
+            }
+        """
+
+        # Build overlay per axes (i == 0 is TOP → EMG 1)
+        for i, ax in enumerate(axes):
+            w = QWidget(self.canvas)  # parent to canvas
+            w.setAttribute(Qt.WA_NoSystemBackground, True)
+            w.setAttribute(Qt.WA_TranslucentBackground, True)
+            w.setStyleSheet("background: transparent;")
+            w.setVisible(True)
+
+            lay = QHBoxLayout(w)
+            lay.setContentsMargins(8, 4, 8, 4)
+            lay.setSpacing(10)
+          
+            label_text = str(labels[i]) if labels is not None and len(labels) > i else f"EMG {i+1}"
+            lbl = QLabel(label_text, w)
+            lbl.setStyleSheet(label_style)
+
+            rdo = QRadioButton(w)
+            rdo.setStyleSheet(radio_style)
+            rdo.setChecked(i == int(getattr(self, "_active_row", 0)))
+            self._row_group.addButton(rdo, i)   # id == row index
+
+            lay.addWidget(lbl, 1)
+            lay.addWidget(rdo, 0, alignment=Qt.AlignVCenter)
+
+            self._overlay_items.append({
+                "ax": ax,
+                "widget": w,
+                "label": lbl,
+                "radio": rdo,
+                "row_index": i,   # 0 = TOP
+            })
+
+        # keep overlays positioned
+        if self._draw_cid:
+            try: self.canvas.mpl_disconnect(self._draw_cid)
+            except Exception: pass
+        self._draw_cid = self.canvas.mpl_connect("draw_event", self._on_canvas_draw)
+
+        self.canvas.draw_idle()
+
+    def _on_row_clicked(self, row_id: int):
+        # reattach selector & highlight
+        def reattach_selector(ax_target):
+            return SpanSelector(
+                ax_target, lambda a,b: None,  # replaced immediately below
+                direction="horizontal", useblit=True,
+                props=dict(alpha=0.3, facecolor="orange"),
+                interactive=True, button=MouseButton.LEFT
+            )
+        # we’ll reuse the existing onselect by rebuilding via plot_mat_arrays’ setup
+        # Instead just call _set_active_row with current selector’s callback preserved
+        # Grab current callback by constructing a new selector in _set_active_row
+        self._set_active_row(row_id, reattach_cb=reattach_selector)
+
+    # Keep overlay widgets at top-right of each axes (on draw/resize/pan)
+    def _on_canvas_draw(self, _event):
+        if not self.axes or not self._overlay_items:
+            return
+        # widget size (px) and margins inside axes
+        W, H = 150, 38
+        margin_x = 10
+        margin_y = 8
+
+        # canvas pixel size
+        cW = self.canvas.width()
+        cH = self.canvas.height()
+
+        for itm in self._overlay_items:
+            ax = itm["ax"]
+            w  = itm["widget"]
+            # axes bbox in figure fraction
+            bbox = ax.get_position()
+            # convert to pixel rect inside canvas
+            x0 = int(bbox.x1 * cW - margin_x - W)   # right align
+            y0 = int((1.0 - bbox.y1) * cH + margin_y)  # top inside axes
+            w.setGeometry(x0, y0, W, H)
+
+    # ---------------------- active row / selector ----------------------
+    def _set_active_row(self, row: int, reattach_cb):
+        """
+        Make `row` active (mutually exclusive):
+        - reattach SpanSelector to that axes
+        - bold its border, de-emphasize others
+        - update radio (Qt group already exclusive)
+        """
+        self._active_row = int(row)
+
+        # disconnect old selector
+        if self._span is not None:
+            try: self._span.disconnect_events()
+            except Exception: pass
+            self._span = None
+
+        # define the real onselect now (uses current active row)
+        def onselect(xmin, xmax):
+            if xmin == xmax:
+                return
+            if len(self._selections[self._active_row]) >= 3:
+                return
+            lo, hi = sorted([xmin, xmax])
+            p = self.axes[self._active_row].axvspan(lo, hi, color="orange", alpha=0.30)
+            self._selections[self._active_row].append((lo, hi))
+            self._patches[self._active_row].append(p)
             self.canvas.draw_idle()
 
-    def rango_de_articulacion_arriba_limite(self):
-        if self.mot_data is None:
-            return
+        # attach to target axes
+        ax = self.axes[self._active_row]
+        self._span = SpanSelector(
+            ax, onselect, direction="horizontal",
+            useblit=True, props=dict(alpha=0.3, facecolor="orange"),
+            interactive=True, button=MouseButton.LEFT
+        )
 
-        y_min = self.mw.dsb_y_axis_min.value()
-        y_max = self.mw.dsb_y_axis_max.value()
+        # bold active axes border
+        for i, ax in enumerate(self.axes):
+            lw = 2.2 if i == self._active_row else 0.8
+            for sp in ax.spines.values():
+                sp.set_linewidth(lw)
 
-        rdaa_min = self.mw.RdAa_min.value()
-        rdaa_lim = self.mw.RdAa_limite.value()
-
-        if not (y_min < rdaa_min < y_max) or not (y_min < rdaa_lim < y_max) or not (rdaa_min < rdaa_lim):
-            return
-
-        self.clear_limit_overlays("arriba")
-
-        # Orange (top) band: limite → y_max
-        top_patch = self.ax.axhspan(rdaa_lim, y_max, xmin=0, xmax=1,
-                                    facecolor="#ffa836", alpha=self.overlays_alpha, zorder=0)
-        top_patch.set_gid("overlay_arriba_orange")
-
-        # Yellow (middle) band: rdaa_min → limite
-        mid_patch = self.ax.axhspan(rdaa_min, rdaa_lim, xmin=0, xmax=1,
-                                    facecolor="#ffe060", alpha=self.overlays_alpha, zorder=0)
-        mid_patch.set_gid("overlay_arriba_yellow")
-
-        # Red line at limite
-        red = self.ax.axhline(rdaa_lim, color="red", linewidth=2.0, zorder=1)
-        red.set_gid("overlay_arriba_line")
+        # ensure radio reflects state
+        if self._row_group is not None:
+            btn = self._row_group.button(self._active_row)
+            if btn and not btn.isChecked():
+                btn.setChecked(True)
 
         self.canvas.draw_idle()
 
-    # ---------- Overlays (lower) ----------
-    def toggle_lower_overlay(self, checked: bool):
-        if checked:
-            self.rango_de_articulacion_abajo_limite()
-        else:
-            self.remove_overlay_by_name("abajo")
-            self.canvas.draw_idle()
-
-    def rango_de_articulacion_abajo_limite(self):
-        if self.mot_data is None:
-            return
-
-        y_min = self.mw.RdAaB_min.value()
-        y_max = self.mw.RdAaB_max.value()
-        limite = self.mw.RdAaB_limite.value()
-
-        if not (y_min < limite < y_max):
-            return
-
-        self.clear_limit_overlays("abajo")
-
-        # Orange bottom band: y_min → limite
-        bot_orange = self.ax.axhspan(y_min, limite, xmin=0, xmax=1,
-                                     facecolor="#ffa836", alpha=self.overlays_alpha, zorder=0)
-        bot_orange.set_gid("overlay_abajo_orange")
-
-        # Yellow second band: limite → y_max
-        bot_yellow = self.ax.axhspan(limite, y_max, xmin=0, xmax=1,
-                                     facecolor="#ffe060", alpha=self.overlays_alpha, zorder=0)
-        bot_yellow.set_gid("overlay_abajo_yellow")
-
-        # Red line
-        red = self.ax.axhline(limite, color="red", linewidth=2.0, zorder=1)
-        red.set_gid("overlay_abajo_line")
-
-        self.canvas.draw_idle()
-
-    # ---------- Overlay cleanup ----------
-    def clear_limit_overlays(self, overlay_name=None):
-        def gid_of(o):
-            return getattr(o, "get_gid", lambda: None)() or getattr(o, "gid", None)
-
-        for line in list(self.ax.lines):
-            gid = gid_of(line)
-            if gid and gid.startswith(f"overlay_{overlay_name}_"):
-                line.remove()
-
-        for patch in list(self.ax.patches):
-            gid = gid_of(patch)
-            if gid and gid.startswith(f"overlay_{overlay_name}_"):
-                patch.remove()
-
-    def remove_overlay_by_name(self, name: str):
-        self.clear_limit_overlays(name)
-
-    # ---------- Resets ----------
-    def reset_rdaa_defaults(self):
-        # recompute from current Y spinboxes (top 2/5)
-        y_min = self.mw.dsb_y_axis_min.value()
-        y_max = self.mw.dsb_y_axis_max.value()
-        rng = max(y_max - y_min, 1e-9)
-        rdaa_min = y_max - (2.0/5.0) * rng
-        rdaa_lim = (y_max + rdaa_min) / 2.0
-        self.mw.RdAa_max.setValue(y_max)
-        self.mw.RdAa_min.setValue(rdaa_min)
-        self.mw.RdAa_limite.setValue(rdaa_lim)
-        if self.mw.tgl_arriba_rDa.isChecked():
-            self.rango_de_articulacion_arriba_limite()
-            
-            
-    def reset_rdaab_defaults(self):
-        # Recompute lower defaults from current Y-axis limits (bottom 2/5)
-        y_min = self.mw.dsb_y_axis_min.value()
-        y_max = self.mw.dsb_y_axis_max.value()
-        rng = max(y_max - y_min, 1e-9)
-    
-        rdaab_max = y_min + (2.0/5.0) * rng
-        rdaab_lim = (y_min + rdaab_max) / 2.0
-    
-        # Update spinboxes
-        self.mw.RdAaB_min.setValue(y_min)
-        self.mw.RdAaB_max.setValue(rdaab_max)
-        self.mw.RdAaB_limite.setValue(rdaab_lim)
-    
-        # Redraw overlays if toggle is on
-        if self.mw.tgl_abajo_rDa.isChecked():
-            self.rango_de_articulacion_abajo_limite()
-
-            
-            
-    
-
-    def reset_x_axis(self):
-        if self.SAVE_INITIAL_minnX is None or self.SAVE_INITIAL_maxxX is None:
-            return
-        x_min = min(self.SAVE_INITIAL_minnX, self.SAVE_INITIAL_maxxX)
-        x_max = max(self.SAVE_INITIAL_minnX, self.SAVE_INITIAL_maxxX)
-        self.ax.set_xlim(x_min, x_max)
-        self.mw.dsb_x_axis_min.setValue(x_min)
-        self.mw.dsb_x_axis_max.setValue(x_max)
-        self.canvas.draw_idle()
-
-    def reset_y_axis(self):
-        if self.SAVE_INITIAL_minnY is None or self.SAVE_INITIAL_maxxY is None:
-            return
-        y_min = min(self.SAVE_INITIAL_minnY, self.SAVE_INITIAL_maxxY)
-        y_max = max(self.SAVE_INITIAL_minnY, self.SAVE_INITIAL_maxxY)
-        self.ax.set_ylim(y_min, y_max)
-        self.mw.dsb_y_axis_min.setValue(y_min)
-        self.mw.dsb_y_axis_max.setValue(y_max)
-        self.canvas.draw_idle()
-        if self.mw.tgl_arriba_rDa.isChecked():
-            self.rango_de_articulacion_arriba_limite()
-        if self.mw.tgl_abajo_rDa.isChecked():
-            self.rango_de_articulacion_abajo_limite()
 
 
-
-
-
-    # ---------- Styling ----------
-    def reapply_plot_settings(self):
-        self.ax.set_xlabel(
-            "Tiempo (s)", fontsize=self.mw.spb_label_size.value())
-        self.ax.set_ylabel(
-            "Grados (°)", fontsize=self.mw.spb_label_size.value())
-        self.ax.tick_params(
-            axis='both', labelsize=self.mw.spb_tick_size.value())
-
-        leg_text = self.mw.led_legend_text.text().strip(
-        ) or self.mw.cbx_imported_mot_y.currentText()
-        self.ax.legend(
-            [leg_text], fontsize=self.mw.spb_legend_text_size.value(), loc='upper right')
-
-        title_text = self.mw.led_titulo_text.text().strip(
-        ) or self.mw.cbx_imported_mot_y.currentText()
-        self.ax.set_title(
-            title_text, fontsize=self.mw.spb_titulo_text_size.value())
-
-        self.ax.grid(True)
-
-
-
-    # ---------- Simple setters ----------
-    def set_title(self, text: str, size: int):
-        self.ax.set_title(text, fontsize=size)
-        self.canvas.draw_idle()
-
-    def set_legend(self, text: str, size: int):
-        self.ax.legend([text], fontsize=size, loc='upper right')
-        self.canvas.draw_idle()
-
-    def set_line_thickness(self, thickness: float):
-        if self.ax.lines:
-            self.ax.lines[0].set_linewidth(thickness)
-            self.canvas.draw_idle()
-
-    def set_label_font_size(self, size: int):
-        self.ax.set_xlabel(self.ax.get_xlabel(), fontsize=size)
-        self.ax.set_ylabel(self.ax.get_ylabel(), fontsize=size)
-        self.canvas.draw_idle()
-
-    def set_tick_font_size(self, size: int):
-        self.ax.tick_params(axis='both', labelsize=size)
-        self.canvas.draw_idle()
-
-    def set_x_limits(self, x_min, x_max):
-        self.ax.set_xlim(x_min, x_max)
-        self.canvas.draw_idle()
-
-    def set_y_limits(self, y_min, y_max):
-        self.ax.set_ylim(y_min, y_max)
-        self.canvas.draw_idle()
-
-
-    def update_axis_limit_widgets(self):
-        x_min, x_max = self.ax.get_xlim()
-        y_min, y_max = self.ax.get_ylim()
-        self.mw.dsb_x_axis_min.setValue(x_min)
-        self.mw.dsb_x_axis_max.setValue(x_max)
-        self.mw.dsb_y_axis_min.setValue(y_min)
-        self.mw.dsb_y_axis_max.setValue(y_max)
-        
-    # ---------- Keep limite inside its bounds ----------
-    def update_RdAa_limite_bounds(self):
-        min_val = self.mw.RdAa_min.value()
-        max_val = self.mw.RdAa_max.value()
-        if min_val >= max_val:
-            return
-        cur = self.mw.RdAa_limite.value()
-        self.mw.RdAa_limite.blockSignals(True)
-        self.mw.RdAa_limite.setMinimum(min_val)
-        self.mw.RdAa_limite.setMaximum(max_val)
-        if cur < min_val or cur > max_val:
-            self.mw.RdAa_limite.setValue((min_val + max_val) / 2.0)
-        self.mw.RdAa_limite.blockSignals(False)
-        if self.mw.tgl_arriba_rDa.isChecked():
-            self.rango_de_articulacion_arriba_limite()
-
-    def update_RdAaB_limite_bounds(self):
-        min_val = self.mw.RdAaB_min.value()
-        max_val = self.mw.RdAaB_max.value()
-        if min_val >= max_val:
-            return
-        cur = self.mw.RdAaB_limite.value()
-        self.mw.RdAaB_limite.blockSignals(True)
-        self.mw.RdAaB_limite.setMinimum(min_val)
-        self.mw.RdAaB_limite.setMaximum(max_val)
-        if cur < min_val or cur > max_val:
-            self.mw.RdAaB_limite.setValue((min_val + max_val) / 2.0)
-        self.mw.RdAaB_limite.blockSignals(False)
-        if self.mw.tgl_abajo_rDa.isChecked():
-            self.rango_de_articulacion_abajo_limite()

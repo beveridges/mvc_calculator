@@ -211,6 +211,28 @@ def copy_contents(src: Path, dst: Path) -> None:
             shutil.copytree(s, d)
         else:
             shutil.copy2(s, d)
+            
+            
+def strip_stubs_and_caches(root: Path) -> None:
+    """Remove .pyi/.pyc and __pycache__ from a built tree."""
+    if not root or not root.exists():
+        return
+    removed = 0
+    for p in root.rglob("*.pyi"):
+        try:
+            p.unlink()
+            removed += 1
+        except Exception:
+            pass
+    for p in root.rglob("*.pyc"):
+        try:
+            p.unlink()
+        except Exception:
+            pass
+    for d in list(root.rglob("__pycache__")):
+        shutil.rmtree(d, ignore_errors=True)
+    print(f"[clean] removed {removed} *.pyi files from {root}")
+
 
 # ---------- Main ----------
 def main():
@@ -349,10 +371,18 @@ def main():
 
     print("\nRunning PyInstaller with:\n  " + "\n  ".join(args_pi))
     pyinstaller_run(args_pi)
+    
+    # Remove stub and cache files from the dist folder
+    out_dir = (distpath / args.name) if not args.onefile else distpath
+    strip_stubs_and_caches(out_dir)
+
 
     # ----- Archive this build (FLAT) -----
     tag = f"{args.name}-{BUILDNUMBER}"
     archived_at = archive_latest(distpath, builds_dir, tag, app_name=args.name)
+    if archived_at:
+        strip_stubs_and_caches(archived_at)
+
     if not archived_at:
         print("[warn] nothing archived (dist empty?)")
         return

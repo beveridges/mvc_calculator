@@ -16,7 +16,7 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>Conversión de csv Movella DOT</string>
+   <string>Import MATLAB files</string>
   </property>
   <property name="styleSheet">
    <string>* { font-size: 12pt; }</string>
@@ -51,20 +51,18 @@
            </widget>
           </item>
           <item>
-           <spacer name="verticalSpacer_2">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
+           <widget class="QPushButton" name="btnImport">
+            <property name="text">
+             <string>Import files</string>
             </property>
-            <property name="sizeType">
-             <enum>QSizePolicy::Fixed</enum>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnClear">
+            <property name="text">
+             <string>Clear files</string>
             </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>10</height>
-             </size>
-            </property>
-           </spacer>
+           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="btnClose">

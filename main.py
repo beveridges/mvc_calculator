@@ -17,6 +17,7 @@ import sys
 import traceback
 import time
 import win32com.client
+import xml.etree.ElementTree as ET
 
 # sys.path.append(os.path.join(os.path.dirname(
 #     __file__), 'dialogs'))  
@@ -46,6 +47,8 @@ from utilities.version_info import (
 )
 from utilities.path_utils import resource_path
 from utilities.path_utils import base_path
+
+
 
 
 # from utilities.workers import Worker
@@ -134,7 +137,7 @@ def main():
     time.sleep(delay)
 
     update_splash(splash, "STARTING INTERFACE", 90)
-    time.sleep(delay)
+    time.sleep(delay)       
 
     update_splash(splash, "READY", 100)
     time.sleep(delay)
@@ -164,7 +167,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             self.ui_initializer = gui.setup(self, None)
                         
             self._current_viewfinder = None
-            
+                    
             
             # self.logger = SBConsoleOutput(self.ledt_output, formatter=formatter)
             
@@ -176,7 +179,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             )
 
             logging.info("=== Session started ===")
-            print("BOOOOOOOOOO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!y")
+            
     
             QtCore.QTimer.singleShot(0, lambda: self.ledt_output.verticalScrollBar().setValue(self.ledt_output.verticalScrollBar().maximum()))
                     
@@ -214,8 +217,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             
             
             self.myFigTop = self.plot_controller.canvas 
-      
-
+    
             self.activateWindow()
             
             print(f"VERSIONNUMBER = {VERSIONNUMBER}")
@@ -265,15 +267,92 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             self.btn_process.clicked.connect(self.load_mat_files) 
             self.btn_export.clicked.connect(self.export_logfile) 
             self.btn_exit.clicked.connect(self.close) 
+            
+            self.btn_burstDetection.clicked.connect(self.on_burst_detection)
+
 
             self.file_path = None
+                
+            self.tw_plotting.setStyleSheet("""
+                QTabBar::tab {
+                    font-size: 13px;
+                    padding: 8px 16px;
+                    height: 15px;
+                }
+            """)
+            self.tw_plotting.clear()
+            
+            # in ApplicationWindow.__init__ after self.tw_plotting is created
+            self._style_tabs_for_plotting()
 
-            try:
-                with h5py.File("./data/P05_MVC_Left_EXT_CAR_RAD.mat", "r") as f:
-                    print("Opened with h5py")
-            except OSError:
-                mat = scipy.io.loadmat("./data/P05_MVC_Left_EXT_CAR_RAD.mat", struct_as_record=False, squeeze_me=True)
-                print("Opened with scipy.io.loadmat")
+
+
+            # try:
+            #     with h5py.File("./data/P05_MVC_Left_EXT_CAR_RAD.mat", "r") as f:
+            #         print("File loader: h5py")
+            # except OSError:
+            #     mat = scipy.io.loadmat("./data/P05_MVC_Left_EXT_CAR_RAD.mat", struct_as_record=False, squeeze_me=True)
+            #         print("File loader: scipy.io.loadmat")
+                
+                
+        def _style_tabs_for_plotting(self):
+            plot_blue = "#3daee9"   # your plot color
+            sel_bg    = "#d6f1fe"   # lighter blue for selected tab
+            hover_bg  = "#eaf7ff"   # subtle hover
+            base_bg   = "#f6f8fb"   # unselected tab background
+            border    = "#cfd6e6"   # neutral border
+        
+            qss = f"""
+            QTabWidget::pane {{
+                border: 1px solid {plot_blue};
+                border-top: 2px solid {plot_blue};
+                background: white;
+                top: -1px; /* tight seam with tabs */
+            }}
+        
+            /* Base tab look */
+            QTabBar::tab {{
+                background: {base_bg};
+                color: #1f2937;
+                border: 1px solid {border};
+                border-bottom-color: transparent; /* blend into pane */
+                padding: 6px 16px;
+                margin: 2px 2px 0 2px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                min-height: 26px;
+                font-size: 14px;
+                font-weight: 500;              
+            }}
+        
+            /* Selected/current tab */
+            QTabBar::tab:selected {{
+                background: {sel_bg};
+                color: #0b3d57;
+                font-weight: 600;
+                border: 1px solid {plot_blue};
+                border-bottom-color: {sel_bg}; /* hide seam */
+            }}
+        
+            /* Hover (not selected) */
+            QTabBar::tab:hover:!selected {{
+                background: {hover_bg};
+                border-color: {plot_blue};
+            }}
+        
+            /* Make the selected tab visually “on top” */
+            QTabBar::tab:selected {{
+                z-index: 2;
+            }}
+        
+            /* Optional: disabled tabs look muted */
+            QTabBar::tab:disabled {{
+                color: #9aa4b2;
+            }}
+            """
+        
+            self.tw_plotting.setStyleSheet(qss)
+
                 
             # self.btn_one_button.setIcon(
             #     QIcon(base_path('resources/icons', 'icn_movella_to_joint_angle.png')))
@@ -369,30 +448,340 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         #         self._rec_dot.move(obj.width() - 22, 8)
         #     return super().eventFilter(obj, ev)
 # %% MAIN
-         
+            
+
+        def clear_tabs(self):
+            self.tw_plotting.clear()
+            self.file_path = None
+        
+            
+        import xml.etree.ElementTree as ET
+        from datetime import datetime
+        from PyQt5.QtWidgets import QFileDialog
+        import logging
+        
+        def export_logfile(self):
+            savepath, _ = QFileDialog.getSaveFileName(
+                self, "Export XML", "", "XML Files (*.xml)"
+            )
+            if not savepath:
+                logging.info("Export cancelled: no file path selected.")
+                return
+        
+            session_data = []
+            for i in range(self.tw_plotting.count()):
+                tab = self.tw_plotting.widget(i)
+                file_label = self.tw_plotting.tabText(i)   # e.g., original MAT filename
+                plot_ctrl = getattr(tab, "plot_ctrl", None)
+                if not plot_ctrl:
+                    continue
+        
+                # Pull selections from the CURRENTLY CHECKED row
+                payload = plot_ctrl.get_export_payload_active_row(file_label, require_three=False)
+                if payload:
+                    session_data.append(payload)
+                    logging.info(
+                        f"Prepared export: file={payload['filename']} row={payload['row']} "
+                        f"bursts={len(payload['bursts'])} mvc={payload['mvc']}"
+                    )
+        
+            if not session_data:
+                logging.info("Nothing to export (no selections on the active rows).")
+                return
+        
+            root = ET.Element("MVCResults")
+            now = datetime.now()
+            info = ET.SubElement(root, "ExportInfo")
+            ET.SubElement(info, "Date").text = now.strftime("%Y-%m-%d")
+            ET.SubElement(info, "Time").text = now.strftime("%H:%M:%S")
+        
+            for f in session_data:
+                fe = ET.SubElement(root, "File", name=f["filename"])
+                ET.SubElement(fe, "Row").text = str(f["row"])
+                if f["mvc"] is not None:
+                    ET.SubElement(fe, "MVC").text = str(f["mvc"])
+                bursts = ET.SubElement(fe, "Bursts")
+                for idx, (lo, hi) in enumerate(f["bursts"], 1):
+                    b = ET.SubElement(bursts, "Burst", id=str(idx))
+                    ET.SubElement(b, "Start").text = str(lo)
+                    ET.SubElement(b, "End").text = str(hi)
+        
+            ET.ElementTree(root).write(savepath, encoding="utf-8", xml_declaration=True)
+            logging.info(f"XML export completed: {savepath}")
+
+        
+        
+        # def export_logfile(self):
+        #     savepath, _ = QFileDialog.getSaveFileName(
+        #         self,
+        #         "Export XML",
+        #         "",
+        #         "XML Files (*.xml)"
+        #     )
+        #     if not savepath:
+        #         logging.info("Export cancelled: no file path selected.")
+        #         return
+        
+        #     # Dummy session data
+        #     session_data = [
+        #         {
+        #             "filename": "P05_MVC_Left_EXT_CAR_RAD.mat",
+        #             "row": 0,
+        #             "mvc": 1.234,
+        #             "bursts": [(120, 240), (400, 560), (800, 950)]
+        #         },
+        #         {
+        #             "filename": "P05_MVC_Left_ABD.mat",
+        #             "row": 1,
+        #             "mvc": 0.876,
+        #             "bursts": [(100, 220), (500, 670), (850, 1000)]
+        #         }
+        #     ]
+        
+        #     # Build XML root
+        #     root = ET.Element("MVCResults")
+        
+        #     # Add export timestamp
+        #     now = datetime.now()
+        #     export_info = ET.SubElement(root, "ExportInfo")
+        #     ET.SubElement(export_info, "Date").text = now.strftime("%Y-%m-%d")
+        #     ET.SubElement(export_info, "Time").text = now.strftime("%H:%M:%S")
+        
+        #     # Add file entries
+        #     for filedata in session_data:
+        #         file_el = ET.SubElement(root, "File", name=filedata["filename"])
+        #         ET.SubElement(file_el, "Row").text = str(filedata["row"])
+        #         ET.SubElement(file_el, "MVC").text = str(filedata["mvc"])
+        
+        #         bursts_el = ET.SubElement(file_el, "Bursts")
+        #         for idx, (start, end) in enumerate(filedata["bursts"], 1):
+        #             burst_el = ET.SubElement(bursts_el, "Burst", id=str(idx))
+        #             ET.SubElement(burst_el, "Start").text = str(start)
+        #             ET.SubElement(burst_el, "End").text = str(end)
+        
+        #         logging.info(
+        #             f"Prepared export for file={filedata['filename']} row={filedata['row']} "
+        #             f"MVC={filedata['mvc']} bursts={len(filedata['bursts'])}"
+        #         )
+        
+        #     # Write XML file
+        #     try:
+        #         tree = ET.ElementTree(root)
+        #         tree.write(savepath, encoding="utf-8", xml_declaration=True)
+        
+        #         directory = os.path.dirname(savepath)
+        #         logging.info(f"XML export completed successfully: {savepath}")
+        #         logging.info(f"Export directory: {directory}")
+        #         logging.info(f"Export timestamp: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        #     except Exception as e:
+        #         logging.error(f"Failed to write XML export: {e}")
+
+
+        # def export_logfile(self):
+        #     savepath, _ = QFileDialog.getSaveFileName(
+        #         self,
+        #         "Export txt",
+        #         "",
+        #         "Text Files (*.txt)"
+        #     )
+        #     if savepath:
+        #         try:
+        #             # Example: simulate exporting a file
+        #             exported_file = "results.csv"
+        
+        #             # Log info about the export
+        #             logging.info(f"Exporting file '{exported_file}' to '{savepath}'")
+        
+        #             # Actually write a minimal export file (optional)
+        #             with open(savepath, "w", encoding="utf-8") as f:
+        #                 f.write("MVC Calculator Export Test\n")
+        #                 f.write("This is just a test line.\n")
+        #                 f.write("More lines can go here...\n")
+        
+        #             # Confirm completion in the log
+        #             logging.info(f"Export completed successfully. File saved at '{savepath}'")
+        
+        #         except Exception as e:
+        #             logging.error(f"Export failed: {e}", exc_info=True)
+        
+        
+        def exportXML_file(self):
+            print("exportXML_file")
+           
+        def importXML_file(self):
+            print('importXML_file')
+            # dialog.matsImported.connect(self.on_mats_imported)
+            # dialog.exec_()
+       
         def load_mat_files(self):
             dialog = LoadMat(self)
-            dialog.filesSelected.connect(self.on_mat_files_selected)
+            dialog.matsImported.connect(self.on_mats_imported)
             dialog.exec_()
+            
+            
+        def on_burst_detection(self):
+            # find current tab & its PlotController
+            idx = self.tw_plotting.currentIndex()
+            if idx < 0:
+                QMessageBox.information(self, "Burst detection", "No plotting tab is selected.")
+                return
+        
+            tab = self.tw_plotting.widget(idx)
+            plot_ctrl = getattr(tab, "plot_ctrl", None)
+            if plot_ctrl is None:
+                QMessageBox.warning(self, "Burst detection", "No plot controller on this tab.")
+                return
+        
+            # choose your sampling rate
+            # If you have a global/constant, use that; otherwise set an appropriate default for sEMG.
+            fs = globals().get("DEFAULT_SEMG_FREQUENCY", 2000)  # Hz fallback
+        
+            # run detection on the ACTIVE row (the one with bold border)
+            # this will compute energy mask → intervals → paint up to 3 spans
+            try:
+                plot_ctrl.detect_bursts_with_energy(fs=fs, min_silence=0.080, min_sound=0.200)
+            except Exception as e:
+                QMessageBox.critical(self, "Burst detection error", str(e))
+
+          
+            
+        def on_mats_imported(self, results):
+            self.tw_plotting.clear()
+            for res in results:
+                base_name = os.path.basename(res["path"])
+        
+                tab = QWidget()
+                layout = QVBoxLayout(tab)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.setSpacing(2)
+                tab.setLayout(layout)
+        
+                # Let PlotController handle adding toolbar+canvas to the container's layout
+                plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
+        
+                # Plot in-memory arrays
+                # plot_ctrl.plot_mat_arrays(res["data"], res["labels"]) ORIGINASL
+                plot_ctrl.plot_mat_arrays(res["data"], res["labels"], source_path=res["path"])
+
+          
+                # Keep a reference for export
+                tab.plot_ctrl = plot_ctrl
+        
+                self.tw_plotting.addTab(tab, base_name)
+
+            
+        # def on_mats_imported(self, results):
+        #     """Called after LoadMat dialog emits imported MAT files"""
+        #     self.tw_plotting.clear()
+        
+        #     for res in results:
+        #         base_name = os.path.basename(res["path"])
+        
+        #         # Create new tab
+        #         tab = QWidget()
+        #         layout = QVBoxLayout(tab)
+        #         layout.setContentsMargins(0, 0, 0, 0)  # remove padding so plots fill tab
+        #         layout.setSpacing(2)
+        
+        #         # Attach a PlotController for this file
+        #         plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
+        #         # layout.addWidget(plot_ctrl.toolbar)
+        #         # layout.addWidget(plot_ctrl.canvas)
+        
+        #         # Ensure layout is set on tab
+        #         tab.setLayout(layout)
+        
+        #         # Plot using arrays already in memory
+        #         plot_ctrl.plot_mat_arrays(res["data"], res["labels"])
+        
+        #         # Add tab to tw_plotting
+        #         self.tw_plotting.addTab(tab, base_name)
+                
+        #         tab.plot_ctrl = plot_ctrl
+
+        # def on_mats_imported(self, results):
+        #     self.tw_plotting.clear()
+        #     for res in results:
+        #         base_name = os.path.basename(res["path"])
+        #         tab = QWidget()
+        #         layout = QVBoxLayout(tab)
+        
+        #         plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
+        #         layout.addWidget(plot_ctrl.toolbar)
+        #         layout.addWidget(plot_ctrl.canvas)
+        
+        #         # use in-memory arrays
+        #         plot_ctrl.plot_mat_arrays(res["data"], res["labels"])
+        
+        #         self.tw_plotting.addTab(tab, base_name)
            
         def on_mat_files_selected(self, files):
-            for f in files:
-                logging.info(f"Loaded MAT file: {os.path.basename(f)}") 
-                # --- Update plotting tabs ---
-                self.tw_plotting.clear()
-                for file_path in files:
-                    base_name = os.path.basename(file_path)
-                    tab = QWidget()
-                    layout = QVBoxLayout(tab)
-                    # Example: put a QLabel or custom plotting widget inside
-                    label = QLabel(base_name)   # <<== show actual file name, not literal string
-                    layout.addWidget(label)
+            self.tw_plotting.clear()
+            for file_path in files:
+                base_name = os.path.basename(file_path)
+        
+                # Create a tab
+                tab = QWidget()
+                layout = QVBoxLayout(tab)
+        
+                # Create a new PlotController for this tab
+                plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
+                plot_ctrl.canvas.setVisible(True)
+                plot_ctrl.toolbar.setVisible(True)
+                layout.addWidget(plot_ctrl.toolbar)
+                layout.addWidget(plot_ctrl.canvas)
+        
+                # Load and plot the .mat file
+                plot_ctrl.plot_mat_file(file_path)
+        
+                self.tw_plotting.addTab(tab, base_name)            
+
+
+
+
+
+
+
+
+            # for f in files:
+            #     logging.info(f"Loaded MAT file: {os.path.basename(f)}") 
+            #     # --- Update plotting tabs ---
+            #     self.tw_plotting.clear()
+            #     for file_path in files:
+            #         base_name = os.path.basename(file_path)
+            #         tab = QWidget()
+            #         layout = QVBoxLayout(tab)
+            #         # Example: put a QLabel or custom plotting widget inside
+            #         label = QLabel(base_name)   # <<== show actual file name, not literal string
+            #         layout.addWidget(label)
                     
-                    self.tw_plotting.addTab(tab, base_name)
+            #         self.tw_plotting.addTab(tab, base_name)
+
+
+
+
+
+
                     
-        def export_logfile(self):
-            print(self.export_logfile.__name__)
-            pass
+        # def export_logfile(self):
+        #     savepath, _ = QFileDialog.getSaveFileName(
+        #         self,
+        #         "Export txt",
+        #         "",
+        #         "Text Files (*.txt)"
+        #     )
+        #     if savepath:
+        #         with open(savepath, "w") as f:
+        #             f.write("MVC Calculator Export Test\n")
+        #             f.write("This is just a test line.\n")
+        #             f.write("More lines can go here...\n")
+                    
+            # if savepath:
+            #     with open(savepath, "w") as f:
+            #         f.write("MVC Calculator Results\n")
+            #         f.write("=======================\n\n")
+            #         for key, value in self.results.items():
+            #             f.write(f"{key}: {value}\n")
 
             
         # def load_mat_files(self):
