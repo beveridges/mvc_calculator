@@ -1,0 +1,12 @@
+# Ignore log files
+*.log
+*.py[cod]
+
+# Ignore local configs
+## config.json
+
+# Ignore folders
+.data/
+.resources/raw/
+/__pycache__/
+data/
