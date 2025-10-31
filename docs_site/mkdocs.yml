@@ -1,0 +1,62 @@
+site_name: MVC Calculator
+
+theme:
+  name: readthedocs
+  logo: img/icn_emg.png
+
+extra_css: 
+  - css/extra.css
+
+extra:
+  generator: false
+
+# plugins:
+  # - search
+  # - bibtex:
+      # bib_file: "docs/bibs/IMM_DRUMMER.bib"
+      # csl_file: "docs/bibs/apa-6th-edition.csl"
+      # # cite_inline: true  
+      # # cite_style: author_year            
+      # # reference_style: plain
+      # # reference_heading: References      
+
+plugins:
+  - search
+  - bibtex:
+      bib_file: docs/bibs/IMM_DRUMMER.bib
+      csl_file: docs/bibs/apa-6th-edition.csl
+      cite_inline: true                # 👈 renders (Author, Year)
+      render_bibliography: true        # 👈 creates the References section
+      reference_heading: References    # 👈 section title
+      full_bibliography: false         # 👈 only show cited entries
+
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - tables
+  # - footnotes                            # 👈 required for reference anchors
+  - pymdownx.details                     # 👈 helps with ::: blocks
+  - pymdownx.superfences                 # 👈 improves ::: bibliography rendering
+  
+  
+# nav:
+# - QUICK START:
+  # - MetaSensors: metasensors.md
+# - SENSORS:
+  # - MetaMotionRL (MMRL): metamotionrl.md
+  # - MetaMotionS (MMS): metamotions.md
+# - APPS:
+  # - MetaBase App: metabse.md
+  # - MetaWear App: metawear.md
+# - HUB:
+  # - MetaHub: metahub.md
+# - DEVELOPER APIS:
+  # - MetaWear APIs: metawear_api.md
+  # - C++ APIs: cpp_api.md
+  # - Java APIs: java_api.md
+  # - Swift APIs: swift_api.md
+  # - Python APIs: python_api.md
+  # - JavaScript APIs: js_api.md

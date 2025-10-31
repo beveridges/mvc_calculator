@@ -5,6 +5,7 @@ from datetime import datetime
 import faulthandler
 import h5py
 import logging
+from logging.handlers import RotatingFileHandler
 import math
 import os
 import numpy as np
@@ -18,6 +19,8 @@ import traceback
 import time
 import win32com.client
 import xml.etree.ElementTree as ET
+
+import webbrowser
 
 # sys.path.append(os.path.join(os.path.dirname(
 #     __file__), 'dialogs'))  
@@ -33,13 +36,23 @@ from PyQt5 import uic
 from PyQt5.QtGui import QFont, QIcon, QPixmap
 
 import matplotlib.patches as patches
+import matplotlib.patches as Rectangle
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QIcon
+
+
 # -- CUSTOM ---------------------
 from dialogs.load_mat_dialog import LoadMat
+
+from config.defaults import BEST_OF
+
+from processors.processors import Processor
+
 from plot_controller import PlotController
 # from utilities.preferences import Preferences
+
 import ui_initializer as gui
 from utilities.version_info import (
     GITREVHEAD, BUILDNUMBER, VERSIONNUMBER, VERSIONNAME, FRIENDLYVERSIONNAME,
@@ -47,79 +60,61 @@ from utilities.version_info import (
 )
 from utilities.path_utils import resource_path
 from utilities.path_utils import base_path
-
-from processors.processors import Processor
-
-
-
 # from utilities.workers import Worker
 
 from sbui.consoleui.console_output import SBConsoleOutput 
+    
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from PyQt5.QtWidgets import QFileDialog
+import logging
+
 
 if getattr(sys, "frozen", False):
-    # Running as frozen exe → put motus.log next to the .exe
+    # Running as frozen exe → put application .log next to the .exe
     exe_dir = os.path.dirname(sys.executable)
 else:
     # Running in Python (Spyder/dev) → put motus.log in CWD
     exe_dir = os.getcwd()
+
+
 
 class LowercaseFormatter(logging.Formatter):
     def format(self, record):
         record.levelname = record.levelname.lower()
         return super().format(record)
 
-LOGFILE = os.path.join(exe_dir, "mvccalc.log")
 
-formatter = LowercaseFormatter(
-    fmt="[%(asctime)s.%(msecs)03d] [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+# --- Logging directories ---
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOGFILE = os.path.join(LOG_DIR, "mvc_calculator.log")
+
+# --- Logging setup (file + console + rotation) ---
+handler = RotatingFileHandler(LOGFILE, maxBytes=1_000_000, backupCount=3)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[handler, logging.StreamHandler(sys.stdout)]
 )
 
-handler = logging.FileHandler(LOGFILE, mode="w", encoding="utf-8")
-handler.setFormatter(formatter)
+# --- Fault + uncaught exception tracing ---
+faulthandler.enable(open(LOGFILE, "a"))
 
-# level=logging.DEBUG means that Matplotlib’s font manager then prints all of its font scoring attempts as debug messages when it tries to resolve your rcParams["font.family"].  That’s why it happens only the first time you run main.py after opening Spyder.
-# logging.basicConfig(level=logging.DEBUG, handlers=[handler])
-# THE SOLUTION IS TO CHANGE DEBUG -> INFO
-logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
-
-# logging.basicConfig(
-#     level=logging.DEBUG,
-#     filename=LOGFILE,
-#     filemode="w",       # overwrite each run
-#     encoding="utf-8",
-#     format="[{asctime}]:{levelname}:{message}",
-#     style="{",
-#     datefmt="%Y-%m-%d %H:%M:%S",
-# )
-
-# Enable faulthandler to dump tracebacks on segfaults
-# faulthandler.enable(file=open(LOGFILE, "a"))
-
-# with open(LOGFILE, "a") as fh:
-#     faulthandler.enable(file=fh)
-
-faulthandler_log = open(LOGFILE, "a")
-faulthandler.enable(file=faulthandler_log)
-
-
-def _log_uncaught_exceptions(exctype, value, tb):
+def handle_uncaught_exception(exctype, value, tb):
     logging.critical("Uncaught exception", exc_info=(exctype, value, tb))
 
+sys.excepthook = handle_uncaught_exception
 
-sys.excepthook = _log_uncaught_exceptions
-
-
-
+# ---  Splash ---
 def main():
-    QtWidgets.QApplication.setAttribute(
-        QtCore.Qt.AA_EnableHighDpiScaling, True)
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 
     app = QtWidgets.QApplication(sys.argv)
 
-    pixmap = QPixmap(base_path('resources/icons', 'bmc_logo_splash.png'))
+    pixmap = QPixmap(base_path('resources/icons', 'mvccalculator_splash.png'))
     splash = QSplashScreen(pixmap)
     splash.show()
     font = QFont("Helvetica", 10)
@@ -172,23 +167,19 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             
             # self.logger = SBConsoleOutput(self.ledt_output, formatter=formatter)
             
+            # --- Formatter for console output ---
+            formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
             self.logger = SBConsoleOutput(
                 target=self.ledt_output,
                 formatter=formatter,
                 send_button=self.btn_sendLog,  
                 logfile=LOGFILE                 
             )
-
             logging.info("=== Session started ===")
             
     
             QtCore.QTimer.singleShot(0, lambda: self.ledt_output.verticalScrollBar().setValue(self.ledt_output.verticalScrollBar().maximum()))
                     
-            # # Force initial scroll to bottom
-            # sb = self.ledt_output.verticalScrollBar()
-            # if sb is not None:
-            #     sb.setValue(sb.maximum())
-
             # Now the UI is loaded, widgets like form_btm_graph exist
             self.form_btm_graph = self.findChild(QFrame, "form_btm_graph")
             self.placeholder_image = self.findChild(
@@ -214,32 +205,17 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             self.main_window.plot_controller = self.plot_controller
 
             # 4. Safe to bind UI controls
-            self.plot_controller.bind_ui_controls()
+            # self.plot_controller.bind_ui_controls()
             
             
             self.myFigTop = self.plot_controller.canvas 
     
             self.activateWindow()
             
-            # print(f"VERSIONNUMBER = {VERSIONNUMBER}")
-            # print(f"BUILDNUMBER   = {BUILDNUMBER}")
-            # print(f"GITREVHEAD    = {GITREVHEAD}")
-            # print(f"VERSIONNAME   = {VERSIONNAME}")
-            # print(f"GITTAG        = {GITTAG}")
-            # print(f"CONDAENVIRONMENTNAME = {CONDAENVIRONMENTNAME}")
-            # print(f"PYTHONVERSION = {PYTHONVERSION}")
-            # print(f"CONDAENVIRONMENTFILENAME = {CONDAENVIRONMENTFILENAME or '(not found)'}")
-            
             self.threadpool = QThreadPool()
             logging.info('Multithreading with maximum %d threads' %
                   self.threadpool.maxThreadCount())
-            
-            def log_exceptions(exctype, value, tb):
-                logging.critical("Uncaught exception",
-                                 exc_info=(exctype, value, tb))
-            
-            sys.excepthook = log_exceptions
-            
+                                    
             logging.info(f"=== {FRIENDLYVERSIONNAME} executable started ===")
             logging.info(f"VERSIONNUMBER = {VERSIONNUMBER}")
             logging.info(f"BUILDNUMBER   = {BUILDNUMBER}")
@@ -249,14 +225,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             logging.info(f"CONDAENVIRONMENTNAME = {CONDAENVIRONMENTNAME}")
             logging.info(f"PYTHONVERSION = {PYTHONVERSION}")
             logging.info(f"CONDAENVIRONMENTFILENAME = {CONDAENVIRONMENTFILENAME or '(not found)'}")
-            logging.info("Multithreading with maximum %d threads" %
-                         self.threadpool.maxThreadCount())
 
             self.setWindowFlag(Qt.WindowMaximizeButtonHint)
             self.setWindowFlag(Qt.WindowMinimizeButtonHint)
             self.setWindowTitle(FRIENDLYVERSIONNAME)
-            self.setWindowIcon(
-                QIcon(base_path('resources/icons', 'icn_b.png')))
+            self.setWindowIcon(QIcon(base_path('resources/icons', 'icn_emg.png')))
 
             # self.showMaximized()
 
@@ -265,13 +238,15 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
 
             self.btn_loadMat.clicked.connect(self.load_mat_files) 
-            self.btn_export.clicked.connect(self.export_logfile) 
             self.btn_exit.clicked.connect(self.close) 
             
             self.btn_burstDetection.clicked.connect(self.on_burst_detection)
             
             # inside ApplicationWindow.__init__ after UI setup
             self.btn_process.clicked.connect(self.on_process_clicked)
+            self.btn_processBatch.clicked.connect(self.on_process_clicked_batch)
+            self.btn_export.clicked.connect(self.export_mvc_xml)
+
 
             # self.btn_process.clicked.connect(self.run_mvc_calculation)
 
@@ -286,22 +261,43 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             """)
             self.tw_plotting.clear()
             
-            # in ApplicationWindow.__init__ after self.tw_plotting is created
-            # self._style_tabs_for_plotting()
+            self._enable_tab_context_menu()
 
-
-
-            # try:
-            #     with h5py.File("./data/P05_MVC_Left_EXT_CAR_RAD.mat", "r") as f:
-            #         print("File loader: h5py")
-            # except OSError:
-            #     mat = scipy.io.loadmat("./data/P05_MVC_Left_EXT_CAR_RAD.mat", struct_as_record=False, squeeze_me=True)
-            #         print("File loader: scipy.io.loadmat")
-          
-            
-          
+        def _enable_tab_context_menu(self):
+            """Enable right-click context menu on tabs to close them."""
+            tabbar = self.tw_plotting.tabBar()
+            tabbar.setContextMenuPolicy(Qt.CustomContextMenu)
+            tabbar.customContextMenuRequested.connect(self._on_tab_context_menu)
+        
+        def _on_tab_context_menu(self, pos):
+            """Show context menu with 'Close Tab' when right-clicking a tab."""
+            tabbar = self.tw_plotting.tabBar()
+            index = tabbar.tabAt(pos)
+            if index < 0:
+                return
+        
+            menu = QMenu(self)
+            close_action = QAction("Close Tab", self)
+            close_action.triggered.connect(lambda _, i=index: self._close_tab(i))
+            menu.addAction(close_action)
+            menu.exec_(tabbar.mapToGlobal(pos))
+        
+        def _close_tab(self, index):
+            """Close the tab at the given index, showing its name in the console."""
+            tab_name = self.tw_plotting.tabText(index)
+            widget = self.tw_plotting.widget(index)
+            if widget:
+                widget.deleteLater()
+            self.tw_plotting.removeTab(index)
+            self.ledt_output.appendPlainText(f"[info] Closed tab: {tab_name}")
+        
+        
         def _get_current_plot_and_row(self):
-            """Return (plot_ctrl, row, signal) for the current tab/row or (None, None, None)."""
+            '''
+            INTERNAL/PRIVATE METHOD _
+            HELPER: Finds the current TAB, subplot, and numpay array for processing.
+            Return (plot_ctrl, row, signal) for the current TAB/row or (None, None, None).
+            '''
             idx = self.tw_plotting.currentIndex()
             if idx < 0:
                 self.ledt_output.appendPlainText("[warn] No tab selected")
@@ -507,13 +503,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             self.tw_plotting.clear()
             self.file_path = None
         
-            
-        import xml.etree.ElementTree as ET
-        from datetime import datetime
-        from PyQt5.QtWidgets import QFileDialog
-        import logging
-        
-        def export_logfile(self):
+        def export_mvc_xml(self):
             savepath, _ = QFileDialog.getSaveFileName(
                 self, "Export XML", "", "XML Files (*.xml)"
             )
@@ -530,7 +520,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                     continue
         
                 # Pull selections from the CURRENTLY CHECKED row
-                payload = plot_ctrl.get_export_payload_active_row(file_label, require_three=False)
+                # payload = plot_ctrl.get_export_payload_active_row(file_label, require_three=False)
+                payload = plot_ctrl.get_export_payload(file_label, require_three=False)
                 if payload:
                     session_data.append(payload)
                     logging.info(
@@ -561,103 +552,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
             ET.ElementTree(root).write(savepath, encoding="utf-8", xml_declaration=True)
             logging.info(f"XML export completed: {savepath}")
-
-        
-        
-        # def export_logfile(self):
-        #     savepath, _ = QFileDialog.getSaveFileName(
-        #         self,
-        #         "Export XML",
-        #         "",
-        #         "XML Files (*.xml)"
-        #     )
-        #     if not savepath:
-        #         logging.info("Export cancelled: no file path selected.")
-        #         return
-        
-        #     # Dummy session data
-        #     session_data = [
-        #         {
-        #             "filename": "P05_MVC_Left_EXT_CAR_RAD.mat",
-        #             "row": 0,
-        #             "mvc": 1.234,
-        #             "bursts": [(120, 240), (400, 560), (800, 950)]
-        #         },
-        #         {
-        #             "filename": "P05_MVC_Left_ABD.mat",
-        #             "row": 1,
-        #             "mvc": 0.876,
-        #             "bursts": [(100, 220), (500, 670), (850, 1000)]
-        #         }
-        #     ]
-        
-        #     # Build XML root
-        #     root = ET.Element("MVCResults")
-        
-        #     # Add export timestamp
-        #     now = datetime.now()
-        #     export_info = ET.SubElement(root, "ExportInfo")
-        #     ET.SubElement(export_info, "Date").text = now.strftime("%Y-%m-%d")
-        #     ET.SubElement(export_info, "Time").text = now.strftime("%H:%M:%S")
-        
-        #     # Add file entries
-        #     for filedata in session_data:
-        #         file_el = ET.SubElement(root, "File", name=filedata["filename"])
-        #         ET.SubElement(file_el, "Row").text = str(filedata["row"])
-        #         ET.SubElement(file_el, "MVC").text = str(filedata["mvc"])
-        
-        #         bursts_el = ET.SubElement(file_el, "Bursts")
-        #         for idx, (start, end) in enumerate(filedata["bursts"], 1):
-        #             burst_el = ET.SubElement(bursts_el, "Burst", id=str(idx))
-        #             ET.SubElement(burst_el, "Start").text = str(start)
-        #             ET.SubElement(burst_el, "End").text = str(end)
-        
-        #         logging.info(
-        #             f"Prepared export for file={filedata['filename']} row={filedata['row']} "
-        #             f"MVC={filedata['mvc']} bursts={len(filedata['bursts'])}"
-        #         )
-        
-        #     # Write XML file
-        #     try:
-        #         tree = ET.ElementTree(root)
-        #         tree.write(savepath, encoding="utf-8", xml_declaration=True)
-        
-        #         directory = os.path.dirname(savepath)
-        #         logging.info(f"XML export completed successfully: {savepath}")
-        #         logging.info(f"Export directory: {directory}")
-        #         logging.info(f"Export timestamp: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-        #     except Exception as e:
-        #         logging.error(f"Failed to write XML export: {e}")
-
-
-        # def export_logfile(self):
-        #     savepath, _ = QFileDialog.getSaveFileName(
-        #         self,
-        #         "Export txt",
-        #         "",
-        #         "Text Files (*.txt)"
-        #     )
-        #     if savepath:
-        #         try:
-        #             # Example: simulate exporting a file
-        #             exported_file = "results.csv"
-        
-        #             # Log info about the export
-        #             logging.info(f"Exporting file '{exported_file}' to '{savepath}'")
-        
-        #             # Actually write a minimal export file (optional)
-        #             with open(savepath, "w", encoding="utf-8") as f:
-        #                 f.write("MVC Calculator Export Test\n")
-        #                 f.write("This is just a test line.\n")
-        #                 f.write("More lines can go here...\n")
-        
-        #             # Confirm completion in the log
-        #             logging.info(f"Export completed successfully. File saved at '{savepath}'")
-        
-        #         except Exception as e:
-        #             logging.error(f"Export failed: {e}", exc_info=True)
-        
-        
+  
+           
         def get_active_row_data(self):
             if self._data is None:
                 return None
@@ -665,319 +561,156 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             if row < 0 or row >= self._data.shape[0]:
                 return None
             return self._data[row, :]
-
+   
+        def import_mvc_xml(self):
+            """
+            Import a previously exported MVC XML file and display its contents
+            with alignment. If the corresponding .mat file is loaded in a tab,
+            the bursts will be plotted on that tab automatically.
+            """
+            from xml.etree import ElementTree as ET
+            import os
         
-        def exportXML_file(self):
-            print("exportXML_file")
-           
-        def importXML_file(self):
-            print('importXML_file')
-            # dialog.matsImported.connect(self.on_mats_imported)
-            # dialog.exec_()
-       
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Import XML", "", "XML Files (*.xml)"
+            )
+            if not path:
+                return
+        
+            try:
+                tree = ET.parse(path)
+                root = tree.getroot()
+            except Exception as e:
+                self.ledt_output.appendPlainText(f"[error] Failed to read XML: {e}")
+                return
+        
+            self.ledt_output.appendPlainText("=== Imported MVC XML ===")
+        
+            files = root.findall("File")
+            if not files:
+                self.ledt_output.appendPlainText("[warn] No <File> entries found.")
+                self.ledt_output.appendPlainText("=== End of import ===")
+                return
+        
+            # Longest filename → for nice alignment
+            max_len = max(len(f.attrib.get("name", "")) for f in files)
+            tab_width = 8
+            pad_tabs = lambda s: "\t" * max(1, (max_len - len(s)) // tab_width + 1)
+        
+            # --- Get list of currently loaded tab names
+            loaded_tab_names = [
+                self.tw_plotting.tabText(i).strip() for i in range(self.tw_plotting.count())
+            ]
+        
+            for file_elem in files:
+                fname = file_elem.attrib.get("name", "unknown").strip()
+                row_text = file_elem.findtext("Row", default="?")
+                mvc_text = file_elem.findtext("MVC", default="n/a")
+                bursts_elem = file_elem.find("Bursts")
+        
+                burst_texts = []
+                intervals = []
+                if bursts_elem is not None:
+                    for b in bursts_elem.findall("Burst"):
+                        lo = b.findtext("Start", default="?")
+                        hi = b.findtext("End", default="?")
+                        burst_texts.append(f"({lo}-{hi})")
+                        # store numeric ranges for plotting
+                        try:
+                            intervals.append((float(lo), float(hi)))
+                        except ValueError:
+                            pass
+        
+                bursts_str = ", ".join(burst_texts) if burst_texts else "no bursts"
+                spacer = pad_tabs(fname)
+        
+                # --- Find if this file is currently loaded in a tab
+                if fname in loaded_tab_names:
+                    tab_idx = loaded_tab_names.index(fname)
+                    tab = self.tw_plotting.widget(tab_idx)
+                    plot_ctrl = getattr(tab, "plot_ctrl", None)
+        
+                    if plot_ctrl is not None and intervals:
+                        row = int(row_text)
+                        if row in plot_ctrl._selections:
+                            # clear any previous selections
+                            plot_ctrl.clear_row_selections(row)
+                        ax = plot_ctrl.axes[row]
+                        for (lo, hi) in intervals:
+                            patch = ax.axvspan(lo, hi, color="orange", alpha=0.3)
+                            plot_ctrl._patches[row].append(patch)
+                            plot_ctrl._selections[row].append((lo, hi))
+                        plot_ctrl.canvas.draw_idle()
+        
+                        msg = (
+                            f"[info] MATLAB MVC (imported)\n"
+                            f"{fname}:{spacer}Row {row_text}: {mvc_text}\n"
+                            f"bursts at: {bursts_str}"
+                        )
+                    else:
+                        msg = (
+                            f"[info] MATLAB MVC (imported)\n"
+                            f"{fname}:{spacer}Row {row_text}: {mvc_text}\n"
+                            f"bursts at: {bursts_str} (not loaded in UI)"
+                        )
+                else:
+                    msg = (
+                        f"[info] MATLAB MVC (imported)\n"
+                        f"{fname}:{spacer}Row {row_text}: {mvc_text}\n"
+                        f"bursts at: {bursts_str} (not loaded in UI)"
+                    )
+        
+                self.ledt_output.appendPlainText(msg)
+        
+            self.ledt_output.appendPlainText("=== End of import ===")
+
+
+
+   
+        def launch_help(self):
+            """Force open the MkDocs help site in Microsoft Chrome """
+            import os, subprocess, sys, urllib.request
+            from urllib.parse import urljoin
+            from PyQt5.QtWidgets import QMessageBox
+        
+            site_index = os.path.join(os.path.dirname(__file__), "docs_site", "site", "index.html")
+        
+            if not os.path.exists(site_index):
+                QMessageBox.warning(
+                    self,
+                    "Help not found",
+                    f"Cannot find MkDocs help site at:\n{site_index}\n\n"
+                    "Run:\n\n    mkdocs build\n\n"
+                    "to generate it."
+                )
+                return
+        
+            file_url = urljoin('file:', urllib.request.pathname2url(os.path.abspath(site_index)))
+        
+            # --- Force open in Edge ---
+            try:
+                if sys.platform.startswith("win"):
+                    chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+
+                    if not os.path.exists(chrome_path):
+                        chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+
+                    if os.path.exists(chrome_path):
+                        subprocess.Popen([chrome_path, file_url])
+                    else:
+                        os.startfile(file_url)  # fallback
+                else:
+                    subprocess.Popen(["xdg-open", file_url])
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Could not open browser:\n{e}")
+   
+         
         def load_mat_files(self):
-            dialog = LoadMat(self)
-            dialog.matsImported.connect(self.on_mats_imported)
-            dialog.exec_()
-            
-            
-        # def on_burst_detection(self):
-        #     # find current tab & its PlotController
-        #     idx = self.tw_plotting.currentIndex()
-        #     if idx < 0:
-        #         QMessageBox.information(self, "Burst detection", "No plotting tab is selected.")
-        #         return
-        
-        #     tab = self.tw_plotting.widget(idx)
-        #     plot_ctrl = getattr(tab, "plot_ctrl", None)
-        #     if plot_ctrl is None:
-        #         QMessageBox.warning(self, "Burst detection", "No plot controller on this tab.")
-        #         return
-        
-        #     # choose your sampling rate
-        #     # If you have a global/constant, use that; otherwise set an appropriate default for sEMG.
-        #     fs = globals().get("DEFAULT_SEMG_FREQUENCY", 2000)  # Hz fallback
-        
-        #     # run detection on the ACTIVE row (the one with bold border)
-        #     # this will compute energy mask → intervals → paint up to 3 spans
-        #     try:
-        #         plot_ctrl.detect_bursts_with_energy(fs=fs, min_silence=0.080, min_sound=0.200)
-        #     except Exception as e:
-        #         QMessageBox.critical(self, "Burst detection error", str(e))
-        
-        # def on_burst_detection(self):
-        #     idx = self.tw_plotting.currentIndex()
-        #     if idx < 0:
-        #         self.ledt_output.appendPlainText("[warn] No plotting tab is selected.")
-        #         return
-        
-        #     tab = self.tw_plotting.widget(idx)
-        #     plot_ctrl = getattr(tab, "plot_ctrl", None)
-        #     if plot_ctrl is None:
-        #         self.ledt_output.appendPlainText("[warn] No plot controller on this tab.")
-        #         return
-        
-        #     row = getattr(plot_ctrl, "_active_row", None)
-        #     if row is None:
-        #         self.ledt_output.appendPlainText("[warn] No active row selected.")
-        #         return
-        
-        #     if plot_ctrl._data is None:
-        #         self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
-        #         return
-        
-        #     signal = plot_ctrl._data[row, :]
-        
-        #     fs = globals().get("DEFAULT_SEMG_FREQUENCY", 2000)  # Hz fallback
-        #     try:
-        #         from processors import Processor
-        #         proc = Processor()
-        #         bursts = proc.energy_detection(signal, fs=fs, min_silence=0.080, min_sound=0.200)
-        
-        #         plot_ctrl._selections[row] = bursts  # store them
-        
-        #         fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else f"Tab {idx}"
-        #         label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
-        
-        #         if bursts:
-        #             self.ledt_output.appendPlainText(
-        #                 f"[info] Burst detection for {fname}, {label}: {len(bursts)} bursts"
-        #             )
-        #             for i, (lo, hi) in enumerate(bursts, 1):
-        #                 self.ledt_output.appendPlainText(f"   Burst {i}: {lo}–{hi}")
-        #         else:
-        #             self.ledt_output.appendPlainText(f"[warn] No bursts detected for {fname}, {label}")
-        
-        #     except Exception as e:
-        #         self.ledt_output.appendPlainText(f"[error] Burst detection failed: {e}")
-        
-        
-        # def on_burst_detection(self):
-        #     idx = self.tw_plotting.currentIndex()
-        #     if idx < 0:
-        #         self.ledt_output.appendPlainText("[warn] No plotting tab is selected.")
-        #         return
-        
-        #     tab = self.tw_plotting.widget(idx)
-        #     plot_ctrl = getattr(tab, "plot_ctrl", None)
-        #     if plot_ctrl is None:
-        #         self.ledt_output.appendPlainText("[warn] No plot controller on this tab.")
-        #         return
-        
-        #     row = getattr(plot_ctrl, "_active_row", None)
-        #     if row is None:
-        #         self.ledt_output.appendPlainText("[warn] No active row selected.")
-        #         return
-        
-        #     if plot_ctrl._data is None:
-        #         self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
-        #         return
-        
-        #     signal = plot_ctrl._data[row, :]
-        #     fs = globals().get("DEFAULT_SEMG_FREQUENCY", 2000)
-        
-        #     try:
-        #         from processors import Processor
-        #         proc = Processor()
-        #         bursts = proc.energy_detection(signal, fs=fs, min_silence=0.080, min_sound=0.200)
-        
-        #         plot_ctrl._selections[row] = bursts  # store them
-        
-        #         fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else f"Tab {idx}"
-        #         label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
-        
-        #         if bursts:
-        #             self.ledt_output.appendPlainText(
-        #                 f"[info] Burst detection for {fname}, {label}: {len(bursts)} bursts"
-        #             )
-        
-        #             burst_values = []
-        #             for i, (lo, hi) in enumerate(bursts, 1):
-        #                 segment = signal[int(lo):int(hi)]
-        #                 if segment.size > 0:
-        #                     val = float(segment.max())  # or np.sqrt(np.mean(segment**2)) for RMS
-        #                     burst_values.append(val)
-        #                     self.ledt_output.appendPlainText(f"   Burst {i}: {lo}–{hi} → {val:.2f}")
-        
-        #             if burst_values:
-        #                 avg_val = sum(burst_values) / len(burst_values)
-        #                 self.ledt_output.appendPlainText(f"   Average value: {avg_val:.2f}")
-        #         else:
-        #             self.ledt_output.appendPlainText(f"[warn] No bursts detected for {fname}, {label}")
-        
-        #     except Exception as e:
-        #         self.ledt_output.appendPlainText(f"[error] Burst detection failed: {e}")
+             dialog = LoadMat(self)
+             dialog.matsImported.connect(self.on_mats_imported)
+             dialog.exec_()
+   
 
-        # def on_burst_detection(self):
-        #     idx = self.tw_plotting.currentIndex()
-        #     if idx < 0:
-        #         self.ledt_output.appendPlainText("[warn] No plotting tab is selected.")
-        #         return
-        
-        #     tab = self.tw_plotting.widget(idx)
-        #     plot_ctrl = getattr(tab, "plot_ctrl", None)
-        #     if plot_ctrl is None:
-        #         self.ledt_output.appendPlainText("[warn] No plot controller on this tab.")
-        #         return
-        
-        #     row = getattr(plot_ctrl, "_active_row", None)
-        #     if row is None:
-        #         self.ledt_output.appendPlainText("[warn] No active row selected.")
-        #         return
-        
-        #     if plot_ctrl._data is None:
-        #         self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
-        #         return
-        
-        #     signal = plot_ctrl._data[row, :]
-        #     fs = globals().get("DEFAULT_SEMG_FREQUENCY", 2000)
-        
-        #     try:
-        #         from processors.processors import Processor
-        #         proc = Processor()
-        
-        #         # call the class method
-        #         energy_vec, out_signal = proc.energy_detection(signal, fs=fs)
-        
-        #         # simple way: get bursts from contiguous 1-runs
-        #         bursts = []
-        #         inside = False
-        #         start = None
-        #         for i, val in enumerate(energy_vec):
-        #             if val == 1 and not inside:
-        #                 start = i
-        #                 inside = True
-        #             elif val == 0 and inside:
-        #                 bursts.append((start, i))
-        #                 inside = False
-        #         if inside:
-        #             bursts.append((start, len(energy_vec)))
-        
-        #         plot_ctrl._selections[row] = bursts
-        
-        #         fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else f"Tab {idx}"
-        #         label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
-        
-        #         if bursts:
-        #             self.ledt_output.appendPlainText(
-        #                 f"[info] Burst detection for {fname}, {label}: {len(bursts)} bursts"
-        #             )
-        #             burst_vals = []
-        #             for j, (lo, hi) in enumerate(bursts, 1):
-        #                 seg = signal[int(lo):int(hi)]
-        #                 if seg.size > 0:
-        #                     val = float(seg.max())
-        #                     burst_vals.append(val)
-        #                     self.ledt_output.appendPlainText(f"   Burst {j}: {lo}–{hi} → {val:.2f}")
-        #             if burst_vals:
-        #                 avg_val = sum(burst_vals) / len(burst_vals)
-        #                 self.ledt_output.appendPlainText(f"   Average value: {avg_val:.2f}")
-        #         else:
-        #             self.ledt_output.appendPlainText(f"[warn] No bursts detected for {fname}, {label}")
-        
-        #     except Exception as e:
-        #         self.ledt_output.appendPlainText(f"[error] Burst detection failed: {e}")
-
-        
-        # def on_mats_imported(self, results):
-        #     self.tw_plotting.clear()
-        #     for res in results:
-        #         base_name = os.path.basename(res["path"])
-        #         tab = QWidget()
-        #         layout = QVBoxLayout(tab)
-        
-        #         plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
-        #         layout.addWidget(plot_ctrl.toolbar)
-        #         layout.addWidget(plot_ctrl.canvas)
-        
-        #         # plot_ctrl.plot_mat_arrays(res["data"], res["labels"])
-        #         plot_ctrl.plot_mat_arrays(res["data"], res["labels"], source_path=res["path"])
-                
-        #         tab.plot_ctrl = plot_ctrl
-        
-        #         self.tw_plotting.addTab(tab, base_name)
-        
-    
-        # def on_burst_detection(self):
-        #     idx = self.tw_plotting.currentIndex()
-        #     if idx < 0:
-        #         self.ledt_output.appendPlainText("[warn] No plotting tab is selected.")
-        #         return
-        
-        #     tab = self.tw_plotting.widget(idx)
-        #     plot_ctrl = getattr(tab, "plot_ctrl", None)
-        #     if plot_ctrl is None:
-        #         self.ledt_output.appendPlainText("[warn] No plot controller on this tab.")
-        #         return
-        
-        #     row = getattr(plot_ctrl, "_active_row", None)
-        #     if row is None:
-        #         self.ledt_output.appendPlainText("[warn] No active row selected.")
-        #         return
-        
-        #     if plot_ctrl._data is None:
-        #         self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
-        #         return
-        
-        #     signal = plot_ctrl._data[row, :]
-        #     fs = globals().get("DEFAULT_SEMG_FREQUENCY", 2000)
-        
-        #     try:
-        #         from processors.processors import Processor
-        #         proc = Processor()
-        #         energy_vec, _ = proc.energy_detection(signal, fs=fs)
-        
-        #         # derive contiguous bursts from energy_vec
-        #         bursts = []
-        #         inside = False
-        #         start = None
-        #         for i, val in enumerate(energy_vec):
-        #             if val == 1 and not inside:
-        #                 start = i
-        #                 inside = True
-        #             elif val == 0 and inside:
-        #                 bursts.append((start, i))
-        #                 inside = False
-        #         if inside:
-        #             bursts.append((start, len(energy_vec)))
-        
-        #         fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else f"Tab {idx}"
-        #         label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
-        
-        #         if bursts:
-        #             self.ledt_output.appendPlainText(
-        #                 f"[info] Burst detection for {fname} \n {label}: {len(bursts)} bursts "
-        #             )
-        
-        #             burst_vals = []
-        #             # reset and draw new patches
-        #             plot_ctrl._selections[row] = []
-        #             plot_ctrl._patches[row] = []
-        #             for j, (lo, hi) in enumerate(bursts, 1):
-        #                 seg = signal[int(lo):int(hi)]
-        #                 if seg.size > 0:
-        #                     val = float(seg.max())
-        #                     burst_vals.append(val)
-        
-        #                     # draw patch
-        #                     p = plot_ctrl.axes[row].axvspan(lo, hi, color="orange", alpha=0.30)
-        #                     plot_ctrl._selections[row].append((lo, hi))
-        #                     plot_ctrl._patches[row].append(p)
-        
-        #                     self.ledt_output.appendPlainText(f"   Burst {j} sample limits: {lo}–{hi} → {val:.2f}")
-        
-        #             if burst_vals:
-        #                 avg_val = sum(burst_vals) / len(burst_vals)
-        #                 self.ledt_output.appendPlainText(f"   Average value: {avg_val:.2f}")
-        
-        #             plot_ctrl.canvas.draw_idle()
-        #         else:
-        #             self.ledt_output.appendPlainText(f"[warn] No bursts detected for {fname}, {label}")
-        
-        #     except Exception as e:
-        #         self.ledt_output.appendPlainText(f"[error] Burst detection failed: {e}")
-                
-        
         def on_burst_detection(self):
             idx = self.tw_plotting.currentIndex()
             if idx < 0:
@@ -1065,7 +798,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 self.ledt_output.appendPlainText(f"[error] Burst detection failed: {e}")
 
         
-        
         def on_clear_selections(self):
             """Remove all burst/manual selections from all subplots in the current tab."""
             idx = self.tw_plotting.currentIndex()
@@ -1094,6 +826,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             plot_ctrl.canvas.draw_idle()
             self.ledt_output.appendPlainText("[info] Cleared all selections for this tab")
 
+
         def on_mats_imported(self, results):
             self.tw_plotting.clear()
             for res in results:
@@ -1111,138 +844,145 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 tab.plot_ctrl = plot_ctrl
         
                 self.tw_plotting.addTab(tab, base_name)
-                    
+
         def on_process_clicked(self):
+            """Execute MATLAB-style MVC calculation for the current tab, selected row, and current selections."""
             idx = self.tw_plotting.currentIndex()
             if idx < 0:
-                QMessageBox.information(self, "Calculate MVC", "No plotting tab is selected.")
+                self.ledt_output.appendPlainText("[warn] No tab selected")
                 return
         
             tab = self.tw_plotting.widget(idx)
             plot_ctrl = getattr(tab, "plot_ctrl", None)
             if plot_ctrl is None:
-                QMessageBox.warning(self, "Calculate MVC", "No plot controller on this tab.")
+                self.ledt_output.appendPlainText("[warn] No PlotController found in this tab")
                 return
         
-            # active row
+            # Active row check
             row = getattr(plot_ctrl, "_active_row", None)
             if row is None:
-                QMessageBox.information(self, "Calculate MVC", "No active row selected.")
+                self.ledt_output.appendPlainText("[warn] No active row selected")
                 return
         
+            # Get EMG data for that row
             if plot_ctrl._data is None:
-                QMessageBox.warning(self, "Calculate MVC", "No data loaded in this PlotController")
+                self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
                 return
         
             signal = plot_ctrl._data[row, :]
+            selections = plot_ctrl._selections.get(row, [])
         
-            try:
-                from processors import Processor
-                proc = Processor()
-                mvc_val, rms = proc.mvc_matlab(signal)
+            if len(selections) < BEST_OF:
+                self.ledt_output.appendPlainText(
+                    f"[warn] Not enough selections for MVC — need {BEST_OF}, found {len(selections)}."
+                )
+                return
         
-                fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else f"Tab {idx}"
+            # Use only the selected intervals
+            from processors.processors import Processor
+            proc = Processor()
+        
+            mvc_values = []
+            for (lo, hi) in selections[:BEST_OF]:
+                segment = signal[int(lo):int(hi)]
+                if segment.size > 0:
+                    mvc_val, rms_val = proc.mvc_matlab(segment)
+                    mvc_values.append(mvc_val)
+        
+            if not mvc_values:
+                self.ledt_output.appendPlainText("[warn] No valid data in selected intervals.")
+                return
+        
+            mvc_final = max(mvc_values)
+        
+            fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else f"Tab {idx}"
+            label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
+        
+            msg = f"[info] MATLAB MVC (best of {BEST_OF})\nfor {fname}, {label}: {mvc_final:.3f}"
+            self.ledt_output.appendPlainText(msg)
+            
+        def on_process_clicked_batch(self):
+            """
+            Run MATLAB MVC calculation on all open tabs that have ≥ BEST_OF selections.
+            Tabs missing selections are colored red as a reminder.
+            Results appear in the console and are saved into plot_ctrl._mvc_result
+            so they will be included in XML export.
+            """
+            total_tabs = self.tw_plotting.count()
+            if total_tabs == 0:
+                self.ledt_output.appendPlainText("[warn] No open tabs.")
+                return
+        
+            self.ledt_output.appendPlainText("\n=== MVC all open tabs ===")
+        
+            proc = Processor()
+            any_processed = False
+        
+            for i in range(total_tabs):
+                tab_name = self.tw_plotting.tabText(i)
+                tab = self.tw_plotting.widget(i)
+                plot_ctrl = getattr(tab, "plot_ctrl", None)
+        
+                # Skip invalid tabs
+                if plot_ctrl is None or plot_ctrl._data is None:
+                    # self.tw_plotting.setTabTextColor(i, Qt.red)
+                    self.set_tab_alert(i, True)
+                    self.ledt_output.appendPlainText(f"[warn] {tab_name}: No data or plot controller.")
+                    continue
+        
+                row = getattr(plot_ctrl, "_active_row", None)
+                if row is None:
+                    # self.tw_plotting.setTabTextColor(i, Qt.red)
+                    self.set_tab_alert(i, True)
+                    self.ledt_output.appendPlainText(f"[warn] {tab_name}: No active row selected.")
+                    continue
+        
+                selections = plot_ctrl._selections.get(row, [])
+                if len(selections) < BEST_OF:
+                    # self.tw_plotting.setTabTextColor(i, Qt.red)
+                    self.set_tab_alert(i, True)
+                    self.ledt_output.appendPlainText(
+                        f"[warn] {tab_name}: Not enough selections (found {len(selections)})."
+                    )
+                    continue
+        
+                # --- Valid tab: reset color to default ---
+                # self.tw_plotting.setTabTextColor(i, Qt.black)
+                self.set_tab_alert(i, False) 
+        
+                # Perform MVC across the selected intervals
+                signal = plot_ctrl._data[row, :]
+                mvc_values = []
+                for (lo, hi) in selections[:BEST_OF]:
+                    segment = signal[int(lo):int(hi)]
+                    if segment.size > 0:
+                        mvc_val, _ = proc.mvc_matlab(segment)
+                        mvc_values.append(mvc_val)
+        
+                if not mvc_values:
+                    self.ledt_output.appendPlainText(f"[warn] {tab_name}: No valid data in selections.")
+                    continue
+        
+                mvc_final = max(mvc_values)
+                fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else tab_name
                 label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
         
-                self.ledt_output.appendPlainText(
-                    f"[info] MVC result for {fname}, {label}: {mvc_val:.3f} (RMS={rms:.3f})"
-                )
-            except Exception as e:
-                QMessageBox.critical(self, "MVC calculation error", str(e))
+                # ✅ Store MVC result in the PlotController for XML export
+                plot_ctrl._mvc_result = mvc_final
+        
+                # ✅ Optional: if you have a per-row data structure, you can store it there too:
+                # plot_ctrl._mvc_per_row[row] = mvc_final
+        
+                msg = f"[info] MVC for {fname}, {label}: {mvc_final:.3f}"
+                self.ledt_output.appendPlainText(msg)
+                any_processed = True
+        
+            if not any_processed:
+                self.ledt_output.appendPlainText("[warn] No tabs had enough selections to process.")
+            else:
+                self.ledt_output.appendPlainText("=== End of batch MVC ===")
 
-
-            
-          # def on_mats_imported(self, results):
-        #     self.tw_plotting.clear()
-        #     for res in results:
-        #         base_name = os.path.basename(res["path"])
-        
-        #         tab = QWidget()
-        #         layout = QVBoxLayout(tab)
-        #         layout.setContentsMargins(0, 0, 0, 0)
-        #         layout.setSpacing(2)
-        #         tab.setLayout(layout)
-        
-        #         # Let PlotController handle adding toolbar+canvas to the container's layout
-        #         plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
-        
-        #         # Plot in-memory arrays
-        #         # plot_ctrl.plot_mat_arrays(res["data"], res["labels"]) ORIGINASL
-        #         plot_ctrl.plot_mat_arrays(res["data"], res["labels"], source_path=res["path"])
-
-          
-        #         # Keep a reference for export
-        #         tab.plot_ctrl = plot_ctrl
-        
-        #         self.tw_plotting.addTab(tab, base_name)
-
-            
-        # def on_mats_imported(self, results):
-        #     """Called after LoadMat dialog emits imported MAT files"""
-        #     self.tw_plotting.clear()
-        
-        #     for res in results:
-        #         base_name = os.path.basename(res["path"])
-        
-        #         # Create new tab
-        #         tab = QWidget()
-        #         layout = QVBoxLayout(tab)
-        #         layout.setContentsMargins(0, 0, 0, 0)  # remove padding so plots fill tab
-        #         layout.setSpacing(2)
-        
-        #         # Attach a PlotController for this file
-        #         plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
-        #         # layout.addWidget(plot_ctrl.toolbar)
-        #         # layout.addWidget(plot_ctrl.canvas)
-        
-        #         # Ensure layout is set on tab
-        #         tab.setLayout(layout)
-        
-        #         # Plot using arrays already in memory
-        #         plot_ctrl.plot_mat_arrays(res["data"], res["labels"])
-        
-        #         # Add tab to tw_plotting
-        #         self.tw_plotting.addTab(tab, base_name)
-                
-        #         tab.plot_ctrl = plot_ctrl
-
-        # def on_mats_imported(self, results):
-        #     self.tw_plotting.clear()
-        #     for res in results:
-        #         base_name = os.path.basename(res["path"])
-        #         tab = QWidget()
-        #         layout = QVBoxLayout(tab)
-        
-        #         plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
-        #         layout.addWidget(plot_ctrl.toolbar)
-        #         layout.addWidget(plot_ctrl.canvas)
-        
-        #         # use in-memory arrays
-        #         plot_ctrl.plot_mat_arrays(res["data"], res["labels"])
-        
-        #         self.tw_plotting.addTab(tab, base_name)
-           
-        # def on_mat_files_selected(self, files):
-        #     self.tw_plotting.clear()
-        #     for file_path in files:
-        #         base_name = os.path.basename(file_path)
-        
-        #         # Create a tab
-        #         tab = QWidget()
-        #         layout = QVBoxLayout(tab)
-        
-        #         # Create a new PlotController for this tab
-        #         plot_ctrl = PlotController(parent=self, container=tab, main_window=self)
-        #         plot_ctrl.canvas.setVisible(True)
-        #         plot_ctrl.toolbar.setVisible(True)
-        #         layout.addWidget(plot_ctrl.toolbar)
-        #         layout.addWidget(plot_ctrl.canvas)
-        
-        #         # Load and plot the .mat file
-        #         plot_ctrl.plot_mat_file(file_path)
-        
-        #         self.tw_plotting.addTab(tab, base_name)     
-                
+               
         def on_mat_files_selected(self, files):
             self.tw_plotting.clear()
             for file_path in files:
@@ -1274,359 +1014,40 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
                 # Add the tab
                 self.tw_plotting.addTab(tab, base_name)
+                
+                
+        def set_tab_alert(self, index: int, alert: bool):
+            """
+            Add or remove a red warning dot icon on the tab, with spacing before text.
+            Works across all platforms.
+            """
+            icon_size = 10
+        
+            if alert:
+                # Create red dot
+                pixmap = QPixmap(icon_size, icon_size)
+                pixmap.fill(Qt.transparent)
+                painter = QPainter(pixmap)
+                painter.setRenderHint(QPainter.Antialiasing)
+                painter.setBrush(QColor("#ff4d4d"))
+                painter.setPen(Qt.NoPen)
+                painter.drawEllipse(0, 0, icon_size, icon_size)
+                painter.end()
+        
+                icon = QIcon(pixmap)
+                self.tw_plotting.setTabIcon(index, icon)
+        
+                # --- Add spacing between icon and text ---
+                self.tw_plotting.setIconSize(QSize(icon_size + 8, icon_size))  # adds 8px spacing
+            else:
+                self.tw_plotting.setTabIcon(index, QIcon())  # clear icon
+
+
+
+
 
                 
-        # def on_process_clicked(self):
-        #     try:
-        #         # get currently active row data from PlotController
-        #         data = self.plot_controller.get_active_row_data()
-        #         if data is None:
-        #             self.plainTextEdit.appendPlainText("No active row selected.")
-        #             return
-        
-        #         # Run MVC calculation
-        #         from processors import Processor
-        #         proc = Processor()
-        #         mvc_val, rms = proc.mvc_matlab(data)
-        
-        #         self.plainTextEdit.appendPlainText(
-        #             f"MVC result: {mvc_val:.3f}"
-        #         )
-        #     except Exception as e:
-        #         self.plainTextEdit.appendPlainText(f"Error during calculation: {e}")
-
-                
-        
-        # def run_mvc_calculation(self):
-        #     # Which tab is active?
-        #     idx = self.tw_plotting.currentIndex()
-        #     if idx < 0:
-        #         self.ledt_output.appendPlainText("[warn] No tab selected")
-        #         return
-        
-        #     tab = self.tw_plotting.widget(idx)
-        #     plot_ctrl = getattr(tab, "plot_ctrl", None)
-        #     if not plot_ctrl:
-        #         self.ledt_output.appendPlainText("[warn] No PlotController found in tab")
-        #         return
-        
-        #     # Which row is active in that tab?
-        #     row = getattr(plot_ctrl, "_active_row", None)
-        #     if row is None:
-        #         self.ledt_output.appendPlainText("[warn] No active row selected")
-        #         return
-        
-        #     # Get the raw data for that row
-        #     if plot_ctrl._data is None:
-        #         self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
-        #         return
-        
-        #     signal = plot_ctrl._data[row, :]
-        
-        #     # Get user spans (burst selections)
-        #     bursts = plot_ctrl._selections.get(row, [])
-        #     if not bursts:
-        #         self.ledt_output.appendPlainText("[warn] No bursts selected on this row")
-        #         return
-        
-        #     # === MVC calculation ===
-        #     mvc_values = []
-        #     for (lo, hi) in bursts:
-        #         lo, hi = int(lo), int(hi)
-        #         segment = signal[lo:hi]
-        #         if segment.size > 0:
-        #             mvc_values.append(segment.max())
-        
-        #     if not mvc_values:
-        #         self.ledt_output.appendPlainText("[warn] No valid data in bursts")
-        #         return
-        
-        #     mvc = max(mvc_values)
-        
-        #     # Print results to the QPlainTextEdit
-        #     fname = getattr(plot_ctrl, "_source_path", f"Tab {idx}")
-        #     label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
-        #     self.ledt_output.appendPlainText(
-        #         f"[info] MVC result for {fname}, {label}: {mvc:.4f}"
-        #     )
-
-        # def on_process_clicked(self):
-        #     """Process the active row in the current tab for MVC calculation."""
-        #     try:
-        #         idx = self.tw_plotting.currentIndex()
-        #         if idx < 0:
-        #             self.ledt_output.appendPlainText("[warn] No tab selected")
-        #             return
-          
-        #         # Retrieve PlotController from the current tab
-        #         tab = self.tw_plotting.widget(idx)
-        #         plot_ctrl = None
-        #         for child in tab.children():
-        #             if isinstance(child, PlotController):
-        #                 plot_ctrl = child
-        #                 break
-        #         if plot_ctrl is None:
-        #             self.ledt_output.appendPlainText("[warn] No PlotController found in this tab")
-        #             return
-        
-        #         # Check active row
-        #         row = getattr(plot_ctrl, "_active_row", None)
-        #         if row is None:
-        #             self.ledt_output.appendPlainText("[warn] No active row selected")
-        #             return
-        
-        #         # Get signal data
-        #         if plot_ctrl._data is None:
-        #             self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
-        #             return
-        #         signal = plot_ctrl._data[row, :]
-        
-        #         # Get user spans (bursts)
-        #         bursts = plot_ctrl._selections.get(row, [])
-        #         if not bursts:
-        #             self.ledt_output.appendPlainText("[warn] No bursts selected on this row")
-        #             return
-        
-        #         # === MVC calculation ===
-        #         mvc_values = []
-        #         for (lo, hi) in bursts:
-        #             lo, hi = int(lo), int(hi)
-        #             segment = signal[lo:hi]
-        #             if segment.size > 0:
-        #                 mvc_values.append(segment.max())
-        
-        #         if not mvc_values:
-        #             self.ledt_output.appendPlainText("[warn] No valid data in bursts")
-        #             return
-        
-        #         mvc = max(mvc_values)
-        
-        #         # Print result
-        #         fname = getattr(plot_ctrl, "_source_path", f"Tab {idx}")
-        #         label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
-        #         self.ledt_output.appendPlainText(
-        #             f"[info] MVC result for {fname}, {label}: {mvc:.4f}"
-        #         )
-        
-        #     except Exception as e:
-        #         self.ledt_output.appendPlainText(f"Error during calculation: {e}")
-        
-        
-        
-        # def on_process_clicked(self):
-        #     try:
-        #         # get currently active row data from PlotController
-        #         data = self.plot_controller.get_active_row_data()
-        #         if data is None:
-        #             self.plainTextEdit.appendPlainText("No active row selected.")
-        #             return
-        
-        #         # Run MVC calculation
-        #         from processors import Processor
-        #         proc = Processor()
-        #         mvc_val, rms = proc.mvc_matlab(data)
-        
-        #         self.plainTextEdit.appendPlainText(
-        #             f"MVC result: {mvc_val:.3f}"
-        #         )
-        #     except Exception as e:
-        #         self.plainTextEdit.appendPlainText(f"Error during calculation: {e}")
-        
-        
-        # def on_process_clicked(self):
-        #     idx = self.tw_plotting.currentIndex()
-        #     if idx < 0:
-        #         self.ledt_output.appendPlainText("[warn] No plotting tab is selected.")
-        #         return
-        
-        #     tab = self.tw_plotting.widget(idx)
-        #     plot_ctrl = getattr(tab, "plot_ctrl", None)
-        #     if plot_ctrl is None:
-        #         self.ledt_output.appendPlainText("[warn] No plot controller on this tab.")
-        #         return
-        
-        #     row = getattr(plot_ctrl, "_active_row", None)
-        #     if row is None:
-        #         self.ledt_output.appendPlainText("[warn] No active row selected.")
-        #         return
-        
-        #     if plot_ctrl._data is None:
-        #         self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
-        #         return
-        
-        #     signal = plot_ctrl._data[row, :]
-        
-        #     try:
-        #         from processors import Processor
-        #         proc = Processor()
-        #         mvc_val, rms = proc.mvc_matlab(signal)
-        
-        #         fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else f"Tab {idx}"
-        #         label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
-        
-        #         self.ledt_output.appendPlainText(
-        #             f"[info] MVC result for {fname}, {label}: {mvc_val:.3f} (RMS={rms:.3f})"
-        #         )
-        
-        #     except Exception as e:
-        #         self.ledt_output.appendPlainText(f"[error] MVC calculation failed: {e}")
-
-        def on_process_clicked(self):
-            idx = self.tw_plotting.currentIndex()
-            if idx < 0:
-                self.ledt_output.appendPlainText("[warn] No plotting tab is selected.")
-                return
-        
-            tab = self.tw_plotting.widget(idx)
-            plot_ctrl = getattr(tab, "plot_ctrl", None)
-            if plot_ctrl is None:
-                self.ledt_output.appendPlainText("[warn] No plot controller on this tab.")
-                return
-        
-            row = getattr(plot_ctrl, "_active_row", None)
-            if row is None:
-                self.ledt_output.appendPlainText("[warn] No active row selected.")
-                return
-        
-            if plot_ctrl._data is None:
-                self.ledt_output.appendPlainText("[warn] No data loaded in this PlotController")
-                return
-        
-            signal = plot_ctrl._data[row, :]
-        
-            try:
-                from processors.processors import Processor
-                proc = Processor()
-        
-                mvc_val, rms = proc.mvc_matlab(signal)
-        
-                fname = os.path.basename(plot_ctrl._source_path) if plot_ctrl._source_path else f"Tab {idx}"
-                label = plot_ctrl._labels[row] if plot_ctrl._labels is not None else f"Row {row+1}"
-        
-                self.ledt_output.appendPlainText(
-                    f"[info] MVC result for {fname}, {label}: {mvc_val:.2f}"
-                )
-            except Exception as e:
-                self.ledt_output.appendPlainText(f"[error] MVC calculation failed: {e}")
-
-
-
-
-
-            # for f in files:
-            #     logging.info(f"Loaded MAT file: {os.path.basename(f)}") 
-            #     # --- Update plotting tabs ---
-            #     self.tw_plotting.clear()
-            #     for file_path in files:
-            #         base_name = os.path.basename(file_path)
-            #         tab = QWidget()
-            #         layout = QVBoxLayout(tab)
-            #         # Example: put a QLabel or custom plotting widget inside
-            #         label = QLabel(base_name)   # <<== show actual file name, not literal string
-            #         layout.addWidget(label)
-                    
-            #         self.tw_plotting.addTab(tab, base_name)
-
-
-
-
-
-
-                    
-        # def export_logfile(self):
-        #     savepath, _ = QFileDialog.getSaveFileName(
-        #         self,
-        #         "Export txt",
-        #         "",
-        #         "Text Files (*.txt)"
-        #     )
-        #     if savepath:
-        #         with open(savepath, "w") as f:
-        #             f.write("MVC Calculator Export Test\n")
-        #             f.write("This is just a test line.\n")
-        #             f.write("More lines can go here...\n")
-                    
-            # if savepath:
-            #     with open(savepath, "w") as f:
-            #         f.write("MVC Calculator Results\n")
-            #         f.write("=======================\n\n")
-            #         for key, value in self.results.items():
-            #             f.write(f"{key}: {value}\n")
-
-            
-        # def load_mat_files(self):
-        #     dialog = LoadMat(self)
-        #     if dialog.exec_() == QDialog.Accepted:
-        #         files = dialog.get_selected_files()
-        #         if files:
-        #             current = self.ledt_output.toPlainText()
-        #             names = "\n".join(os.path.basename(f) for f in files)
-        #             new_text = current + "\n" + names if current else names
-        #             self.ledt_output.setPlainText(new_text)
-        #             if isinstance(self.ledt_output, QPlainTextEdit):
-        #                 self.ledt_output.setPlainText(names)
-        #             else:
-        #                 # fallback if it's still a QLineEdit
-        #                 self.ledt_output.setText(" ; ".join(os.path.basename(f) for f in files))
-            
-        #     self.tw_plotting.clear()
-
-        #     for file_path in files:
-        #         base_name = os.path.basename(file_path)
-        
-        #         # Create a QWidget for this tab
-        #         tab = QWidget()
-        #         layout = QVBoxLayout(tab)
-        
-        #         # Example: put a QLabel or custom plotting widget inside
-        #         label = QLabel(f"base_name")
-        #         layout.addWidget(label)
-        
-        #         # Add to QTabWidget
-        #         self.tw_plotting.addTab(tab, base_name)
-    
-        # def load_mat_files(self):
-        #     dialog = LoadMat(self)
-        #     if dialog.exec_() == QDialog.Accepted:
-        #         files = dialog.get_selected_files()
-        #         if files:
-        #             self.ledt_output.setText("\n".join(os.path.basename(f) for f in files))
-
-        # # main.py — wherever you open the dialog
-        # def load_preferences(self):
-        #     dialog = PreferencesDialog(self)
-        #     dialog.setWindowTitle("Preferencias")
-        #     result = dialog.exec_()
-        #     if result == QtWidgets.QDialog.Accepted:
-        #         # If your dialog writes into self.prefs, persist to disk:
-        #         self.prefs.save()
-        #         # Re-apply visibility
-        #         hide = self.prefs.get(
-        #             "General", "hide_experimental", fallback="True") == "True"
-        #         self.apply_experimental_visibility(hide)
-
-         
-
-
-        # def one_button_click(self):
-        #     dialog = InputDialogONECLICK(self)
-        #     dialog.exec_()
-
-        # def open_imu_positioning_dialog(self):
-        #     self.dialog = ImuPositioningDialog(self)
-        #     self.dialog.show()
-
-        # def save_csv(self, savepath):
-        #     try:
-        #         # savepath = QFileDialog.getSaveFileName(self, "Guardar csv","","*.csv")[0]
-        #         self.imported_MOT.to_csv(savepath, sep=',')
-        #     except:
-        #         pass
-
-  
-        # def show_ik_dialog(self):
-        #     self.dialog = IkDialog(self)
-        #     self.dialog.show()  # or dialog.show() for non-blocking
+       
 
 # %% PROGRAM CLOSE
 
@@ -1679,144 +1100,28 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
             super().closeEvent(event)
 
-
-        # def closeEvent(self, event):
-        #     print("[INFO] Window is closing...")
-        
-        #     # 1) Stop UI timers
-        #     try:
-        #         if hasattr(self, "update_timer") and self.update_timer:
-        #             self.update_timer.stop()
-        #     except Exception:
-        #         pass
-        
-        #     # 2) Stop recording if active
-        #     try:
-        #         if getattr(self, "is_recording", False) and hasattr(self, "camera") and self.camera:
-        #             self.camera.stop_recording()
-        #             self.is_recording = False
-        #     except Exception:
-        #         pass
-        
-        #     # 3) Stop the camera
-        #     try:
-        #         if hasattr(self, "camera") and self.camera:
-        #             self.camera.stop()
-        #     except Exception:
-        #         pass
-        #     finally:
-        #         self.camera = None
-        
-        #     # 4) Remove & delete the viewfinder widget so it doesn't linger in the layout
-        #     try:
-        #         if hasattr(self, "_current_viewfinder") and self._current_viewfinder:
-        #             # Remove from its parent layout if we can
-        #             try:
-        #                 if hasattr(self, "labelWebcamFeed") and self.labelWebcamFeed and self.labelWebcamFeed.parentWidget():
-        #                     parent_layout = self.labelWebcamFeed.parentWidget().layout()
-        #                     if parent_layout:
-        #                         parent_layout.removeWidget(self._current_viewfinder)
-        #             except Exception:
-        #                 pass
-        #             self._current_viewfinder.hide()
-        #             self._current_viewfinder.deleteLater()
-        #     except Exception:
-        #         pass
-        #     finally:
-        #         self._current_viewfinder = None
-        
-        #     # 5) Restore the placeholder label (nice-to-have)
-        #     try:
-        #         if hasattr(self, "labelWebcamFeed") and self.labelWebcamFeed:
-        #             self.labelWebcamFeed.show()
-        #             self.labelWebcamFeed.setText("Cámara desactivada.")
-        #     except Exception:
-        #         pass
-        
-        #     # 6) App-specific cleanup (Bluetooth, video device handles, logs, etc.)
-        #     try:
-        #         self.cleanUp()
-        #     except Exception as e:
-        #         print("Error during app cleanup:", e)
-        #         logging.critical("Critical error during cleanUp()", exc_info=True)
-        
-        #     # 7) Hand off to Qt
-        #     super().closeEvent(event)
-
-
-        # def closeEvent(self, event):
-        #     print("[INFO] Window is closing...")
-        #     try:
-        #         if hasattr(self, "camera") and self.camera:
-        #             try:
-        #                 self.camera.stop()
-        #             except Exception:
-        #                 pass
-        #             self.camera = None
-        #     except Exception:
-        #         pass
-        
-        #     try:
-        #         self.cleanUp()
-        #     except Exception as e:
-        #         print("Error during app cleanup:", e)
-        #         logging.critical("Critical error during cleanUp()", exc_info=True)
-        
-        #     super().closeEvent(event)
-
-
-        # def closeEvent(self, event):
-        #     print("[INFO] Window is closing...")
-
-        #     if hasattr(self.camera, "image_data"):
-        #         try:
-        #             self.camera.image_data.disconnect(self.update_video_frame)
-        #         except Exception:
-        #             pass
-        #         self.camera.stop()
-        #         self.camera = None
-
-            # try:
-            #     if hasattr(self, "camera"):
-            #         self.camera.stop()
-            #         self.update_camera_toggle_button_text()
-            #         logging.info("Camera stopped via closeEvent.")
-            # except Exception as e:
-            #     print("Error stopping camera:", e)
-            #     logging.warning("Error during camera stop.", exc_info=True)
-
-            # try:
-            #     self.cleanUp()
-            # except Exception as e:
-            #     print("Error during app cleanup:", e)
-            #     logging.critical(
-            #         "Critical error during cleanUp()", exc_info=True)
-
-            # # Proceed with normal Qt cleanup
-            # super().closeEvent(event)
-
 # %% PROGRAM CLEANUP
 
         def cleanUp(self):
             logging.info("Starting application cleanup...")
             logging.shutdown()
 
-            # === Disconnect Bluetooth Socket ===
-            try:
-                self.socket.disconnectFromService()
-                logging.info("Bluetooth disconnected.")
-            except Exception as e:
-                print("No Bluetooth connected. Closing...")
-                logging.info(f"No Bluetooth connection to close: {e}")
+            # # === Disconnect Bluetooth Socket ===
+            # try:
+            #     self.socket.disconnectFromService()
+            #     logging.info("Bluetooth disconnected.")
+            # except Exception as e:
+            #     print("No Bluetooth connected. Closing...")
+            #     logging.info(f"No Bluetooth connection to close: {e}")
 
-            # === Close Video Device ===
-            try:
-                self.record_video.close_camera()
-                logging.info("Video device closed.")
-            except Exception as e:
-                print("No video device connected. Closing...")
-                logging.info(f"No video device connected to close: {e}")
-            print("[INFO] Safe shutdown complete.")
+            # # === Close Video Device ===
+            # try:
+            #     self.record_video.close_camera()
+            #     logging.info("Video device closed.")
+            # except Exception as e:
+            #     print("No video device connected. Closing...")
+            #     logging.info(f"No video device connected to close: {e}")
+            # print("[INFO] Safe shutdown complete.")
 
     #  def cleanUp(self):
     #       logging.shutdown()

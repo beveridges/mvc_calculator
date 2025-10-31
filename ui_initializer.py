@@ -5,7 +5,7 @@ from PyQt5.QtGui import QKeySequence, QIcon
 from PyQt5 import uic
 
 # -- CUSTOM ---------------------
-from utilities.plot_controller import PlotController
+from plot_controller import PlotController
 from utilities.path_utils import base_path
 
 
@@ -23,6 +23,7 @@ class UIInitializer:
 
         # Menus
         mw.file_menu = mw.menuBar().addMenu("&File")
+        mw.help_menu = mw.menuBar().addMenu("&Help")
         mw.menuBar().setStyleSheet("font-size: 10pt; font-family: 'Helvetica';")
 
         # File Actions
@@ -30,6 +31,8 @@ class UIInitializer:
         mw.importXMLmot_action = QAction("&Import XML file")
         mw.exportXMLmot_action = QAction("&Export XML file")
         mw.exitAction = QAction("&Exit")
+        
+        mw.indexAction = QAction("&Index")
 
         mw.file_menu.addAction(mw.load_MAT_action)
         mw.file_menu.addAction(mw.importXMLmot_action)
@@ -37,6 +40,8 @@ class UIInitializer:
         mw.file_menu.addAction(mw.exportXMLmot_action) 
         mw.file_menu.addSeparator()
         mw.file_menu.addAction(mw.exitAction)
+        
+        mw.help_menu.addAction(mw.indexAction)
 
         mw.load_MAT_action.setShortcut(QKeySequence("Ctrl+L"))
         mw.importXMLmot_action.setShortcut(QKeySequence("Ctrl+X"))
@@ -44,9 +49,11 @@ class UIInitializer:
         mw.exitAction.setShortcut(QKeySequence("Ctrl+Q"))
 
         mw.load_MAT_action.triggered.connect(mw.load_mat_files)
-        mw.importXMLmot_action.triggered.connect(mw.importXML_file)
-        mw.exportXMLmot_action.triggered.connect(mw.exportXML_file)
+        mw.importXMLmot_action.triggered.connect(mw.import_mvc_xml)
+        mw.exportXMLmot_action.triggered.connect(mw.export_mvc_xml)
         mw.exitAction.triggered.connect(mw.close)
+        
+        mw.indexAction.triggered.connect(mw.launch_help)
 
         # mw.importDOTmot_action.triggered.connect(
         #     lambda: mw.plot_controller.load_dot_mot())

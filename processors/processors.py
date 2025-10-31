@@ -27,6 +27,26 @@ class Processor:
     def bandpass(x, fs, lo=20, hi=450, order=4):
         b, a = butter(order, [lo, hi], btype="band", fs=fs)
         return filtfilt(b, a, x)
+    
+    
+    @staticmethod
+    def hampel_filter(x, win_samples=51, k=3.0):
+        x = np.asarray(x, float); n = x.size
+        w = int(win_samples) | 1; half = w // 2
+        y = x.copy()
+        for i in range(n):
+            lo = max(0, i - half); hi = min(n, i + half + 1)
+            seg = x[lo:hi]; med = np.median(seg)
+            mad = np.median(np.abs(seg - med)) + 1e-12
+            if abs(x[i] - med) > k * 1.4826 * mad:
+                y[i] = med
+        return y
+    
+    @staticmethod
+    def moving_rms(x, win_samples):
+        # centered window via convolution
+        w = np.ones(win_samples) / win_samples
+        return np.sqrt(np.convolve(x**2, w, mode="same"))
 
 
     def clean_semg(self, x, fs, rms_ms=50, hampel_ms=50):
@@ -100,40 +120,6 @@ class Processor:
         out_audio = x * energy_vector
         return energy_vector, out_audio
 
-    # def hampel_filter(x, win_samples=51, k=3.0):
-    #     x = np.asarray(x, float)
-    #     n = x.size
-    #     half = win_samples // 2
-    #     y = x.copy()
-    #     for i in range(n):
-    #         lo = max(0, i - half)
-    #         hi = min(n, i + half + 1)
-    #         med = np.median(x[lo:hi])
-    #         mad = np.median(np.abs(x[lo:hi] - med)) + 1e-12
-    #         if np.abs(x[i] - med) > k * 1.4826 * mad:   # 1.4826 ≈ MAD→σ for normal
-    #             y[i] = med
-    #     return y
-    
-    @staticmethod
-    def hampel_filter(x, win_samples=51, k=3.0):
-        x = np.asarray(x, float); n = x.size
-        w = int(win_samples) | 1; half = w // 2
-        y = x.copy()
-        for i in range(n):
-            lo = max(0, i - half); hi = min(n, i + half + 1)
-            seg = x[lo:hi]; med = np.median(seg)
-            mad = np.median(np.abs(seg - med)) + 1e-12
-            if abs(x[i] - med) > k * 1.4826 * mad:
-                y[i] = med
-        return y
-    
-    @staticmethod
-    def moving_rms(x, win_samples):
-        # centered window via convolution
-        w = np.ones(win_samples) / win_samples
-        return np.sqrt(np.convolve(x**2, w, mode="same"))
-
-    
     def moving_rms_matlab(self, interval, halfwindow):
         n = len(interval)
         rms_signal = np.zeros(n)
