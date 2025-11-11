@@ -32,7 +32,8 @@ class UIInitializer:
         mw.exportXMLmot_action = QAction("&Export XML file")
         mw.exitAction = QAction("&Exit")
         
-        mw.indexAction = QAction("&Index")
+        mw.aboutAction = QAction("&About")
+        mw.indexAction = QAction("&Documentation")
 
         mw.file_menu.addAction(mw.load_MAT_action)
         mw.file_menu.addAction(mw.importXMLmot_action)
@@ -41,6 +42,7 @@ class UIInitializer:
         mw.file_menu.addSeparator()
         mw.file_menu.addAction(mw.exitAction)
         
+        mw.help_menu.addAction(mw.aboutAction)
         mw.help_menu.addAction(mw.indexAction)
 
         mw.load_MAT_action.setShortcut(QKeySequence("Ctrl+L"))
@@ -53,6 +55,7 @@ class UIInitializer:
         mw.exportXMLmot_action.triggered.connect(mw.export_mvc_xml)
         mw.exitAction.triggered.connect(mw.close)
         
+        mw.aboutAction.triggered.connect(mw.launch_about)
         mw.indexAction.triggered.connect(mw.launch_help)
 
         # mw.importDOTmot_action.triggered.connect(

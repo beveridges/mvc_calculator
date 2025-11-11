@@ -22,6 +22,7 @@ def email_file(filepath,
     """
     Send a file as an email attachment.
     """
+        
     if not os.path.isfile(filepath):
         logging.error(f"email_file: File not found -> {filepath}")
         return False

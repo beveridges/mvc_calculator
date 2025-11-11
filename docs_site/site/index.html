@@ -13,7 +13,7 @@
     
       <script>
         // Current page data
-        var mkdocs_page_name = "Welcome to MVC Calculator";
+        var mkdocs_page_name = "Home";
         var mkdocs_page_input_path = "index.md";
         var mkdocs_page_url = null;
       </script>
@@ -22,7 +22,30 @@
       <script src="js/html5shiv.min.js"></script>
     <![endif]-->
       <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
-      <script>hljs.highlightAll();</script> 
+      <script>hljs.highlightAll();</script>
+   
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var logoLink = document.querySelector('.wy-side-nav-search > a');
+      var searchDiv = document.querySelector('.wy-side-nav-search div[role="search"]');
+      if (logoLink && searchDiv && logoLink.parentNode) {
+        // Create version div
+        var versionDiv = document.createElement('div');
+        versionDiv.className = 'inline-version';
+        versionDiv.style.cssText = 'text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;';
+        
+        // Read version HTML from template file
+        
+        
+        versionDiv.innerHTML = "<div class=\"inline-version\" style=\"text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;\">   MVC_Calculator-25.11-alpha.01.61 </div>";
+        
+        // Insert between logo and search (after the logo link, before search)
+        logoLink.parentNode.insertBefore(versionDiv, searchDiv);
+      }
+    });
+  </script>
+
 </head>
 
 <body class="wy-body-for-nav" role="document">
@@ -42,17 +65,7 @@
 
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul class="current">
-                <li class="toctree-l1 current"><a class="reference internal current" href="#">Welcome to MVC Calculator</a>
-    <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#why-dont-we-just-use-a-script-for-this-calculation">Why don't we just use a script for this calculation?</a>
-    </li>
-    <li class="toctree-l2"><a class="reference internal" href="#quick-start">Quick start</a>
-    </li>
-    <li class="toctree-l2"><a class="reference internal" href="#measurement-protocol-suggestions">Measurement protocol suggestions</a>
-    </li>
-    <li class="toctree-l2"><a class="reference internal" href="#todos-in-mkdocs">TODOs in MkDocs</a>
-    </li>
-    </ul>
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">Home</a>
                 </li>
               </ul>
       </div>
@@ -69,7 +82,7 @@
         <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
   <ul class="wy-breadcrumbs">
     <li><a href="." class="icon icon-home" aria-label="Docs"></a></li>
-      <li class="breadcrumb-item active">Welcome to MVC Calculator</li>
+      <li class="breadcrumb-item active">Home</li>
     <li class="wy-breadcrumbs-aside">
     </li>
   </ul>
@@ -78,235 +91,89 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
             <div class="section" itemprop="articleBody">
               
-                <h1 id="welcome-to-mvc-calculator">Welcome to MVC Calculator<a class="headerlink" href="#welcome-to-mvc-calculator" title="Permanent link">&para;</a></h1>
-<p>MVC Calculator calculates the Maximum Voluntary Contraction based on the signal processing guidelines in (Konrad, 2005)[^Konrad05].</p>
-<h2 id="why-dont-we-just-use-a-script-for-this-calculation">Why don't we just use a script for this calculation?<a class="headerlink" href="#why-dont-we-just-use-a-script-for-this-calculation" title="Permanent link">&para;</a></h2>
-<p>sEMG can be a bit noisy.  Depending in the testing protocol and the success of the recording session, thia noise can make it's weay into the measurement process.  By allowing ther user to define the MVC bursts, MVC caluclator provides a <strong>visual</strong> method of reducing noise.  MVC Calculator also provides a method for saving, loading, and modifying MVC.  </p>
-<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p>The input files to MVC Calculator are .mat files creasted by Qualisys.  The system uses this data structure to extract data from all sensors.</p>
-<div class="admonition remember">
-<p class="admonition-title">Remember</p>
-<p>Noraxon/Qualisys doesn't know or care, which sensors are the target for the MVC.  All sesnor data will record all sensors regardless.  It is up to the user to not only identify the relevant sensor from all those </p>
+                <p>MVC Calculator follows <span class="citation"
+
+data-cites="Konrad05">(Konrad, 2005)</span>. Welcome to MVC
+
+Calculator</p>
+
+<p>MVC Calculator calculates the Maximum Voluntary Contraction (MVC)
+
+based on the signal-processing guidelines in <span class="citation"
+
+data-cites="Konrad05">(Konrad, 2005)</span>. The MVC Calculator provides
+
+a visual workflow for burst identification, noise reduction, and
+
+normalization.</p>
+
+<h2 id="why-dont-we-just-use-a-script-for-this-calculation">Why don’t we
+
+just use a script for this calculation?</h2>
+
+<p>sEMG can be noisy. Depending on the testing protocol and recording
+
+success, this noise can make its way into the measurement process. By
+
+allowing the user to define the MVC bursts manually, MVC Calculator
+
+provides a <strong>visual</strong> method of reducing noise. It also
+
+provides a method for saving, loading, and modifying MVC datasets.</p>
+
+<p>The system is written to follow the <em>“best of 3”</em> procedure
+
+described in <span class="citation" data-cites="Konrad05">(Konrad,
+
+2005)</span>.</p>
+
+<h2 id="quick-start">Quick start</h2>
+
+<p>The input files for MVC Calculator are <code>.mat</code> files
+
+created by Qualisys. The system uses this data structure to extract data
+
+from all sensors.</p>
+
+<p>!!! note “Remember” Noraxon / Qualisys records all sensors by
+
+default.<br />
+
+It is the user’s responsibility to identify which sensors are relevant
+
+for the MVC computation.</p>
+
+<p>!!! tip “Configuration” To change the <strong>‘best of x’</strong>
+
+rule (number of trials used), edit the variable <code>BEST_OF</code> in
+
+<code>./config/defaults.py</code>.</p>
+
+<hr />
+
+<h2 id="measurement-protocol-suggestions">Measurement protocol
+
+suggestions</h2>
+
+<p>The system is written to follow the <em>‘best of 3’</em> procedure in
+
+(Konrad, 2005).</p>
+
+<hr />
+
+<div id="refs" class="## Referencescsl-bib-body hanging-indent"
+
+data-entry-spacing="0" data-line-spacing="2" role="list">
+
+<div id="ref-Konrad05" class="csl-entry" role="listitem">
+
+Konrad, P. (2005). The abc of emg. <em>A Practical Introduction to
+
+Kinesiological Electromyography</em>, <em>1</em>.
+
 </div>
-<h2 id="measurement-protocol-suggestions">Measurement protocol suggestions<a class="headerlink" href="#measurement-protocol-suggestions" title="Permanent link">&para;</a></h2>
-<p>The system is written to follow the 'best of 3' procedure in (Konrad, 2005)[^Konrad05].</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>To change the 'best of x' x = no of selections, change the BEST_OF variable in ./config/defaults.py</p>
+
 </div>
-<h2 id="todos-in-mkdocs">TODOs in MkDocs<a class="headerlink" href="#todos-in-mkdocs" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Test 4 in tests/test_plot_controller.py::test_row_click_bolds_correct_row FAILED  </li>
-<li>FINISH a splash screen</li>
-<li>Single TAB MVC</li>
-<li>ALL TABS MVC</li>
-<li>Proper citations from bibtex</li>
-<li>Create a template for future Spyder GUI projects</li>
-<li>WiX to create .msi installer file a la Blender</li>
-<li>Track called methods - look for redundant code etc, etc, etc</li>
-<li>Vulture for dead code finding</li>
-</ul>
-<p>🧭 Overview</p>
-<p>Creating an .msi installer involves two main stages:</p>
-<p>Packaging your app into a standalone executable (using PyInstaller or similar).</p>
-<p>Wrapping that executable into a Windows installer (using MSI tools like msitools, WiX, or NSIS).</p>
-<p>We’ll focus on the modern approach:
-👉 PyInstaller + WiX Toolset, since it produces professional, signed .msi installers used by Blender, OBS, and others.</p>
-<p>🧱 Step 1 — Prepare Your PyQt5 App</p>
-<p>Make sure your app runs fine as:</p>
-<p>python main.py</p>
-<p>If it uses relative paths (for icons, UI files, etc.), make sure you handle both development and frozen modes:</p>
-<p>import sys, os</p>
-<p>def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller"""
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(<strong>file</strong>)))
-    return os.path.join(base_path, relative_path)</p>
-<p>⚙️ Step 2 — Create a PyInstaller .spec File</p>
-<p>Install PyInstaller:</p>
-<p>pip install pyinstaller</p>
-<p>Generate a base .spec:</p>
-<p>pyinstaller --name "MVC_Calculator" --noconfirm --windowed main.py</p>
-<p>Then edit the .spec file to include:</p>
-<p>Icons (icon='app.ico')</p>
-<p>Additional data (UI files, logos, docs)</p>
-<p>Hidden imports (for PyQt5)</p>
-<p>Example snippet:</p>
-<p>a = Analysis(
-    ['main.py'],
-    pathex=['.'],
-    binaries=[],
-    datas=[('ui/<em>.ui', 'ui'), ('img/</em>', 'img'), ('docs_site/site', 'help')],
-    hiddenimports=['PyQt5.sip', 'PyQt5.QtPrintSupport'],
-    noarchive=False,
-)</p>
-<p>Then rebuild:</p>
-<p>pyinstaller MVC_Calculator.spec</p>
-<p>Output folder:</p>
-<p>dist/MVC_Calculator/
-    ├── MVC_Calculator.exe
-    ├── Qt5Core.dll
-    ├── platforms/
-    └── ...</p>
-<p>✅ At this point, your app is a standalone EXE.</p>
-<p>📦 Step 3 — Install the WiX Toolset</p>
-<p>Download and install WiX 3.11 or later:
-👉 https://wixtoolset.org/releases/</p>
-<p>Add WiX to your PATH:</p>
-<p>set PATH=%PATH%;C:\Program Files (x86)\WiX Toolset v3.11\bin</p>
-<p>WiX gives you tools like:</p>
-<p>candle.exe — compiles WiX source files (.wxs)</p>
-<p>light.exe — links compiled object files into an .msi</p>
-<p>🧰 Step 4 — Create a .wxs Installer Definition</p>
-<p>Create a file called installer.wxs:</p>
-<?xml version="1.0" encoding="UTF-8"?>
-<p><Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="MVC Calculator" Language="1033" Version="1.0.0" Manufacturer="Moviolabs" UpgradeCode="PUT-GUID-HERE">
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
-    <MajorUpgrade AllowDowngrades="no" />
-    <MediaTemplate /></p>
-<div class="codehilite"><pre><span></span><code><span class="nt">&lt;Feature</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;MainFeature&quot;</span><span class="w"> </span><span class="na">Title=</span><span class="s">&quot;MVC Calculator&quot;</span><span class="w"> </span><span class="na">Level=</span><span class="s">&quot;1&quot;</span><span class="nt">&gt;</span>
-<span class="w">  </span><span class="nt">&lt;ComponentGroupRef</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;AppFiles&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<span class="nt">&lt;/Feature&gt;</span>
-
-<span class="nt">&lt;Directory</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;TARGETDIR&quot;</span><span class="w"> </span><span class="na">Name=</span><span class="s">&quot;SourceDir&quot;</span><span class="nt">&gt;</span>
-<span class="w">  </span><span class="nt">&lt;Directory</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;ProgramFilesFolder&quot;</span><span class="nt">&gt;</span>
-<span class="w">    </span><span class="nt">&lt;Directory</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;INSTALLFOLDER&quot;</span><span class="w"> </span><span class="na">Name=</span><span class="s">&quot;MVC Calculator&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<span class="w">  </span><span class="nt">&lt;/Directory&gt;</span>
-<span class="nt">&lt;/Directory&gt;</span>
-
-<span class="nt">&lt;ComponentGroup</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;AppFiles&quot;</span><span class="w"> </span><span class="na">Directory=</span><span class="s">&quot;INSTALLFOLDER&quot;</span><span class="nt">&gt;</span>
-<span class="w">  </span><span class="nt">&lt;Component</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;MainExe&quot;</span><span class="w"> </span><span class="na">Guid=</span><span class="s">&quot;PUT-NEW-GUID-HERE&quot;</span><span class="nt">&gt;</span>
-<span class="w">    </span><span class="nt">&lt;File</span><span class="w"> </span><span class="na">Source=</span><span class="s">&quot;dist\MVC_Calculator\MVC_Calculator.exe&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<span class="w">  </span><span class="nt">&lt;/Component&gt;</span>
-<span class="nt">&lt;/ComponentGroup&gt;</span>
-
-<span class="nt">&lt;Icon</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;appicon.ico&quot;</span><span class="w"> </span><span class="na">SourceFile=</span><span class="s">&quot;app.ico&quot;</span><span class="nt">/&gt;</span>
-<span class="nt">&lt;Property</span><span class="w"> </span><span class="na">Id=</span><span class="s">&quot;ARPPRODUCTICON&quot;</span><span class="w"> </span><span class="na">Value=</span><span class="s">&quot;appicon.ico&quot;</span><span class="nt">/&gt;</span>
-</code></pre></div>
-
-<p></Product>
-</Wix></p>
-<p>Use PowerShell to generate new GUIDs:</p>
-<p>🧩 Step 5 — Compile the Installer</p>
-<p>Run WiX tools from your project folder:</p>
-<p>candle installer.wxs
-light installer.wixobj -o MVC_Calculator.msi</p>
-<p>✅ You now have:</p>
-<p>MVC_Calculator.msi</p>
-<p>This .msi:</p>
-<p>Installs to C:\Program Files\MVC Calculator</p>
-<p>Adds uninstall entry in Control Panel</p>
-<p>Supports repair/uninstall</p>
-<p>Looks and behaves like Blender’s installer</p>
-<p>🔐 Step 6 — (Optional) Code Sign Your MSI</p>
-<p>To prevent Windows SmartScreen warnings, sign the MSI using a valid certificate:</p>
-<p>signtool sign /a /tr http://timestamp.digicert.com /td sha256 /fd sha256 MVC_Calculator.msi</p>
-<p>🧹 Step 7 — Optional Extras</p>
-<p>Create shortcuts
-Add <Shortcut> elements in your .wxs inside the Component.</p>
-<p>Include registry keys
-To add uninstall info or defaults, use <RegistryValue>.</p>
-<p>Bundle dependencies
-Use datas=[...] in .spec for PyQt5 platforms, icons, docs, etc.</p>
-<p>Versioning
-Use a dynamic version from your <strong>version</strong> or VERSION.txt file.</p>
-<p>⚡ Alternative: Automatic MSI Creation with cx_Freeze or fbs</p>
-<p>If you prefer simplicity over full control:</p>
-<p>🧊 Using fbs (built on PyInstaller)
-pip install fbs
-fbs startproject
-fbs run
-fbs freeze
-fbs installer</p>
-<p>This produces an .msi automatically — perfect for PyQt5.</p>
-<p>🧭 Recommended Workflow Summary
-Stage   Tool    Purpose
-Package app PyInstaller Bundle into single-folder EXE
-Build installer WiX Professional MSI
-Sign installer  signtool    Remove SmartScreen warnings</p>
-<p>If you’d like, I can generate a ready-to-use example (.spec, .wxs, and build script) tailored for your current PyQt5 app — just tell me:</p>
-<p>The main file (e.g. main.py)</p>
-<p>App name and version</p>
-<p>Icon path
-and I’ll produce a fully working setup.</p>
-<p>Would you like me to do that?</p>
-<p>🧭 1. Find which classes/functions are actually used from main.py
-🔹 Static analysis tools
-These inspect the structure of your code without running it.</p>
-<p>pyan3 – builds a call graph showing which functions/classes call which others.
-pip install pyan3
-pyan3 main.py yourpackage/*<em>/</em>.py --dot &gt; callgraph.dot</p>
-<p>Then visualize:
-dot -Tpng callgraph.dot -o callgraph.png</p>
-<p>This will show which classes/functions are actually referenced from main.py.</p>
-<p>pycg (Python Call Graph) – more advanced, builds inter-module call graphs:
-pip install pycg
-pycg --package yourpackage --entry-file main.py --output callgraph.json</p>
-<p>You can inspect callgraph.json to see what’s reachable from main.py.</p>
-<p>⚙️ 2. Find which code is actually executed
-🔹 Dynamic runtime tracing
-Run your app and track what gets called.</p>
-<p>coverage.py (most popular)
-pip install coverage
-coverage run main.py
-coverage html</p>
-<p>Then open htmlcov/index.html.</p>
-<p>Any file or line not executed = dead / unused code.</p>
-<p>Great for spotting redundant methods and unreachable classes.</p>
-<p>pycallgraph2 – generates runtime call graphs:
-pip install pycallgraph2
-python -m pycallgraph --output-file=graph.png yourscript.py</p>
-<p>You’ll get a flow diagram of all called functions.</p>
-<p>trace module (built-in)
-python -m trace --trace main.py</p>
-<p>Prints every function call as it happens (no install required).</p>
-<p>🧹 3. Detect redundant / unreachable / duplicated code
-🔹 Dead code finders</p>
-<p>vulture – best tool for unused functions, variables, and classes.
-pip install vulture
-vulture yourproject/</p>
-<p>Output example:
-yourmodule.py:42: unused function 'old_calibrate'
-yourdialog.py:88: unused class 'LegacyDialog'</p>
-<p>Combine it with coverage.py for accuracy (static + dynamic).</p>
-<p>🔹 Duplication checkers</p>
-<p>flake8 + plugins:</p>
-<p>flake8-unused-arguments</p>
-<p>flake8-dead-code</p>
-<p>flake8-eradicate (finds commented-out code)</p>
-<p>jscpd (language-agnostic):
-npx jscpd --languages python --reporters console --min-tokens 50 .</p>
-<p>Detects copied/pasted code segments.</p>
-<p>🧠 4. Recommended workflow
-GoalBest ToolsFind unused classes/functionsvultureVisualize function/class call relationshipspyan3, pycgVerify which code runscoverage.py, traceFind duplicate codejscpd, flake8-eradicateAudit imports / unused variablesflake8, pylint, ruff</p>
-<p>If you want, I can help you:</p>
-<p>🔍 Run these tools step-by-step on your MOTUS or MVC Calculator repository,</p>
-<p>🧩 Produce a dependency graph showing which classes are actually called from main.py,</p>
-<p>🧼 Generate a “redundancy report” combining vulture + coverage.</p>
-<p>Would you like me to outline that exact combined workflow (e.g., commands + report integration)?</p>
-<!-- 
-## Commands
-
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
-
-
-
-
-## Bibliography
-::: bibliography
-
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
- -->
-<p>[^Konrad05]: Konrad, P. (2005). The abc of emg. <em>A Practical Introduction to
- Kinesiological Electromyography</em>, <em>1</em>.</p>
               
             </div>
           </div><footer>
@@ -350,5 +217,5 @@ GoalBest ToolsFind unused classes/functionsvultureVisualize function/class call 
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2025-10-30 21:38:26.174428+00:00
+Build Date UTC : 2025-11-11 22:39:35.743505+00:00
 -->

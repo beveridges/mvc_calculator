@@ -1,11 +1,24 @@
 .wy-side-nav-search .wy-dropdown > a img,
 .wy-side-nav-search > a img {
-  width: 150px !important;      
+  width: 150px !important;
   height: auto;
-  margin: 0 auto;
   display: block;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  margin: 0 auto -10px auto !important;  /* Pull version text closer */
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Tighten spacing around the version label */
+.wy-side-nav-search div.version {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  margin-bottom: 10px !important;  /* Add a little room before the search bar */
+}
+
+/* Optional: fine-tune space between the search bar and navigation menu */
+.wy-side-nav-search input[type="text"] {
+  margin-top: 16px !important;   /* pushes search box further down */
+  margin-bottom: 6px !important;
 }
 
 /* Remove numbered list from bibliography */

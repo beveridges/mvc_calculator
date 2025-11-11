@@ -91,6 +91,7 @@ class SBConsoleOutput:
 
 
     def send_log(self):
+        logging.info(f"Sending session log...")
         """Send the current log file via email."""
         if not self._logfile or not os.path.exists(self._logfile):
             logging.error("send_log: No logfile available to send")

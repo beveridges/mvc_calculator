@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {# Inject version between logo and search using JavaScript #}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var logoLink = document.querySelector('.wy-side-nav-search > a');
+      var searchDiv = document.querySelector('.wy-side-nav-search div[role="search"]');
+      if (logoLink && searchDiv && logoLink.parentNode) {
+        // Create version div
+        var versionDiv = document.createElement('div');
+        versionDiv.className = 'inline-version';
+        versionDiv.style.cssText = 'text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;';
+        
+        // Read version HTML from template file
+        {% set version_html %}{% include "partials/version_inline.html" %}{% endset %}
+        {% set version_js = version_html|replace('"', '\\"')|replace('\n', ' ')|replace('\r', '')|trim %}
+        versionDiv.innerHTML = "{{ version_js }}";
+        
+        // Insert between logo and search (after the logo link, before search)
+        logoLink.parentNode.insertBefore(versionDiv, searchDiv);
+      }
+    });
+  </script>
+{% endblock %}

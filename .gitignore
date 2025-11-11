@@ -1,12 +1,77 @@
-# Ignore log files
-*.log
-*.py[cod]
+# ============================================================
+# 🔧 GENERIC PYTHON IGNORE RULES
+# ============================================================
 
-# Ignore local configs
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Logs
+*.log
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# ============================================================
+# 🧩 PROJECT-SPECIFIC IGNORE RULES
+# ============================================================
+
+# IDE / editor configs
+.spyproject/
+.vscode/
+.idea/
+
+# MkDocs build output
+docs_site/site/
+
+# Local data and raw resources
+data/
+.data/
+resources/raw/
+.resources/raw/
+
+# Trash or temp folders
+zTrash/
+zTrash/*
+
+# Temporary bib/test folders
+docs_site/bibtest/
+docs_site/site/_index_raw/
+
+# ============================================================
+# 📦 OPTIONAL DEVELOPMENT FILES
+# ============================================================
+
+# Local configs
 ## config.json
 
-# Ignore folders
-.data/
-.resources/raw/
-/__pycache__/
-data/
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# 🧪 TESTS (optional — comment out if you track tests)
+# ============================================================
+# tests/
+
+# ============================================================
+# ✅ KEEP THESE (DO NOT IGNORE)
+# ============================================================
+# MASTER_BUILD.py
+# docs_site/preprocess_bib.py
+# docs_site/insert_version_banner.py
+# docs_site/references.bib
+# docs_site/docs/_index_raw.md
+# utilities/version_info_.py
+# release_to_github.py
+# resources/icons/icn_emg.ico
+# uis/main_stretched.ui

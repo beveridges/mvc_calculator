@@ -15,7 +15,30 @@
       <script src="./js/html5shiv.min.js"></script>
     <![endif]-->
       <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
-      <script>hljs.highlightAll();</script> 
+      <script>hljs.highlightAll();</script>
+   
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var logoLink = document.querySelector('.wy-side-nav-search > a');
+      var searchDiv = document.querySelector('.wy-side-nav-search div[role="search"]');
+      if (logoLink && searchDiv && logoLink.parentNode) {
+        // Create version div
+        var versionDiv = document.createElement('div');
+        versionDiv.className = 'inline-version';
+        versionDiv.style.cssText = 'text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;';
+        
+        // Read version HTML from template file
+        
+        
+        versionDiv.innerHTML = "<div class=\"inline-version\" style=\"text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;\">   MVC_Calculator-25.11-alpha.01.61 </div>";
+        
+        // Insert between logo and search (after the logo link, before search)
+        logoLink.parentNode.insertBefore(versionDiv, searchDiv);
+      }
+    });
+  </script>
+
 </head>
 
 <body class="wy-body-for-nav" role="document">
@@ -35,7 +58,7 @@
 
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul>
-                <li class="toctree-l1"><a class="reference internal" href="./.">Welcome to MVC Calculator</a>
+                <li class="toctree-l1"><a class="reference internal" href="./.">Home</a>
                 </li>
               </ul>
       </div>
