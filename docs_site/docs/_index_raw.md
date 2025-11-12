@@ -1,44 +1,61 @@
-## Welcome to MVC Calculator
+# Welcome to MVC Calculator
 
-MVC Calculator follows [@Konrad05].
+![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
+![Version](https://img.shields.io/badge/version-25.11--alpha.01.66-orange?style=flat-square)
+
+## What is mvc_calculator ?
+
+MVC Calculator provides a **visual workflow** for burst identification. 
 
 
-MVC Calculator calculates the Maximum Voluntary Contraction (MVC) based on the
-signal-processing guidelines in [@Konrad05].  The MVC Calculator provides
-a visual workflow for burst identification, noise reduction, and normalization.
+## Why do we need manual MVC detection?
+...because things go wromg during recording sessions. sEMG can be noisy. Depending on the testing protocol and recording success, noise often contaminates the measurement process.  
+By allowing the user to manually define MVC bursts, the Calculator provides a **visual and reliable** way to reduce noise before analysis.
 
-## Why don't we just use a script for this calculation?
-
-sEMG can be noisy.  Depending on the testing protocol and recording success,
-this noise can make its way into the measurement process.  By allowing the user
-to define the MVC bursts manually, MVC Calculator provides a **visual**
-method of reducing noise.  It also provides a method for saving, loading,
-and modifying MVC datasets.
-
-The system is written to follow the *“best of 3”* procedure described in
-[@Konrad05].
-
-## Quick start
-
-The input files for MVC Calculator are `.mat` files created by Qualisys.
-The system uses this data structure to extract data from all sensors.
-
-!!! note "Remember"
-    Noraxon / Qualisys records all sensors by default.  
-    It is the user’s responsibility to identify which sensors are relevant
-    for the MVC computation.
-
-!!! tip "Configuration"
-    To change the **‘best of x’** rule (number of trials used),
-    edit the variable `BEST_OF` in `./config/defaults.py`.
+The system is written to follow the *“best of 3”* procedure described in (Konrad, 2005).
 
 ---
 
-## Measurement protocol suggestions
+## Features
 
-The system is written to follow the *‘best of 3’* procedure in (Konrad, 2005).
+- Import `.mat` files recorded by Qualisys or Noraxon systems  
+- Detect and visualize MVC bursts interactively  
+- Export processed data to CSV, JSON, or OpenSim-compatible formats  
+- Adjustable burst thresholds and auto-normalization  
+- Built-in logging and data management features  
 
 ---
 
 
 
+---
+
+## Quick Start
+
+1. Open **MVC Calculator** and load your `.mat` file from the recording system.  
+2. Use the **Energy Detection** tool to locate candidate MVC bursts.  
+3. Fine-tune burst regions using the graphical selector.  
+4. Press **Save Results** to store computed MVC metrics.  
+
+!!! tip
+    You can change the “best of X” rule in the configuration file:  
+    `./config/defaults.py` → variable `BEST_OF`.
+
+!!! note
+    Noraxon / Qualisys record all sensors by default.  
+    It’s the user’s responsibility to identify which sensors are relevant for MVC computation.
+
+---
+
+## Measurement Protocol Suggestions
+
+- Perform three maximum-effort trials for each muscle group.  
+- Allow sufficient rest (≥ 30 seconds) between trials.  
+- Ensure consistent electrode placement across sessions.  
+- Use the same sampling frequency for all measurements.
+
+---
+
+## References
+
+Konrad, P. (2005). *The ABC of EMG: A Practical Introduction to Kinesiological Electromyography.* Noraxon Inc.

@@ -1,42 +1,64 @@
-<h2 id="welcome-to-mvc-calculator">Welcome to MVC Calculator</h2>
-<p>MVC Calculator follows <span class="citation"
-data-cites="Konrad05">(Konrad, 2005)</span>.</p>
-<p>MVC Calculator calculates the Maximum Voluntary Contraction (MVC)
-based on the signal-processing guidelines in <span class="citation"
-data-cites="Konrad05">(Konrad, 2005)</span>. The MVC Calculator provides
-a visual workflow for burst identification, noise reduction, and
-normalization.</p>
-<h2 id="why-dont-we-just-use-a-script-for-this-calculation">Why don’t we
-just use a script for this calculation?</h2>
-<p>sEMG can be noisy. Depending on the testing protocol and recording
-success, this noise can make its way into the measurement process. By
-allowing the user to define the MVC bursts manually, MVC Calculator
-provides a <strong>visual</strong> method of reducing noise. It also
-provides a method for saving, loading, and modifying MVC datasets.</p>
-<p>The system is written to follow the <em>“best of 3”</em> procedure
-described in <span class="citation" data-cites="Konrad05">(Konrad,
-2005)</span>.</p>
-<h2 id="quick-start">Quick start</h2>
-<p>The input files for MVC Calculator are <code>.mat</code> files
-created by Qualisys. The system uses this data structure to extract data
-from all sensors.</p>
-<p>!!! note “Remember” Noraxon / Qualisys records all sensors by
-default.<br />
-It is the user’s responsibility to identify which sensors are relevant
-for the MVC computation.</p>
-<p>!!! tip “Configuration” To change the <strong>‘best of x’</strong>
-rule (number of trials used), edit the variable <code>BEST_OF</code> in
-<code>./config/defaults.py</code>.</p>
-<hr />
-<h2 id="measurement-protocol-suggestions">Measurement protocol
-suggestions</h2>
-<p>The system is written to follow the <em>‘best of 3’</em> procedure in
-(Konrad, 2005).</p>
-<hr />
-<div id="refs" class="## Referencescsl-bib-body hanging-indent"
-data-entry-spacing="0" data-line-spacing="2" role="list">
-<div id="ref-Konrad05" class="csl-entry" role="listitem">
-Konrad, P. (2005). The abc of emg. <em>A Practical Introduction to
-Kinesiological Electromyography</em>, <em>1</em>.
-</div>
-</div>
+# Welcome to MVC Calculator
+
+![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
+![Version](https://img.shields.io/badge/version-25.11--alpha.01.66-orange?style=flat-square)
+
+## What is mvc_calculator ?
+
+MVC Calculator provides a **visual workflow** for burst identification.
+
+## Why do we need manual MVC detection?
+
+…because things go wromg during recording sessions. sEMG can be noisy.
+Depending on the testing protocol and recording success, noise often
+contaminates the measurement process.  
+By allowing the user to manually define MVC bursts, the Calculator
+provides a **visual and reliable** way to reduce noise before analysis.
+
+The system is written to follow the *“best of 3”* procedure described in
+(Konrad, 2005).
+
+------------------------------------------------------------------------
+
+## Features
+
+- Import `.mat` files recorded by Qualisys or Noraxon systems  
+- Detect and visualize MVC bursts interactively  
+- Export processed data to CSV, JSON, or OpenSim-compatible formats  
+- Adjustable burst thresholds and auto-normalization  
+- Built-in logging and data management features
+
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+## Quick Start
+
+1.  Open **MVC Calculator** and load your `.mat` file from the recording
+    system.  
+2.  Use the **Energy Detection** tool to locate candidate MVC bursts.  
+3.  Fine-tune burst regions using the graphical selector.  
+4.  Press **Save Results** to store computed MVC metrics.
+
+!!! tip You can change the “best of X” rule in the configuration file:  
+`./config/defaults.py` → variable `BEST_OF`.
+
+!!! note Noraxon / Qualisys record all sensors by default.  
+It’s the user’s responsibility to identify which sensors are relevant
+for MVC computation.
+
+------------------------------------------------------------------------
+
+## Measurement Protocol Suggestions
+
+- Perform three maximum-effort trials for each muscle group.  
+- Allow sufficient rest (≥ 30 seconds) between trials.  
+- Ensure consistent electrode placement across sessions.  
+- Use the same sampling frequency for all measurements.
+
+------------------------------------------------------------------------
+
+## References
+
+Konrad, P. (2005). *The ABC of EMG: A Practical Introduction to
+Kinesiological Electromyography.* Noraxon Inc.

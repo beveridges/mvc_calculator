@@ -1,3 +1,6 @@
+/* 8-bit font import - must be at top */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
 .wy-side-nav-search .wy-dropdown > a img,
 .wy-side-nav-search > a img {
   width: 150px !important;
@@ -36,4 +39,54 @@ div.bibliography li {
 /* Remove backlink arrows */
 div.bibliography a[href^="#ref-"] {
   display: none;
+}
+
+
+/* Reduce spacing between h1 heading and badges on index page (badges are below heading) */
+/* Reduce space below heading - make badges closer to heading */
+.rst-content h1:first-of-type {
+  margin-bottom: 0.0em !important;  /* Space below heading (before badges) - adjust this value (lower = closer, higher = further) */
+}
+
+/* Target the paragraph containing badges (comes after h1) */
+.rst-content h1:first-of-type + p {
+  margin-top: 0 !important;
+  margin-bottom: 1.0em !important;  /* Space below badges (before next content like "Foo") - adjust this value (higher = more space) */
+  line-height: 1.2 !important;
+}
+
+/* Style the badge images in the first paragraph */
+.rst-content > p:first-of-type img {
+  margin-right: 8px !important;  /* Space between badges - adjust this value */
+  vertical-align: middle;
+  display: inline-block;
+}
+
+/* Only on the homepage intro */
+#home-intro h1 {
+  margin-bottom: 0.35em;   /* tighter than theme default */
+}
+
+#home-intro h1 + .badge-row {
+  margin-top: 0.15em;      /* tiny gap under the H1 */
+}
+
+#home-intro .badge-row img {
+  height: 1.05em;          /* visually harmonize with H1 size */
+  vertical-align: baseline;
+  margin-right: 6px;
+}
+
+/* 8-bit style footer text */
+footer .footer-8bit {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 0.7em;
+  color: #666;
+  display: inline-block;
+  margin-top: 0.5em;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
 }

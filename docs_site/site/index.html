@@ -38,7 +38,7 @@
         // Read version HTML from template file
         
         
-        versionDiv.innerHTML = "<div class=\"inline-version\" style=\"text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;\">   MVC_Calculator-25.11-alpha.01.61 </div>";
+        versionDiv.innerHTML = "<div class=\"inline-version\" style=\"text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;\">   MVC_Calculator-25.11-alpha.01.66 </div>";
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
@@ -66,6 +66,20 @@
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul class="current">
                 <li class="toctree-l1 current"><a class="reference internal current" href="#">Home</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#what-is-mvc_calculator">What is mvc_calculator ?</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#why-do-we-need-manual-mvc-detection">Why do we need manual MVC detection?</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#features">Features</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#quick-start">Quick Start</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#measurement-protocol-suggestions">Measurement Protocol Suggestions</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#references">References</a>
+    </li>
+    </ul>
                 </li>
               </ul>
       </div>
@@ -91,102 +105,68 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
             <div class="section" itemprop="articleBody">
               
-                <p>MVC Calculator follows <span class="citation"
-
-data-cites="Konrad05">(Konrad, 2005)</span>. Welcome to MVC
-
-Calculator</p>
-
-<p>MVC Calculator calculates the Maximum Voluntary Contraction (MVC)
-
-based on the signal-processing guidelines in <span class="citation"
-
-data-cites="Konrad05">(Konrad, 2005)</span>. The MVC Calculator provides
-
-a visual workflow for burst identification, noise reduction, and
-
-normalization.</p>
-
-<h2 id="why-dont-we-just-use-a-script-for-this-calculation">Why don’t we
-
-just use a script for this calculation?</h2>
-
-<p>sEMG can be noisy. Depending on the testing protocol and recording
-
-success, this noise can make its way into the measurement process. By
-
-allowing the user to define the MVC bursts manually, MVC Calculator
-
-provides a <strong>visual</strong> method of reducing noise. It also
-
-provides a method for saving, loading, and modifying MVC datasets.</p>
-
-<p>The system is written to follow the <em>“best of 3”</em> procedure
-
-described in <span class="citation" data-cites="Konrad05">(Konrad,
-
-2005)</span>.</p>
-
-<h2 id="quick-start">Quick start</h2>
-
-<p>The input files for MVC Calculator are <code>.mat</code> files
-
-created by Qualisys. The system uses this data structure to extract data
-
-from all sensors.</p>
-
-<p>!!! note “Remember” Noraxon / Qualisys records all sensors by
-
-default.<br />
-
-It is the user’s responsibility to identify which sensors are relevant
-
-for the MVC computation.</p>
-
-<p>!!! tip “Configuration” To change the <strong>‘best of x’</strong>
-
-rule (number of trials used), edit the variable <code>BEST_OF</code> in
-
-<code>./config/defaults.py</code>.</p>
-
-<hr />
-
-<h2 id="measurement-protocol-suggestions">Measurement protocol
-
-suggestions</h2>
-
-<p>The system is written to follow the <em>‘best of 3’</em> procedure in
-
+                <h1 id="welcome-to-mvc-calculator">Welcome to MVC Calculator<a class="headerlink" href="#welcome-to-mvc-calculator" title="Permanent link">&para;</a></h1>
+<p><img alt="Build" src="https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square" />
+<img alt="Version" src="https://img.shields.io/badge/version-25.11--alpha.01.66-orange?style=flat-square" /></p>
+<h2 id="what-is-mvc_calculator">What is mvc_calculator ?<a class="headerlink" href="#what-is-mvc_calculator" title="Permanent link">&para;</a></h2>
+<p>MVC Calculator provides a <strong>visual workflow</strong> for burst identification.</p>
+<h2 id="why-do-we-need-manual-mvc-detection">Why do we need manual MVC detection?<a class="headerlink" href="#why-do-we-need-manual-mvc-detection" title="Permanent link">&para;</a></h2>
+<p>…because things go wromg during recording sessions. sEMG can be noisy.
+Depending on the testing protocol and recording success, noise often
+contaminates the measurement process.<br />
+By allowing the user to manually define MVC bursts, the Calculator
+provides a <strong>visual and reliable</strong> way to reduce noise before analysis.</p>
+<p>The system is written to follow the <em>“best of 3”</em> procedure described in
 (Konrad, 2005).</p>
-
 <hr />
-
-<div id="refs" class="## Referencescsl-bib-body hanging-indent"
-
-data-entry-spacing="0" data-line-spacing="2" role="list">
-
-<div id="ref-Konrad05" class="csl-entry" role="listitem">
-
-Konrad, P. (2005). The abc of emg. <em>A Practical Introduction to
-
-Kinesiological Electromyography</em>, <em>1</em>.
-
-</div>
-
-</div>
+<h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Import <code>.mat</code> files recorded by Qualisys or Noraxon systems  </li>
+<li>Detect and visualize MVC bursts interactively  </li>
+<li>Export processed data to CSV, JSON, or OpenSim-compatible formats  </li>
+<li>Adjustable burst thresholds and auto-normalization  </li>
+<li>Built-in logging and data management features</li>
+</ul>
+<hr />
+<hr />
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Open <strong>MVC Calculator</strong> and load your <code>.mat</code> file from the recording
+    system.  </li>
+<li>Use the <strong>Energy Detection</strong> tool to locate candidate MVC bursts.  </li>
+<li>Fine-tune burst regions using the graphical selector.  </li>
+<li>Press <strong>Save Results</strong> to store computed MVC metrics.</li>
+</ol>
+<p>!!! tip You can change the “best of X” rule in the configuration file:<br />
+<code>./config/defaults.py</code> → variable <code>BEST_OF</code>.</p>
+<p>!!! note Noraxon / Qualisys record all sensors by default.<br />
+It’s the user’s responsibility to identify which sensors are relevant
+for MVC computation.</p>
+<hr />
+<h2 id="measurement-protocol-suggestions">Measurement Protocol Suggestions<a class="headerlink" href="#measurement-protocol-suggestions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Perform three maximum-effort trials for each muscle group.  </li>
+<li>Allow sufficient rest (≥ 30 seconds) between trials.  </li>
+<li>Ensure consistent electrode placement across sessions.  </li>
+<li>Use the same sampling frequency for all measurements.</li>
+</ul>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<p>Konrad, P. (2005). <em>The ABC of EMG: A Practical Introduction to
+Kinesiological Electromyography.</em> Noraxon Inc.</p>
               
             </div>
-          </div><footer>
-
+          </div>
+<footer>
   <hr/>
-
   <div role="contentinfo">
     <!-- Copyright etc -->
   </div>
-
   Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+  <br>
+  <span class="footer-8bit">co-written with a robot 🤖❤️</span>
 </footer>
-          
+
         </div>
       </div>
 
@@ -217,5 +197,5 @@ Kinesiological Electromyography</em>, <em>1</em>.
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2025-11-11 22:39:35.743505+00:00
+Build Date UTC : 2025-11-12 17:55:26.908467+00:00
 -->
