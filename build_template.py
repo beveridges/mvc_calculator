@@ -12,7 +12,7 @@ MVC_Calculator — Safe, Non-Spawning PyInstaller Build Template
 """
 
 from __future__ import annotations
-import argparse, os, re, shutil, subprocess, sys
+import argparse, os, re, shutil, subprocess, sys, signal, atexit
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
@@ -29,6 +29,15 @@ if getattr(sys, "frozen", False):
     sys.exit(0)
 
 # If another build process already holds the lock, abort immediately
+def release_lock() -> None:
+    try:
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+            print(f"[SAFEGUARD] Build lock released: {LOCK_FILE}")
+    except Exception as e:
+        print(f"[warn] Could not remove lock file: {e}")
+
+
 if LOCK_FILE.exists():
     print("[SAFEGUARD] Another build process is already running.")
     sys.exit(0)
@@ -40,6 +49,17 @@ try:
     print(f"[SAFEGUARD] Build lock acquired: {LOCK_FILE}")
 except Exception as e:
     print(f"[warn] Unable to create lock file: {e}")
+
+atexit.register(release_lock)
+
+
+def _sigint_handler(signum, frame):
+    print("\n[warn] Build interrupted by user (Ctrl+C).")
+    release_lock()
+    sys.exit(130)
+
+
+signal.signal(signal.SIGINT, _sigint_handler)
 
 
 # ============================================================
@@ -423,16 +443,6 @@ def main():
     print(f"[time] {datetime.now():%Y-%m-%d %H:%M:%S}")
     print(f"[py]   {sys.executable}\n")
     
-    # ============================================================
-    # 7) CLEANUP — remove persistent build lock
-    # ============================================================
-    try:
-        if LOCK_FILE.exists():
-            LOCK_FILE.unlink()
-            print(f"[SAFEGUARD] Build lock released: {LOCK_FILE}")
-    except Exception as e:
-        print(f"[warn] Could not remove lock file: {e}")
-
 # ============================================================
 # 6) Entry
 # ============================================================
@@ -441,4 +451,10 @@ if __name__ == "__main__":
     if getattr(sys, "frozen", False):
         print("[SAFEGUARD] Refusing to rebuild from frozen EXE.")
         sys.exit(0)
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n[warn] Build aborted by user.")
+        raise
+    finally:
+        release_lock()
