@@ -1,11 +1,16 @@
-## Welcome to MVC Calculator
+# Welcome to MVC Calculator
 
-MVC Calculator follows [@Konrad05].
+<div class="badge-row">
+  <img src="https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square" alt="Build badge">
+  <img src="https://img.shields.io/badge/version-25.11--alpha.01.61-orange?style=flat-square" alt="Version badge">
+</div>
+
+<p class="intro-spacing"></p>
+
+MVC Calculator follows (Konrad, 2005).
 
 
-MVC Calculator calculates the Maximum Voluntary Contraction (MVC) based on the
-signal-processing guidelines in [@Konrad05].  The MVC Calculator provides
-a visual workflow for burst identification, noise reduction, and normalization.
+MVC Calculator calculates the Maximum Voluntary Contraction (MVC) based on the signal-processing guidelines in [@Konrad05].  The MVC Calculator provides a visual workflow for burst identification, noise reduction, and normalization.
 
 ## Why don't we just use a script for this calculation?
 

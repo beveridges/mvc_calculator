@@ -37,3 +37,29 @@ div.bibliography li {
 div.bibliography a[href^="#ref-"] {
   display: none;
 }
+
+/* Keep version/build badges side by side with small gap */
+.badge-row img {
+  margin-top: -20px;  
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px; /* spacing between badges */
+}
+
+/* Align badges closely to the heading without affecting paragraph spacing */
+.badge-row {
+  margin-top: -10px;     /* pull badges closer to heading */
+  margin-bottom: 4px;    /* just a tiny gap below */
+  line-height: 1;        /* prevent inherited line spacing */
+}
+
+.badge-row img {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+/* Add extra breathing room between badges block and following text */
+.intro-spacing {
+  margin-bottom: 20px;
+}
