@@ -3,20 +3,30 @@
 ![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
 ![Version](https://img.shields.io/badge/version-25.11--alpha.01.69-orange?style=flat-square)
 
-## What is mvc_calculator ?
+## What is MVC Calculator?
 
-MVC Calculator provides a **visual workflow** for burst identification.
+MVC Calculator provides a **visual** method of idenitfying bursts in
+sEMG signals.
 
-## Why do we need manual MVC detection?
+## Why do we need manually identify MVC bursts?
 
-…because things go wromg during recording sessions. sEMG can be noisy.
-Depending on the testing protocol and recording success, noise often
-contaminates the measurement process.  
-By allowing the user to manually define MVC bursts, the Calculator
-provides a **visual and reliable** way to reduce noise before analysis.
+You would think that a process like burst identification could be
+pefromed very easily automagically. However, during the first drum study
+we ended up with files that had more than 3 bursts (due to miscounting
+or false starts), multiple files for the same participant, and other
+assorted problems. By allowing the user to manually define MVC bursts,
+the MVC Calculator provides a method that is **reliable, repeatable, and
+valid**. For all intents and purposes using MVC Calculator is
+one-and-done process. MATLAB .mat files go in, and an XML file with the
+MVC values go out. This will probably be the case 90% of the time. The
+other 10% can be a pain. MVC Calculator makes dealing with the 10% WAY
+easier.
 
-The system is written to follow the *“best of 3”* procedure described in
-(Konrad, 2005).
+Let’s dive into a Quick Start. The Quick Start has the following
+assumptions:
+
+- We are following the *“best of 3”* procedure (Konrad, 2005).
+- The sEMG sampling frequency is 1500Hz.
 
 ------------------------------------------------------------------------
 
@@ -33,6 +43,9 @@ The system is written to follow the *“best of 3”* procedure described in
 ------------------------------------------------------------------------
 
 ## Quick Start
+
+Four (or six, depending on the sensor configuration) , .mat files are
+loaded into the software
 
 1.  Open **MVC Calculator** and load your `.mat` file from the recording
     system.  

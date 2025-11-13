@@ -20,7 +20,7 @@
 
 /* Optional: fine-tune space between the search bar and navigation menu */
 .wy-side-nav-search input[type="text"] {
-  margin-top: 16px !important;   /* pushes search box further down */
+  margin-top: -6px !important;
   margin-bottom: 6px !important;
 }
 
@@ -44,13 +44,13 @@ div.bibliography a[href^="#ref-"] {
 
 /* Adjust spacing between the first H1 and the badge row */
 .rst-content h1:first-of-type {
-  margin-bottom: 0.75em !important;
+  margin-bottom: 0.45em !important;
 }
 
 .rst-content h1:first-of-type + p {
-  margin-top: 0.5em !important;
-  margin-bottom: 1.25em !important;
-  line-height: 1.2 !important;
+  margin-top: 0.25em !important;
+  margin-bottom: 1.75em !important;
+  line-height: 1.15 !important;
 }
 
 /* Style the badge images in the first paragraph */
@@ -58,6 +58,23 @@ div.bibliography a[href^="#ref-"] {
   margin-right: 8px !important;
   vertical-align: middle;
   display: inline-block;
+}
+
+/* Sidebar version block */
+.wy-side-nav-search .inline-version {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 11px 0 21px 0;
+  font-weight: 700;
+  color: #111;
+}
+
+.wy-side-nav-search .inline-version__name {
+  font-size: 2.1em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* Only on the homepage intro */

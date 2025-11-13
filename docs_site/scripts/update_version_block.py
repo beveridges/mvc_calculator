@@ -21,20 +21,16 @@ exec(vi.read_text(encoding="utf-8"), namespace)
 app_name = namespace.get("FRIENDLYVERSIONNAME", "Unknown App")
 build = namespace.get("BUILDNUMBER", "?.??")
 
-# Format: MVC_Calculator-25.11-alpha.01.57
-version_text = f"{app_name.replace(' ', '_')}-{build}"
-
-# Keep the inline badge consistent across docs
-html = f"""
-<div class="inline-version" style="text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;">
-  {version_text}
+inline_html = f"""
+<div class="inline-version">
+  <span class="inline-version__name">{app_name}</span>
 </div>
 """
 
 out = root / "docs_site" / "overrides" / "partials" / "version_inline.html"
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text(html, encoding="utf-8")
-print(f"[ok] wrote version_inline.html: {version_text}")
+out.write_text(inline_html, encoding="utf-8")
+print(f"[ok] wrote version_inline.html: {app_name} / {build}")
 
 
 def update_version_badge(target: Path, new_label: str) -> None:
