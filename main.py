@@ -692,10 +692,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         if not os.path.exists(site_index):
             QMessageBox.warning(
                 self,
-                "Help not found",
-                f"Cannot find MkDocs help site at:\n{site_index}\n\n"
-                "Run:\n\n    mkdocs build\n\n"
-                "to generate it."
+                "Help Not Available",
+                "This build does not include help files."
             )
             return
 

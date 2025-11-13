@@ -22,6 +22,7 @@ from typing import Optional, Tuple
 # ============================================================
 from pathlib import Path
 LOCK_FILE = Path.home() / ".ml_build_active.lock"
+SKIP_DOCS = True  # Temporary: skip MkDocs rebuild for pre-alpha-sin-ayudar branch
 
 # Refuse to rebuild from a frozen EXE
 if getattr(sys, "frozen", False):
@@ -262,7 +263,7 @@ def main():
             # Try to rebuild docs if mkdocs is available
             docs_dir = project_root / "docs_site"
             docs_site_index = docs_dir / "site" / "index.html"
-            if docs_dir.exists():
+            if docs_dir.exists() and not SKIP_DOCS:
                 try:
                     result = subprocess.run(
                         ["mkdocs", "build"],
@@ -285,6 +286,8 @@ def main():
                 # Check if docs exist even if build wasn't attempted
                 if not docs_site_index.exists():
                     print("[warn] docs_site/site/index.html not found - help files will not be available in EXE")
+            elif docs_dir.exists() and SKIP_DOCS:
+                print("[info] SKIP_DOCS enabled — skipping MkDocs build for this branch.")
         except Exception as e:
             print(f"[warn] Could not update docs version (non-critical): {e}")
 

@@ -1,7 +1,7 @@
 # Welcome to MVC Calculator
 
 ![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
-![Version](https://img.shields.io/badge/version-25.11--alpha.01.69-orange?style=flat-square)
+![Version](https://img.shields.io/badge/version-25.11--alpha.01.70-orange?style=flat-square)
 
 ## What is MVC Calculator?
 
