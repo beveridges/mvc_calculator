@@ -42,22 +42,20 @@ div.bibliography a[href^="#ref-"] {
 }
 
 
-/* Reduce spacing between h1 heading and badges on index page (badges are below heading) */
-/* Reduce space below heading - make badges closer to heading */
+/* Adjust spacing between the first H1 and the badge row */
 .rst-content h1:first-of-type {
-  margin-bottom: 0.0em !important;  /* Space below heading (before badges) - adjust this value (lower = closer, higher = further) */
+  margin-bottom: 0.75em !important;
 }
 
-/* Target the paragraph containing badges (comes after h1) */
 .rst-content h1:first-of-type + p {
-  margin-top: 0 !important;
-  margin-bottom: 1.0em !important;  /* Space below badges (before next content like "Foo") - adjust this value (higher = more space) */
+  margin-top: 0.5em !important;
+  margin-bottom: 1.25em !important;
   line-height: 1.2 !important;
 }
 
 /* Style the badge images in the first paragraph */
 .rst-content > p:first-of-type img {
-  margin-right: 8px !important;  /* Space between badges - adjust this value */
+  margin-right: 8px !important;
   vertical-align: middle;
   display: inline-block;
 }

@@ -5,6 +5,7 @@ Generate inline version string for MkDocs sidebar/header.
 Example output:  MVC Calculator – version 25.11-alpha.01.13
 """
 
+import re
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]  # project root
@@ -23,6 +24,7 @@ build = namespace.get("BUILDNUMBER", "?.??")
 # Format: MVC_Calculator-25.11-alpha.01.57
 version_text = f"{app_name.replace(' ', '_')}-{build}"
 
+# Keep the inline badge consistent across docs
 html = f"""
 <div class="inline-version" style="text-align:center; font-size:1.1em; margin:2px 0 8px 0; color:#000; font-weight:500;">
   {version_text}
@@ -33,3 +35,51 @@ out = root / "docs_site" / "overrides" / "partials" / "version_inline.html"
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(html, encoding="utf-8")
 print(f"[ok] wrote version_inline.html: {version_text}")
+
+
+def update_version_badge(target: Path, new_label: str) -> None:
+    if not target.exists():
+        return
+
+    text = target.read_text(encoding="utf-8")
+    badge_url = f"https://img.shields.io/badge/version-{new_label}-orange?style=flat-square"
+
+    if target.suffix.lower() == ".md":
+        badge_pattern = re.compile(r"(!\[Version\]\()[^)]+(\))")
+
+        def repl(match: re.Match) -> str:
+            return f"{match.group(1)}{badge_url}{match.group(2)}"
+    else:
+        badge_pattern = re.compile(r'(alt="Version"\s+src=")[^"]+(")')
+
+        def repl(match: re.Match) -> str:
+            return f'{match.group(1)}{badge_url}{match.group(2)}'
+
+    new_text, count = badge_pattern.subn(repl, text)
+
+    if count:
+        target.write_text(new_text, encoding="utf-8")
+        try:
+            rel = target.relative_to(root)
+        except ValueError:
+            rel = target
+        print(f"[ok] updated version badge in {rel}")
+    else:
+        try:
+            rel = target.relative_to(root)
+        except ValueError:
+            rel = target
+        print(f"[skip] version badge already current in {rel}")
+
+
+shield_label = build.replace("-", "--")
+
+targets = [
+    root / "docs_site" / "docs" / "_index_raw.md",
+    root / "docs_site" / "docs" / "index.md",
+    root / "docs_site" / "site" / "index.html",
+    root / "docs_site" / "site" / "_index_raw" / "index.html",
+]
+
+for path in targets:
+    update_version_badge(path, shield_label)
