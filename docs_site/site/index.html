@@ -38,7 +38,7 @@
         // Read version HTML from template file
         
         
-        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span> </div>";
+        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.11-alpha.01.70</span> </div>";
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
@@ -69,13 +69,31 @@
     <ul class="current">
     <li class="toctree-l2"><a class="reference internal" href="#what-is-mvc-calculator">What is MVC Calculator?</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#why-do-we-need-manually-identify-mvc-bursts">Why do we need manually identify MVC bursts?</a>
+    <li class="toctree-l2"><a class="reference internal" href="#why-do-we-need-to-manually-identify-mvc-bursts">Why do we need to manually identify MVC bursts?</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#how-mvc-calculator-fits-into-the-workflow">How MVC calculator fits into the workflow.</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#features">Features</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#quick-start">Quick Start</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#measurement-protocol-suggestions">Measurement Protocol Suggestions</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#the-interface">The Interface</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#quick-start_1">Quick Start</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#scenario-1-performing-the-mvc-calculation">Scenario 1: Performing the MVC Calculation</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#scenario-2-performing-a-batch-mvc-calculation">Scenario 2: Performing a batch MVC Calculation</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#scenario-3-importing-an-xml-file">Scenario 3: Importing an XML file</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#changing-the-defaults">Changing the Defaults</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#references">References</a>
     </li>
@@ -109,52 +127,85 @@
 <p><img alt="Build" src="https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square" />
 <img alt="Version" src="https://img.shields.io/badge/version-25.11--alpha.01.70-orange?style=flat-square" /></p>
 <h2 id="what-is-mvc-calculator">What is MVC Calculator?<a class="headerlink" href="#what-is-mvc-calculator" title="Permanent link">&para;</a></h2>
-<p>MVC Calculator provides a <strong>visual</strong> method of idenitfying bursts in
-sEMG signals.</p>
-<h2 id="why-do-we-need-manually-identify-mvc-bursts">Why do we need manually identify MVC bursts?<a class="headerlink" href="#why-do-we-need-manually-identify-mvc-bursts" title="Permanent link">&para;</a></h2>
+<p>MVC Calculator is software that provides a <strong>visual</strong> method of
+idenitfying bursts in sEMG signals.</p>
+<h2 id="why-do-we-need-to-manually-identify-mvc-bursts">Why do we need to manually identify MVC bursts?<a class="headerlink" href="#why-do-we-need-to-manually-identify-mvc-bursts" title="Permanent link">&para;</a></h2>
 <p>You would think that a process like burst identification could be
-pefromed very easily automagically. However, during the first drum study
-we ended up with files that had more than 3 bursts (due to miscounting
-or false starts), multiple files for the same participant, and other
-assorted problems. By allowing the user to manually define MVC bursts,
-the MVC Calculator provides a method that is <strong>reliable, repeatable, and
-valid</strong>. For all intents and purposes using MVC Calculator is
+pefromed automatically. However, during the first drum study we ended up
+with files that were so irregular, they couldn’t be processed
+automatically. Examples of such irregularities include files with more
+bursts than required (due to false starts or miscounting), multiple
+files for the same participant, and noise. By allowing the user to
+manually define MVC bursts, the MVC Calculator provides a method that is
+<strong>reliable, repeatable, and valid</strong>.</p>
+<div class="admonition summary">
+<p class="admonition-title">Summary</p>
+<p>For all intents and purposes using MVC Calculator is
 one-and-done process. MATLAB .mat files go in, and an XML file with the
-MVC values go out. This will probably be the case 90% of the time. The
-other 10% can be a pain. MVC Calculator makes dealing with the 10% WAY
-easier.</p>
-<p>Let’s dive into a Quick Start. The Quick Start has the following
-assumptions:</p>
-<ul>
-<li>We are following the <em>“best of 3”</em> procedure (Konrad, 2005).</li>
-<li>The sEMG sampling frequency is 1500Hz.</li>
-</ul>
+MVC values comes out. This will probably be the case 90% of the time.
+The other 10% can be a pain. MVC Calculator makes dealing with this 10%
+much more painless.</p>
+</div>
+<h2 id="how-mvc-calculator-fits-into-the-workflow">How MVC calculator fits into the workflow.<a class="headerlink" href="#how-mvc-calculator-fits-into-the-workflow" title="Permanent link">&para;</a></h2>
+<h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
+<p>There are currently two builds for Windows and one for Linux. These can
+be found at <a href="https://downloads.moviolabs.com/MVC_Calculator/releases/">https://downloads.moviolabs.com/MVC_Calculator/releases/</a>.</p>
+<p>The Windows portable version doesn’t require installtion, but can be
+slower on startup. The installable version (.msi) is faster because it
+does most of the time consuming heavy lifting only once during
+installation.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>During the alpha phase of development MVC Calculator will run
+with a temporary terminal in the background. This is designed as a
+troubleshooting tool and should mimic what is shown in the
+<a href="#console">console</a>. of MVC Calculator.</p>
+</div>
 <hr />
 <h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Import <code>.mat</code> files recorded by Qualisys or Noraxon systems  </li>
+<li>MATLAB&#174; <code>.mat</code> file importer  </li>
 <li>Detect and visualize MVC bursts interactively  </li>
-<li>Export processed data to CSV, JSON, or OpenSim-compatible formats  </li>
-<li>Adjustable burst thresholds and auto-normalization  </li>
-<li>Built-in logging and data management features</li>
+<li>Export processed MVC results data to XML  </li>
+<li>Import XML</li>
+<li>Adjustable burst thresholds detection function  </li>
+<li>Built-in logging and data management</li>
 </ul>
-<hr />
-<hr />
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"># Overview of the MVC Calculation and implementation</td>
+</tr>
+<tr>
+<td style="text-align: left;">The following asteps outline the entire process on implemeneting MVC single normalisation</td>
+</tr>
+</tbody>
+</table>
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
 <p>Four (or six, depending on the sensor configuration) , .mat files are
 loaded into the software</p>
 <ol>
 <li>Open <strong>MVC Calculator</strong> and load your <code>.mat</code> file from the recording
-    system.  </li>
+    system recorded by Qualisys or Noraxon systems.  </li>
 <li>Use the <strong>Energy Detection</strong> tool to locate candidate MVC bursts.  </li>
 <li>Fine-tune burst regions using the graphical selector.  </li>
 <li>Press <strong>Save Results</strong> to store computed MVC metrics.</li>
 </ol>
-<p>!!! tip You can change the “best of X” rule in the configuration file:<br />
-<code>./config/defaults.py</code> → variable <code>BEST_OF</code>.</p>
-<p>!!! note Noraxon / Qualisys record all sensors by default.<br />
-It’s the user’s responsibility to identify which sensors are relevant
-for MVC computation.</p>
+<div class="admonition measurementprotocol">
+<p class="admonition-title">Measurement Protocol</p>
+<p>By default, MVC
+Calculator assumes two things:</p>
+<ol>
+<li>We are following the <em>“best of 3”</em> procedure (Konrad, 2005).</li>
+<li>The sEMG sampling frequency is 1500Hz.</li>
+</ol>
+<p>These settings can be modified by <a href="#changing-the-defaults">changing the defaults</a></p>
+</div>
 <hr />
 <h2 id="measurement-protocol-suggestions">Measurement Protocol Suggestions<a class="headerlink" href="#measurement-protocol-suggestions" title="Permanent link">&para;</a></h2>
 <ul>
@@ -164,6 +215,116 @@ for MVC computation.</p>
 <li>Use the same sampling frequency for all measurements.</li>
 </ul>
 <hr />
+<p><a id="console"></a></p>
+<h2 id="the-interface">The Interface<a class="headerlink" href="#the-interface" title="Permanent link">&para;</a></h2>
+<p>The interface for MVC Calculator is very simple. It comprises:</p>
+<ol>
+<li>Menu bar</li>
+<li>Plotting area</li>
+<li>Console</li>
+<li>Main UI controls</li>
+</ol>
+<figure class="screenshot">
+
+<img
+    src="img/screenshots/full_ui.png"
+    data-full="img/screenshots/full_ui.png"
+    width="700"
+    alt="MVC Calculator UI"
+    class="lightbox-trigger"
+  />
+<figcaption aria-hidden="true">
+
+MVC Calculator UI
+</figcaption>
+
+</figure>
+
+<h2 id="quick-start_1">Quick Start<a class="headerlink" href="#quick-start_1" title="Permanent link">&para;</a></h2>
+<p>What follows are thea series of videos demonstrating the primary
+functions of MVC Calculator</p>
+<h3 id="scenario-1-performing-the-mvc-calculation">Scenario 1: Performing the MVC Calculation<a class="headerlink" href="#scenario-1-performing-the-mvc-calculation" title="Permanent link">&para;</a></h3>
+<p>Making an MVC Calculation is very straight forward, it involves:</p>
+<ol>
+<li>Importing MATLAB&#174; files</li>
+<li>Selecting bursts in the sEMG signal</li>
+<li>Performing the calculation</li>
+<li>Exportiong the saved data</li>
+</ol>
+<p>The following video will demonstrate this process.</p>
+<figure class="screenshot">
+
+<img
+    src="img/screenshots/video_placeholder.png"
+    data-full="img/screenshots/video_placeholder.png"
+    width="700"
+    alt="Video Placeholder"
+    class="lightbox-trigger"
+  />
+<figcaption aria-hidden="true">
+
+MVC Calculator – Video Walkthrough (coming soon)
+</figcaption>
+
+</figure>
+
+<h3 id="scenario-2-performing-a-batch-mvc-calculation">Scenario 2: Performing a batch MVC Calculation<a class="headerlink" href="#scenario-2-performing-a-batch-mvc-calculation" title="Permanent link">&para;</a></h3>
+<p>The majority of the time you will be processing multiple files (In our
+case four or six sensors). The following video demonstrates this
+process. The selection of single sEMG bursts is exactly the same as
+above except there are multiple tabs so multiple selections shoudl be
+made. Note that the tabs that have not had an active selection will show
+a red dot when the batchg MVV calculation</p>
+<figure class="screenshot">
+
+<img
+    src="img/screenshots/video_placeholder.png"
+    data-full="img/screenshots/video_placeholder.png"
+    width="700"
+    alt="Video Placeholder"
+    class="lightbox-trigger"
+  />
+<figcaption aria-hidden="true">
+
+MVC Calculator – Video Walkthrough (coming soon)
+</figcaption>
+
+</figure>
+
+<h3 id="scenario-3-importing-an-xml-file">Scenario 3: Importing an XML file<a class="headerlink" href="#scenario-3-importing-an-xml-file" title="Permanent link">&para;</a></h3>
+<p>XML is the format the system uses to save MVC calculations</p>
+<figure class="screenshot">
+
+<img
+    src="img/screenshots/video_placeholder.png"
+    data-full="img/screenshots/video_placeholder.png"
+    width="700"
+    alt="Video Placeholder"
+    class="lightbox-trigger"
+  />
+<figcaption aria-hidden="true">
+
+MVC Calculator – Video Walkthrough (coming soon)
+</figcaption>
+
+</figure>
+
+<h2 id="changing-the-defaults">Changing the Defaults<a class="headerlink" href="#changing-the-defaults" title="Permanent link">&para;</a></h2>
+<p>You can change the defaults mentioned above by modifying the relative
+path <code>./config/defaults.py</code>. Just open the file in any text editor and
+modify the two numbers corresponding to <code>BEST_OF</code> and
+<code>DEFAULT_SEMG_FREQUENCY</code>.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>You can change the “best of X” rule in the configuration file:
+<code>./config/defaults.py</code> → variable <code>BEST_OF</code>.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Noraxon / Qualisys record all sensors by default. It’s the
+user’s responsibility to identify which sensors are relevant for MVC
+computation.</p>
+</div>
 <h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
 <p>Konrad, P. (2005). <em>The ABC of EMG: A Practical Introduction to
 Kinesiological Electromyography.</em> Noraxon Inc.</p>
@@ -198,6 +359,7 @@ Kinesiological Electromyography.</em> Noraxon Inc.</p>
     <script>var base_url = ".";</script>
     <script src="js/theme_extra.js"></script>
     <script src="js/theme.js"></script>
+      <script src="js/lightbox.js"></script>
       <script src="search/main.js"></script>
     <script>
         jQuery(function () {
@@ -210,5 +372,5 @@ Kinesiological Electromyography.</em> Noraxon Inc.</p>
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2025-11-13 14:27:51.731910+00:00
+Build Date UTC : 2025-11-14 05:27:17.386798+00:00
 -->

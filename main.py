@@ -122,6 +122,26 @@ def update_splash(splash, message, percent):
     QtWidgets.qApp.processEvents()
 
 
+from telemetry.telemetry import log_startup, log_shutdown, log_event, log_error
+
+APP_VERSION = "25.11-alpha.01.70"
+
+def main():
+    log_startup(APP_VERSION)
+
+    try:
+        # your full application start
+        run_gui()
+    except Exception as e:
+        log_error(e)
+        raise
+    finally:
+        log_shutdown()
+
+if __name__ == "__main__":
+    main()
+
+
 # ============================================================
 #  Main Window
 # ============================================================

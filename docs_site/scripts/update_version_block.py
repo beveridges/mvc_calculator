@@ -24,6 +24,7 @@ build = namespace.get("BUILDNUMBER", "?.??")
 inline_html = f"""
 <div class="inline-version">
   <span class="inline-version__name">{app_name}</span>
+  <span class="inline-version__badge">{build}</span>
 </div>
 """
 
