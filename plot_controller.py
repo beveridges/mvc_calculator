@@ -19,6 +19,7 @@ from PyQt5.QtCore import QSize
 
 
 from config.defaults import BEST_OF
+from processors.processors import Processor
 
 class PlotController:
     def __init__(self, parent=None, container=None, main_window=None):
@@ -50,6 +51,7 @@ class PlotController:
         self._row_group = None
         self._data = None
         self._labels = None
+        self._processor = None
 
         self._live_rect = None
 
@@ -664,6 +666,8 @@ class PlotController:
             return None
 
         mvc_val = getattr(self, "_mvc_result", None)
+        if mvc_val is None and bursts:
+            mvc_val = self._compute_mvc_from_bursts(row, bursts[:BEST_OF])
 
         return {
             "filename": filename,
@@ -671,5 +675,33 @@ class PlotController:
             "bursts": bursts[:BEST_OF],
             "mvc": mvc_val,
         }
+
+    def _compute_mvc_from_bursts(self, row: int, bursts):
+        if self._data is None:
+            return None
+        if self._processor is None:
+            try:
+                self._processor = Processor()
+            except Exception:
+                self._processor = None
+                return None
+
+        signal = self._data[row, :]
+        mvc_values = []
+        for lo, hi in bursts:
+            lo_i = int(lo)
+            hi_i = int(hi)
+            segment = signal[lo_i:hi_i]
+            if segment.size == 0:
+                continue
+            try:
+                mvc_val, _ = self._processor.mvc_matlab(segment)
+                mvc_values.append(mvc_val)
+            except Exception:
+                continue
+
+        if not mvc_values:
+            return None
+        return max(mvc_values)
 
 

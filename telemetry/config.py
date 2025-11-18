@@ -1,8 +1,6 @@
 # telemetry/config.py
 
-ENABLE_TELEMETRY = True   # Turn telemetry on/off globally
-LOG_FILENAME = "mvc_telemetry.log"
+ENABLE_TELEMETRY = True
 
-# In the future (optional):
-UPLOAD_ENDPOINT = None    # e.g. "https://moviolabs.com/telemetry"
-UPLOAD_ENABLED = False
+# Performance sampling interval (heartbeat)
+PERF_SAMPLE_INTERVAL = 60  # seconds

@@ -7,6 +7,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 import numpy as np
 
+from PyQt5.QtWidgets import QApplication
+
 # ============================================================
 #  Startup banner — shown before anything else
 # ============================================================
@@ -123,23 +125,10 @@ def update_splash(splash, message, percent):
 
 
 from telemetry.telemetry import log_startup, log_shutdown, log_event, log_error
+from telemetry.perf_monitor import start_performance_monitor, stop_performance_monitor
+from telemetry.notifier import record_launch_info, send_session_summary_email
 
-APP_VERSION = "25.11-alpha.01.70"
-
-def main():
-    log_startup(APP_VERSION)
-
-    try:
-        # your full application start
-        run_gui()
-    except Exception as e:
-        log_error(e)
-        raise
-    finally:
-        log_shutdown()
-
-if __name__ == "__main__":
-    main()
+APP_VERSION = f"{FRIENDLYVERSIONNAME} {VERSIONNUMBER}.{BUILDNUMBER}"
 
 
 # ============================================================
@@ -788,31 +777,44 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 #  main() — reuse the already-created QApplication and splash
 # ============================================================
 def main():
-    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
-    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
-    os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
+    log_startup(APP_VERSION)
+    record_launch_info(APP_VERSION)
+    start_performance_monitor()
 
-    app = QtWidgets.QApplication(sys.argv)
-    splash_pix = QPixmap(base_path("resources/icons", "splash_zx_arr.png"))
-    splash = QSplashScreen(splash_pix)
-    splash.setFont(QFont("Helvetica", 10))
-    splash.show()
-    splash.showMessage("Initializing — please wait...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-    app.processEvents()
+    try:
+        QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+        QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
+        os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 
-    # progress ticks
-    update_splash(splash, "LOADING RESOURCES", 10); time.sleep(0.05)
-    update_splash(splash, "INITIALIZING COMPONENTS", 30); time.sleep(0.3)
-    update_splash(splash, "CONNECTING TO DB", 60); time.sleep(0.3)
-    update_splash(splash, "STARTING INTERFACE", 90); time.sleep(0.05)
+        app = QtWidgets.QApplication(sys.argv)
+        splash_pix = QPixmap(base_path("resources/icons", "splash_zx_arr.png"))
+        splash = QSplashScreen(splash_pix)
+        splash.setFont(QFont("Helvetica", 10))
+        splash.show()
+        splash.showMessage("Initializing — please wait...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+        app.processEvents()
 
+        # progress ticks
+        update_splash(splash, "LOADING RESOURCES", 10); time.sleep(0.05)
+        update_splash(splash, "INITIALIZING COMPONENTS", 30); time.sleep(0.3)
+        update_splash(splash, "CONNECTING TO DB", 60); time.sleep(0.3)
+        update_splash(splash, "STARTING INTERFACE", 90); time.sleep(0.05)
 
-    window = ApplicationWindow(splash=splash)
-    window.show()
-    splash.showMessage("READY", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-    splash.finish(window)
+        window = ApplicationWindow(splash=splash)
+        window.show()
+        splash.showMessage("READY", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+        splash.finish(window)
 
-    sys.exit(app.exec_())
+        sys.exit(app.exec_())
+
+    except Exception as e:
+        log_error(e)
+        raise
+
+    finally:
+        perf_summary = stop_performance_monitor()
+        send_session_summary_email(APP_VERSION, perf_summary)
+        log_shutdown()
 
 
 # ============================================================

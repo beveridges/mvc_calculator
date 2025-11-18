@@ -8,10 +8,58 @@ import os
 import logging
 
 SENDER_EMAIL = "support@moviolabs.com"
-RECIPIENT_EMAIL = "support@moviolabs.com"   # all logs go here
+RECIPIENT_EMAIL = "telemetry@moviolabs.com"   # telemetry mailbox
 APP_PASSWORD = "aMJi4826bV."  
 SMTP_SERVER = "mail.moviolabs.com"
 SMTP_PORT = 465  # SSL
+
+
+def send_email(subject,
+               body,
+               attachments=None,
+               recipient=RECIPIENT_EMAIL,
+               sender=SENDER_EMAIL,
+               password=APP_PASSWORD,
+               smtp_server=SMTP_SERVER,
+               port=SMTP_PORT):
+    """
+    Send an email with optional attachments.
+    """
+    attachments = attachments or []
+
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg["Subject"] = subject
+
+    msg.attach(MIMEText(body, "plain"))
+
+    for filepath in attachments:
+        if not os.path.isfile(filepath):
+            logging.warning(f"send_email: Attachment not found -> {filepath}")
+            continue
+        with open(filepath, "rb") as f:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(f.read())
+            encoders.encode_base64(part)
+            part.add_header(
+                "Content-Disposition",
+                f"attachment; filename={os.path.basename(filepath)}"
+            )
+            msg.attach(part)
+
+    try:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+            server.login(sender, password)
+            server.sendmail(sender, recipient, msg.as_string())
+        logging.debug(f"Email sent to {recipient} ({subject})")
+        return True
+    except Exception:
+        # Fail silently when offline or SMTP unavailable
+        logging.debug(f"Email '{subject}' could not be sent (silenced).")
+        return False
+
 
 def email_file(filepath,
                recipient=RECIPIENT_EMAIL,
@@ -20,38 +68,24 @@ def email_file(filepath,
                smtp_server=SMTP_SERVER,
                port=SMTP_PORT):
     """
-    Send a file as an email attachment.
+    Backwards-compatible helper that sends a single file attachment
+    with a standard subject/body.
     """
-        
     if not os.path.isfile(filepath):
         logging.error(f"email_file: File not found -> {filepath}")
         return False
 
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = recipient
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    msg["Subject"] = f"MVCCalc Session Log — {now}"
+    subject = f"MVCCalc Session Log — {now}"
+    body = "Please find attached the session log."
 
-    msg.attach(MIMEText("Please find attached the session log.", "plain"))
-
-    with open(filepath, "rb") as f:
-        part = MIMEBase("application", "octet-stream")
-        part.set_payload(f.read())
-        encoders.encode_base64(part)
-        part.add_header(
-            "Content-Disposition",
-            f"attachment; filename={os.path.basename(filepath)}"
-        )
-        msg.attach(part)
-
-    try:
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
-            server.login(sender, password)
-            server.sendmail(sender, recipient, msg.as_string())
-        logging.info(f"Session log emailed to {recipient}")
-        return True
-    except Exception as e:
-        logging.error(f"Failed to send email: {e}", exc_info=True)
-        return False
+    return send_email(
+        subject=subject,
+        body=body,
+        attachments=[filepath],
+        recipient=recipient,
+        sender=sender,
+        password=password,
+        smtp_server=smtp_server,
+        port=port,
+    )
