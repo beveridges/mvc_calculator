@@ -5,9 +5,7 @@ Moviolabs download page.
 https://moviolabs.com/downloads/MVC_Calculator/releases/
 USERNAME: imm.qtm.machine
 PASSWORD: Nc)D6J(Fs1q+t=&x
-
-wsl_pull token: REMOVED11ANZTMVA0db5r5hVwzV50_eePZ10PtsWC2eRziX8vM6FYcCbAqNW07V9uyAqKGXeG7KIAU4BFBDQG9ys3
-                 
+                
 '''
 from __future__ import print_function
 import os, sys, time, logging, faulthandler
