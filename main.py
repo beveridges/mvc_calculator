@@ -1,11 +1,25 @@
 # -*- coding: utf-8 -*-
 # main.py
+'''
+Moviolabs download page.  
+https://moviolabs.com/downloads/MVC_Calculator/releases/
+USERNAME: imm.qtm.machine
+PASSWORD: Nc)D6J(Fs1q+t=&x
+
+wsl_pull token: REMOVED11ANZTMVA0db5r5hVwzV50_eePZ10PtsWC2eRziX8vM6FYcCbAqNW07V9uyAqKGXeG7KIAU4BFBDQG9ys3
+                 
+'''
 from __future__ import print_function
 import os, sys, time, logging, faulthandler
 from logging.handlers import RotatingFileHandler
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import numpy as np
+
+
+from telemetry.telemetry import log_startup, log_shutdown, log_event, log_error
+from telemetry.perf_monitor import start_performance_monitor, stop_performance_monitor
+from telemetry.notifier import record_launch_info, send_session_summary_email
 
 from PyQt5.QtWidgets import QApplication
 
@@ -111,9 +125,6 @@ sys.excepthook = handle_uncaught_exception
 # ============================================================
 #  Splash progress helper
 # ============================================================
-# ============================================================
-#  Splash progress helper
-# ============================================================
 def update_splash(splash, message, percent):
     """Update splash text safely (accepts splash instance)."""
     if splash is None:
@@ -124,9 +135,7 @@ def update_splash(splash, message, percent):
     QtWidgets.qApp.processEvents()
 
 
-from telemetry.telemetry import log_startup, log_shutdown, log_event, log_error
-from telemetry.perf_monitor import start_performance_monitor, stop_performance_monitor
-from telemetry.notifier import record_launch_info, send_session_summary_email
+
 
 APP_VERSION = f"{FRIENDLYVERSIONNAME} {VERSIONNUMBER}.{BUILDNUMBER}"
 
@@ -787,6 +796,29 @@ def main():
         os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 
         app = QtWidgets.QApplication(sys.argv)
+        # ---------- WSLg ICON FIX (safe, no variable shadowing) ----------
+        import platform as _plat
+        import os as _os
+        from PyQt5 import QtGui
+        from utilities.path_utils import resource_path
+        
+        _IN_WSL = (
+            "microsoft" in _plat.uname().release.lower()
+            or "WSL" in _os.getenv("WSL_DISTRO_NAME", "")
+        )
+        
+        if _IN_WSL:
+            print("Running inside WSL → applying WSLg icon fix")
+        
+            app.setApplicationName("MVC_Calculator")
+            app.setDesktopFileName("mvc_calculator")
+        
+            app_icon = QtGui.QIcon(resource_path("resources/icons/icn_emg.png"))
+            app.setWindowIcon(app_icon)
+        else:
+            print("Running on Windows → using normal icon logic")
+        # -----------------------------------------------------------------
+
         splash_pix = QPixmap(base_path("resources/icons", "splash_zx_arr.png"))
         splash = QSplashScreen(splash_pix)
         splash.setFont(QFont("Helvetica", 10))
@@ -797,6 +829,7 @@ def main():
         # progress ticks
         update_splash(splash, "LOADING RESOURCES", 10); time.sleep(0.05)
         update_splash(splash, "INITIALIZING COMPONENTS", 30); time.sleep(0.3)
+        update_splash(splash, "TELEMETRÍA ACTIVADA", 40); time.sleep(0.7)
         update_splash(splash, "CONNECTING TO DB", 60); time.sleep(0.3)
         update_splash(splash, "STARTING INTERFACE", 90); time.sleep(0.05)
 

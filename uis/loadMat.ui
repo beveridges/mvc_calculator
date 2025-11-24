@@ -1,103 +1,87 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>LoadMatDialog</class>
- <widget class="QDialog" name="LoadMatDialog">
+ <class>LoadMat</class>
+ <widget class="QDialog" name="LoadMat">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1061</width>
-    <height>300</height>
+    <width>560</width>
+    <height>380</height>
    </rect>
   </property>
-  <property name="font">
-   <font>
-    <pointsize>12</pointsize>
-   </font>
-  </property>
   <property name="windowTitle">
-   <string>Import MATLAB files</string>
+   <string>Import MAT Files</string>
   </property>
-  <property name="styleSheet">
-   <string>* { font-size: 12pt; }</string>
-  </property>
+
   <layout class="QVBoxLayout" name="verticalLayout">
+
+   <!-- TOP BUTTON BAR -->
    <item>
-    <widget class="QGroupBox" name="groupBox">
-     <property name="title">
-      <string>Files</string>
+    <layout class="QHBoxLayout" name="buttonRow">
+     <item>
+      <widget class="QPushButton" name="btnSelectFiles">
+       <property name="text">
+        <string>Select Files</string>
+       </property>
+      </widget>
+     </item>
+
+     <item>
+      <widget class="QPushButton" name="btnImport">
+       <property name="text">
+        <string>Import Files</string>
+       </property>
+     </widget>
+     </item>
+
+     <!-- NEW REMOVE BUTTON -->
+     <item>
+      <widget class="QPushButton" name="btnRemoveSelected">
+       <property name="text">
+        <string>Remove Selected</string>
+       </property>
+      </widget>
+     </item>
+
+     <item>
+      <widget class="QPushButton" name="btnClear">
+       <property name="text">
+        <string>Clear Files</string>
+       </property>
+      </widget>
+     </item>
+
+     <item>
+      <widget class="QPushButton" name="btnClose">
+       <property name="text">
+        <string>Close</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+   <!-- FILE LIST -->
+   <item>
+    <widget class="QListWidget" name="listFiles">
+     <property name="selectionMode">
+      <enum>QAbstractItemView::ExtendedSelection</enum>
      </property>
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_3">
-        <item>
-         <layout class="QVBoxLayout" name="verticalLayout_2">
-          <item>
-           <widget class="QPushButton" name="btnSelectFiles">
-            <property name="minimumSize">
-             <size>
-              <width>200</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="font">
-             <font>
-              <pointsize>12</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>Select files</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnImport">
-            <property name="text">
-             <string>Import files</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnClear">
-            <property name="text">
-             <string>Clear files</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnClose">
-            <property name="text">
-             <string>Close</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="verticalSpacer">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <widget class="QListWidget" name="listFiles"/>
-        </item>
-       </layout>
-      </item>
-     </layout>
+     <property name="dragEnabled">
+      <bool>true</bool>
+     </property>
+     <property name="acceptDrops">
+      <bool>true</bool>
+     </property>
+     <property name="dragDropMode">
+      <enum>QAbstractItemView::DropOnly</enum>
+     </property>
     </widget>
    </item>
-   <item>
-    <layout class="QHBoxLayout" name="horizontalLayoutButtons"/>
-   </item>
+
   </layout>
+
  </widget>
  <resources/>
  <connections/>

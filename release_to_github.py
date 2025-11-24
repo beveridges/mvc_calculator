@@ -11,9 +11,6 @@ Requires:
   • GitHub CLI (gh)
   • Git installed and authenticated with 'gh auth login'
 ================================================================================
-PASSWORD FOR 
-imm.qtm.machine
-Nc)D6J(Fs1q+t=&x
 """
 
 import subprocess, sys
