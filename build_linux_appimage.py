@@ -35,7 +35,8 @@ def copy_files() -> None:
 
     # Icon: use your existing PNG
     icon_src = Path("resources/icons/icn_emg.png")
-    icon_dest = APPDIR / "usr/share/icons" / f"{APP_NAME}.png"
+    # icon_dest = APPDIR / "usr/share/icons" / f"{APP_NAME}.png"
+    icon_dest = APPDIR / f"{APP_NAME}.png"
     shutil.copy(icon_src, icon_dest)
 
 
@@ -44,7 +45,8 @@ def create_desktop() -> None:
 
     exec_path = f"/usr/bin/{APP_NAME}/{APP_NAME}"
 
-    desktop_file = APPDIR / "usr/share/applications" / f"{APP_NAME}.desktop"
+    # desktop_file = APPDIR / "usr/share/applications" / f"{APP_NAME}.desktop"
+    desktop_file = APPDIR / f"{APP_NAME}.desktop"
     desktop_file.write_text(
         f"""[Desktop Entry]
 Type=Application
