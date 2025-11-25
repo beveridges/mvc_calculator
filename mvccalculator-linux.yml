@@ -6,21 +6,26 @@ dependencies:
   - python=3.11
   - pyqt=5.15.9
   - qt-main=5.15.8
+
+  # Core scientific stack
   - numpy
   - scipy
   - pandas
   - matplotlib
   - scikit-learn
+
+  # System + utility libs
   - psutil
   - pillow
   - jinja2
   - joblib
   - tornado
-  - pyinstaller
-  - patchelf
-  - fakeroot
-  - desktop-file-utils
-  - dpkg
+
+  # Build tools for Linux AppImage + DEB
+  - pyinstaller        # required for portable Linux onedir
+  - patchelf           # required for AppImage ELF patching
+
+  # Misc tools
   - pip
   - pip:
       - pytest
