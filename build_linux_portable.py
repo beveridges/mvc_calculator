@@ -8,7 +8,8 @@ APP_NAME = "MVC_Calculator"
 ICON = "resources/icons/icn_emg.png"
 
 # Output directory (WINDOWS PATH mirrored into WSL)
-/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds/pyinstaller
+OUT_DIR = Path("/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds/pyinstaller")
+
 
 def run():
     out_dir = Path("/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds/pyinstaller")
