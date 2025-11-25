@@ -16,6 +16,11 @@ dependencies:
   - jinja2
   - joblib
   - tornado
+  - pyinstaller
+  - patchelf
+  - fakeroot
+  - desktop-file-utils
+  - dpkg
   - pip
   - pip:
       - pytest
