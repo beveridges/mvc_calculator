@@ -11,7 +11,8 @@ APP_ID = "mvc-calculator"          # Debian package name
 DISPLAY_NAME = "MVC Calculator"    # Human-readable
 VERSION = BUILDNUMBER              # e.g. "25.11-alpha.01.72"
 
-ROOT = Path("/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds")
+# ROOT = Path("/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds")
+ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
 PORTABLE = ROOT / "pyinstaller"
 DEBROOT = ROOT / "deb" / f"{APP_ID}_{VERSION}_amd64"
 OUTFILE = ROOT / f"{APP_ID}_{VERSION}_amd64.deb"

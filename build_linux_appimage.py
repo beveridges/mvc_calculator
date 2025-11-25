@@ -10,7 +10,8 @@ from utilities.version_info import BUILDNUMBER  # same as Windows build
 APP_NAME = "MVC_Calculator"
 VERSION = BUILDNUMBER  # e.g. "25.11-alpha.01.72"
 
-ROOT = Path("/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds")
+# ROOT = Path("/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds")
+ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
 PORTABLE = ROOT / "pyinstaller"
 APPDIR = ROOT / "appimage" / "AppDir"
 OUTFILE = ROOT / f"{APP_NAME}-{VERSION}-x86_64.AppImage"
