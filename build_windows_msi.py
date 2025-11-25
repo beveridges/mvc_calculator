@@ -15,6 +15,10 @@ from pathlib import Path
 from datetime import datetime
 from utilities.path_utils import base_path
 
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+
+
 # ------------------------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------------------------

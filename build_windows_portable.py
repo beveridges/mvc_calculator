@@ -17,6 +17,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
+
+# -*- coding: utf-8 -*-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+
+
 # ============================================================
 # 0) RECURSION / MULTI-SPAWN GUARD  (persistent + environment)
 # ============================================================
