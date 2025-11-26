@@ -16,11 +16,25 @@ PORTABLE_SCRIPT = SCRIPT_ROOT / "build_linux_portable.py"
 APPIMAGE_SCRIPT = SCRIPT_ROOT / "build_linux_appimage.py"
 DEB_SCRIPT      = SCRIPT_ROOT / "build_linux_deb.py"
 
+# Get version number
+VERSION_INFO = SCRIPT_ROOT / "utilities" / "version_info.py"
+BUILDNUMBER = "unknown"
+if VERSION_INFO.exists():
+    for line in VERSION_INFO.read_text(encoding="utf-8").splitlines():
+        if line.startswith("BUILDNUMBER"):
+            BUILDNUMBER = line.split("=")[1].strip().strip('"')
+            break
+
 # Uses local WSL home directory (correct)
 LINUX_ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
 LINUX_ROOT.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE = LINUX_ROOT / f"linux_master_{datetime.now():%y.%m%d-%H%M%S}.log"
+
+# Windows versioned directory (where Linux builds will be copied)
+WIN_BUILD_BASE = Path("/mnt/c/Users/Scott/Documents/.builds/mvc_calculator")
+WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"
+WIN_BUILDFILES_DIR = WIN_VERSION_DIR / "buildfiles"
 
 
 def run_step(name: str, cmd: list[str]):
@@ -54,28 +68,29 @@ def run_step(name: str, cmd: list[str]):
 # COPY RESULTING FILES TO WINDOWS DIRECTORY
 # --------------------------------------------------------------
 def copy_to_windows():
-    win_dir = Path("/mnt/c/Users/Scott/Documents/.builds/mvc_calculator")
-    win_dir.mkdir(parents=True, exist_ok=True)
+    WIN_VERSION_DIR.mkdir(parents=True, exist_ok=True)
+    WIN_BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n[INFO] Copying Linux build artifacts to Windows folder:\n{win_dir}\n")
+    print(f"\n[INFO] Copying Linux build artifacts to Windows versioned directory:\n{WIN_VERSION_DIR}\n")
 
-    artifacts = [
-        LINUX_ROOT / "pyinstaller",  # portable
-    ]
-
-    # Add DEB + AppImage if they exist
+    # Copy DEB and AppImage to version directory (main artifacts)
     for item in LINUX_ROOT.iterdir():
         if item.suffix in [".deb", ".AppImage"]:
-            artifacts.append(item)
+            dest = WIN_VERSION_DIR / item.name
+            shutil.copy(item, dest)
+            print(f"  ✓ Copied {item.name} to version directory")
 
-    for item in artifacts:
-        if item.is_dir():
-            dest = win_dir / item.name
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(item, dest)
-        else:
-            shutil.copy(item, win_dir)
+    # Copy portable build and other files to buildfiles
+    for item in LINUX_ROOT.iterdir():
+        if item.name == "pyinstaller" or (item.is_file() and item.suffix not in [".deb", ".AppImage"]):
+            dest = WIN_BUILDFILES_DIR / item.name
+            if item.is_dir():
+                if dest.exists():
+                    shutil.rmtree(dest)
+                shutil.copytree(item, dest)
+            else:
+                shutil.copy(item, dest)
+            print(f"  ✓ Copied {item.name} to buildfiles")
 
     print("[INFO] Copy complete.\n")
 

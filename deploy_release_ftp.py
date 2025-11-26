@@ -1,236 +1,469 @@
 #!/usr/bin/env python3
-# Upload Windows + Linux builds to Moviolabs FTP
-# ----------------------------------------------
 
-from __future__ import annotations
-import argparse
-import os
-import ftplib
+import re
 from pathlib import Path
-
-APP_BASENAME = "MVC_Calculator"
-
-SOURCE_WINDOWS = Path.home() / "Documents/.builds/MVC_CALCULATOR/msi/builds"
-SOURCE_LINUX   = Path.home() / "Documents/.linux_builds/MVC_CALCULATOR/linux_builds"
-
-TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
-
-DEFAULT_HOST = "ftp.moviolabs.com"
-PRESET_USERNAME = "moviolab"
-PRESET_PASSWORD = "f2Pf3aNF-N8:9h"
+from datetime import datetime
 
 
-def newest_windows(src: Path):
-    msi = list(src.glob("MVC_Calculator-*.msi"))
-    zipf = list(src.glob("MVC_Calculator-*-portable.zip"))
-    if not msi or not zipf:
-        raise FileNotFoundError("Windows MSI or ZIP missing")
+BUILD_BASE = Path.home() / "Documents/.builds/mvc_calculator"
+NOTES_DIR = BUILD_BASE
+
+TEMPLATE  = Path(__file__).parent / "TEMPLATE_RELEASE.html"
+OUTPUT    = BUILD_BASE / "index.html"
+
+def find_logo_path():
+    """Find logo file in output directory or copy from resources."""
+    import shutil
+    
+    # Check for common logo file names in the output directory first
+    # icon.png is the primary logo name
+    logo_names = ["icon.png", "logo.svg", "logo.png", "coming.soon.light.on.darkL.svg", "manandsnareRASTERIZED.png"]
+    for name in logo_names:
+        logo_path = BUILD_BASE / name
+        if logo_path.exists():
+            return name
+    
+    # If not found, check resources/icons directory and copy it
+    resources_dir = Path(__file__).parent / "resources" / "icons"
+    for name in logo_names:
+        source_logo = resources_dir / name
+        if source_logo.exists():
+            # Copy to output directory
+            dest_logo = BUILD_BASE / name
+            shutil.copy2(source_logo, dest_logo)
+            print(f"Copied logo from {source_logo} to {dest_logo}")
+            return name
+    
+    # Default fallback
+    return "icon.png"
+
+PATTERNS = [
+    "MVC_Calculator-*-alpha.*.msi",
+    "MVC_Calculator-*-alpha.*-portable.zip",
+    "mvc-calculator_*_amd64.deb",
+    "MVC_Calculator-*-alpha.*-x86_64.AppImage",
+]
+
+VERSION_RE = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
+
+
+def parse_version(name: str):
+    m = VERSION_RE.search(name)
+    return m.group(1) if m else None
+
+
+def load_notes(version: str):
+    notes = {
+        "date": "",
+        "description": "",
+        "whats_new": [],
+        "bug_fixes": [],
+        "tags": [],
+    }
+
+    # Look for release notes in versioned directory's buildfiles subdirectory
+    version_dir = BUILD_BASE / f"MVC_Calculator-{version}"
+    notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{version}.txt"
+    
+    # Fallback to base directory for backwards compatibility
+    if not notes_file.exists():
+        notes_file = BUILD_BASE / f"RELEASE_NOTES-{version}.txt"
+    
+    if not notes_file.exists():
+        return notes
+
+    content = notes_file.read_text(encoding="utf-8")
+    
+    # Find section markers first
+    whats_new_match = re.search(r'(?i)(?:^|\n)\s*(?:\[?what\'?s\s+new\]?|what\'?s\s+new:)\s*\n?', content)
+    bug_fixes_match = re.search(r'(?i)(?:^|\n)\s*(?:\[?bug\s+fixes\]?|bug\s+fixes:)\s*\n?', content)
+    
+    # Find where description section ends (before WHAT'S NEW or BUG FIXES)
+    desc_end_idx = len(content)
+    if whats_new_match:
+        desc_end_idx = min(desc_end_idx, whats_new_match.start())
+    if bug_fixes_match:
+        desc_end_idx = min(desc_end_idx, bug_fixes_match.start())
+    
+    # Extract metadata from top of file
+    lines = content.splitlines()
+    in_description = False
+    description_lines = []
+    skip_next_line = False  # Flag to skip line after TAGS: if tags are on next line
+    
+    for i, line in enumerate(lines):
+        if skip_next_line:
+            skip_next_line = False
+            continue
+            
+        s = line.strip()
+        
+        if s.lower().startswith("date:"):
+            notes["date"] = s.split(":", 1)[1].strip()
+        elif s.lower().startswith("tags:"):
+            # Tags might be on the same line or the next line
+            tags_str = s.split(":", 1)[1].strip()
+            if not tags_str and i + 1 < len(lines):
+                # Tags are on the next line
+                tags_str = lines[i + 1].strip()
+                skip_next_line = True  # Skip the tags line in next iteration
+            if tags_str:
+                notes["tags"] = [t.strip() for t in tags_str.split(",") if t.strip()]
+        elif s.lower().startswith("description:"):
+            # Get description text after the colon on this line
+            desc_text = s.split(":", 1)[1].strip() if ":" in s else ""
+            if desc_text:
+                description_lines.append(desc_text)
+            in_description = True
+        elif in_description:
+            # Check if we've hit a section marker
+            if any(marker in s.upper() for marker in ["WHAT'S NEW", "BUG FIXES", "[WHAT'S", "[BUG"]):
+                in_description = False
+            elif s:  # Only add non-empty lines
+                description_lines.append(s)
+    
+    # Join description lines with spaces
+    notes["description"] = " ".join(description_lines).strip()
+    
+    # Extract WHAT'S NEW and BUG FIXES sections
+    if whats_new_match:
+        start_idx = whats_new_match.end()
+        if bug_fixes_match and bug_fixes_match.start() > start_idx:
+            # Extract what's new section
+            whats_new_text = content[start_idx:bug_fixes_match.start()].strip()
+            bug_fixes_text = content[bug_fixes_match.end():].strip()
+        else:
+            whats_new_text = content[start_idx:].strip()
+            bug_fixes_text = ""
+        
+        # Extract bullet points from what's new
+        for line in whats_new_text.splitlines():
+            s = line.strip()
+            if s.startswith("-"):
+                notes["whats_new"].append(s[1:].strip())
+        
+        # Extract bullet points from bug fixes
+        for line in bug_fixes_text.splitlines():
+            s = line.strip()
+            if s.startswith("-"):
+                notes["bug_fixes"].append(s[1:].strip())
+    else:
+        # Fallback: line-by-line parsing for WHAT'S NEW and BUG FIXES
+        section = None
+        for line in lines:
+            s = line.strip()
+            
+            if s.lower() in ["[what's new]", "what's new:", "what's new"]:
+                section = "new"
+            elif s.lower() in ["[bug fixes]", "bug fixes:", "bug fixes"]:
+                section = "bug"
+            elif section == "new" and s.startswith("-"):
+                notes["whats_new"].append(s[1:].strip())
+            elif section == "bug" and s.startswith("-"):
+                notes["bug_fixes"].append(s[1:].strip())
+
+    notes["description"] = notes["description"].strip()
+    return notes
+
+
+def make_li_list(items):
+    if not items:
+        return ""
+    return "\n            ".join(f"<li>{i}</li>" for i in items)
+
+
+def normalize_tag_name(tag: str) -> str:
+    """
+    Normalize tag names to match predefined CSS classes.
+    Predefined tags: api, security, performance, bugfix, feature, 
+                     ui, documentation, breaking, enhancement, testing
+    """
+    tag_lower = tag.lower().strip()
+    
+    # Mapping of common variations to normalized tag names
+    tag_map = {
+        # API variations
+        "api": "api",
+        
+        # Security variations
+        "security": "security",
+        "sec": "security",
+        
+        # Performance variations
+        "performance": "performance",
+        "perf": "performance",
+        
+        # Bug fix variations
+        "bugfix": "bugfix",
+        "bug fix": "bugfix",
+        "bug-fix": "bugfix",
+        "bugs": "bugfix",
+        "bug": "bugfix",
+        
+        # Feature variations
+        "feature": "feature",
+        "features": "feature",
+        "new feature": "feature",
+        
+        # UI variations
+        "ui": "ui",
+        "ui/ux": "ui",
+        "ux": "ui",
+        "user interface": "ui",
+        "interface": "ui",
+        
+        # Documentation variations
+        "documentation": "documentation",
+        "docs": "documentation",
+        "doc": "documentation",
+        
+        # Breaking change variations
+        "breaking": "breaking",
+        "breaking change": "breaking",
+        "breaking-change": "breaking",
+        "breaking changes": "breaking",
+        
+        # Enhancement variations
+        "enhancement": "enhancement",
+        "enhancements": "enhancement",
+        "improvement": "enhancement",
+        "improvements": "enhancement",
+        
+        # Testing variations
+        "testing": "testing",
+        "system testing": "testing",
+        "system-testing": "testing",
+        "test": "testing",
+    }
+    
+    # Check direct match first
+    if tag_lower in tag_map:
+        return tag_map[tag_lower]
+    
+    # Check if tag contains any of the keywords
+    for key, normalized in tag_map.items():
+        if key in tag_lower:
+            return normalized
+    
+    # Default: return lowercase version (will use default styling if CSS class doesn't exist)
+    return tag_lower.replace(" ", "-").replace("/", "-")
+
+
+def scan_builds():
+    """Scan versioned directories for build files."""
+    all_files = []
+    
+    # Scan all versioned directories (MVC_Calculator-XX.XX-alpha.XX.XX)
+    if BUILD_BASE.exists():
+        for version_dir in BUILD_BASE.iterdir():
+            if version_dir.is_dir() and version_dir.name.startswith("MVC_Calculator-"):
+                # Look for build files in the version directory (not in buildfiles subdirectory)
+                for pat in PATTERNS:
+                    all_files.extend(version_dir.glob(pat))
+        
+        # Fallback: also check old locations for backwards compatibility
+        # Check old MSI builds location
+        old_msi_dir = BUILD_BASE / "msi" / "builds"
+        if old_msi_dir.exists():
+            for pat in PATTERNS:
+                all_files.extend(old_msi_dir.glob(pat))
+        
+        # Check base directory for Linux builds (old location)
+        for pat in PATTERNS:
+            all_files.extend(BUILD_BASE.glob(pat))
+
+    versions = {}
+    for f in all_files:
+        v = parse_version(f.name)
+        if v:
+            versions.setdefault(v, []).append(f)
+
+    return versions
+
+
+def detect_description(filename: str):
+    fn = filename.lower()
+    if fn.endswith(".msi"): return "Windows installer"
+    if fn.endswith(".zip"): return "Portable ZIP build"
+    if fn.endswith(".deb"): return "Linux .deb package"
+    if fn.endswith(".appimage"): return "Linux AppImage"
+    return "Build File"
+
+
+def build_table(files):
+    rows = []
+    for f in sorted(files, key=lambda x: x.name.lower()):
+        size_bytes = f.stat().st_size
+        if size_bytes < 1024 * 1024:
+            size_str = f"{size_bytes / 1024:.0f}K"
+        else:
+            size_str = f"{size_bytes / (1024 * 1024):.0f}M"
+        mod = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+        desc = detect_description(f.name)
+
+        rows.append(
+            "<tr>"
+            f"<td><a class='file-link' href='{f.name}'>{f.name}</a></td>"
+            f"<td class='date-col'>{mod}</td>"
+            f"<td class='size-col'>{size_str}</td>"
+            f"<td class='desc-col'>{desc}</td>"
+            "</tr>"
+        )
+
     return (
-        max(msi,  key=lambda p: p.stat().st_mtime),
-        max(zipf, key=lambda p: p.stat().st_mtime)
+        "<table>"
+        "<thead><tr>"
+        "<th>Name</th><th>Last Modified</th><th>Size</th><th>Description</th>"
+        "</tr></thead>"
+        "<tbody>"
+        + "\n".join(rows) +
+        "</tbody></table>"
     )
-
-
-def newest_linux(src: Path):
-    deb = list((src / "deb").glob("mvc-calculator_*.deb"))
-    app = list((src / "appimage").glob("MVC_Calculator-*.AppImage"))
-    if not deb or not app:
-        raise FileNotFoundError("Linux .deb or AppImage missing")
-    return (
-        max(deb, key=lambda p: p.stat().st_mtime),
-        max(app, key=lambda p: p.stat().st_mtime)
-    )
-
-
-def ensure_dir(ftp, remote):
-    parts = remote.strip("/").split("/")
-    for i in range(1, len(parts) + 1):
-        sub = "/" + "/".join(parts[:i])
-        try:
-            ftp.cwd(sub)
-        except ftplib.error_perm:
-            ftp.mkd(sub)
-            ftp.cwd(sub)
-
-
-def upload(ftp, local: Path):
-    print(f"[upload] {local.name}")
-    with local.open("rb") as f:
-        ftp.storbinary(f"STOR {local.name}", f)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default=DEFAULT_HOST)
-    parser.add_argument("--user")
-    parser.add_argument("--password")
-    args = parser.parse_args()
+    try:
+        print(f"Scanning for builds in versioned directories:")
+        print(f"  BUILD_BASE: {BUILD_BASE}")
+        
+        versions = scan_builds()
+        if not versions:
+            print("No builds found.")
+            print(f"Checked patterns: {PATTERNS}")
+            return
 
-    user = args.user or PRESET_USERNAME
-    pw   = args.password or PRESET_PASSWORD
+        print(f"Found {len(versions)} version(s): {sorted(versions.keys(), reverse=True)}")
+        
+        sorted_versions = sorted(versions.keys(), reverse=True)
+        latest = sorted_versions[0]
+        prev = sorted_versions[1] if len(sorted_versions) > 1 else None
 
-    print("\n📦 Locating build artifacts…")
+        print(f"Latest version: {latest}")
+        if prev:
+            print(f"Previous version: {prev}")
 
-    win_msi, win_zip = newest_windows(SOURCE_WINDOWS)
-    lin_deb, lin_app = newest_linux(SOURCE_LINUX)
+        # Verify we have all 4 build files for latest version
+        latest_files = versions[latest]
+        file_types = {".msi": False, ".zip": False, ".deb": False, ".AppImage": False}
+        for f in latest_files:
+            if f.suffix == ".msi":
+                file_types[".msi"] = True
+            elif f.suffix == ".zip" and "portable" in f.name:
+                file_types[".zip"] = True
+            elif f.suffix == ".deb":
+                file_types[".deb"] = True
+            elif f.suffix == ".AppImage":
+                file_types[".AppImage"] = True
+        
+        missing = [ext for ext, found in file_types.items() if not found]
+        if missing:
+            print(f"⚠️  Warning: Missing build files: {', '.join(missing)}")
+        else:
+            print(f"✓ Found all 4 build files (MSI, ZIP, DEB, AppImage)")
 
-    print("\nFound:")
-    print(" -", win_msi)
-    print(" -", win_zip)
-    print(" -", lin_deb)
-    print(" -", lin_app)
+        notes = load_notes(latest)
+        print(f"Loaded notes for {latest}: date={notes['date']}, tags={notes['tags']}")
 
-    print("\n🔌 Connecting to FTP…")
-    with ftplib.FTP(args.host) as ftp:
-        ftp.login(user=user, passwd=pw)
-        ensure_dir(ftp, TARGET_DIR)
-        ftp.cwd(TARGET_DIR)
+        if not TEMPLATE.exists():
+            print(f"ERROR: Template not found at {TEMPLATE}")
+            return
+        
+        html = TEMPLATE.read_text(encoding="utf-8")
+        if not html:
+            print(f"ERROR: Template file is empty at {TEMPLATE}")
+            return
 
-        for f in [win_msi, win_zip, lin_deb, lin_app]:
-            upload(ftp, f)
+        # Build replacement values
+        latest_date = notes["date"] or datetime.now().strftime("%d %b %Y")
+        latest_desc = notes["description"] or f"Version {latest} release."
+        whats_new_html = make_li_list(notes["whats_new"]) if notes["whats_new"] else "<li>No new features in this release.</li>"
+        bug_fixes_html = make_li_list(notes["bug_fixes"]) if notes["bug_fixes"] else "<li>No bug fixes in this release.</li>"
+        
+        latest_tags_html = " ".join(
+            f"<span class='tag tag-{normalize_tag_name(t)}'>{t}</span>"
+            for t in notes["tags"]
+            if t and t.strip()
+        )
+        if latest_tags_html:
+            latest_tags_html = f"<div style='margin-top: 10px;'>{latest_tags_html}</div>"
 
-    print("\n🌍 FTP deploy complete.\n")
+        # Perform replacements
+        logo_path = find_logo_path()
+        logo_file = BUILD_BASE / logo_path
+        if logo_file.exists():
+            print(f"✓ Found logo: {logo_path}")
+        else:
+            print(f"⚠️  Warning: Logo file not found: {logo_path}")
+        html = html.replace("{{LOGO_PATH}}", logo_path)
+        html = html.replace("{{LATEST_VERSION}}", latest)
+        html = html.replace("{{LATEST_DATE}}", latest_date)
+        html = html.replace("{{LATEST_DESCRIPTION}}", latest_desc)
+        html = html.replace("{{LATEST_WHATS_NEW}}", whats_new_html)
+        html = html.replace("{{LATEST_BUG_FIXES}}", bug_fixes_html)
+        html = html.replace("{{LATEST_TAGS}}", latest_tags_html)
+        html = html.replace("{{LATEST_TABLE}}", build_table(versions[latest]))
+
+        if prev:
+            # Load previous release notes
+            prev_notes = load_notes(prev)
+            prev_date = prev_notes["date"] or "Date unknown"
+            prev_tags_html = " ".join(
+                f"<span class='tag tag-{normalize_tag_name(t)}'>{t}</span>"
+                for t in prev_notes["tags"]
+                if t and t.strip()
+            )
+            if prev_tags_html:
+                prev_tags_html = f"<div style='margin-top: 10px;'>{prev_tags_html}</div>"
+            
+            prev_section = f'''<div class="release-section">
+    <div class="release-left">
+        <div>{prev_date}</div>
+        {prev_tags_html}
+    </div>
+    <div>
+        <div class="section-title">Previous Release — {prev}</div>
+        {build_table(versions[prev])}
+    </div>
+</div>'''
+            html = html.replace("{{PREV_VERSION}}", prev_section)
+        else:
+            html = html.replace("{{PREV_VERSION}}", "")
+
+        # Verify all placeholders were replaced
+        if "{{" in html:
+            print("WARNING: Some placeholders were not replaced!")
+            import re
+            remaining = re.findall(r'\{\{[^}]+\}\}', html)
+            print(f"  Remaining placeholders: {remaining}")
+
+        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        OUTPUT.write_text(html, encoding="utf-8")
+        print(f"✓ index.html generated at: {OUTPUT}")
+        print(f"  File size: {OUTPUT.stat().st_size} bytes")
+        
+        # Summary of files ready for FTP upload
+        print(f"\n📦 Files ready for FTP upload:")
+        print(f"  1. {OUTPUT.name} ({OUTPUT.stat().st_size} bytes)")
+        if logo_file.exists():
+            print(f"  2. {logo_path} ({logo_file.stat().st_size} bytes)")
+        else:
+            print(f"  2. {logo_path} (⚠️  not found)")
+        
+        print(f"\n📁 Build files in version directory:")
+        version_dir = BUILD_BASE / f"MVC_Calculator-{latest}"
+        if version_dir.exists():
+            for f in sorted(version_dir.iterdir()):
+                if f.is_file() and f.suffix in [".msi", ".zip", ".deb", ".AppImage"]:
+                    print(f"  - {f.name} ({f.stat().st_size / (1024*1024):.1f} MB)")
+        
+        print(f"\n✅ Ready for FTP upload to releases folder")
+        print(f"   (FTP upload not yet implemented)")
+        
+    except Exception as e:
+        print(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# #!/usr/bin/env python3
-# # Upload EXE + ZIP + DEB + AppImage to Moviolabs FTP
-
-# from __future__ import annotations
-# import argparse
-# import ftplib
-# import os
-# from pathlib import Path
-
-# # ==========================================
-# # App name + file patterns
-# # ==========================================
-# APP_BASENAME = "MVC_Calculator"
-
-# # ==========================================
-# # Windows & Linux build directories
-# # ==========================================
-# SOURCE_WINDOWS = Path.home() / "Documents/.builds/MVC_CALCULATOR/msi/builds"
-# SOURCE_LINUX = Path.home() / "Documents/.linux_builds/MVC_CALCULATOR/linux_builds"
-
-# TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
-# DEFAULT_HOST = "ftp.moviolabs.com"
-
-# PRESET_USERNAME = "moviolab"
-# PRESET_PASSWORD = "f2Pf3aNF-N8:9h"
-
-# # ==========================================
-# # Find newest Windows build artifacts
-# # ==========================================
-# def newest_windows_files(src: Path):
-    # msi_files = list(src.glob("MVC_Calculator-*.msi"))
-    # zip_files = list(src.glob("MVC_Calculator-*-portable.zip"))
-
-    # if not msi_files:
-        # raise FileNotFoundError("No MSI found in Windows build directory.")
-    # if not zip_files:
-        # raise FileNotFoundError("No portable ZIP found in Windows build directory.")
-
-    # newest_msi = max(msi_files, key=lambda p: p.stat().st_mtime)
-    # newest_zip = max(zip_files, key=lambda p: p.stat().st_mtime)
-
-    # return newest_msi, newest_zip
-
-# # ==========================================
-# # Find newest Linux build artifacts
-# # ==========================================
-# def newest_linux_files(src: Path):
-    # deb_files = list((src / "deb").glob("mvc-calculator_*.deb"))
-    # img_files = list((src / "appimage").glob("MVC_Calculator-*.AppImage"))
-
-    # if not deb_files:
-        # raise FileNotFoundError("No .deb file found in Linux deb/ folder.")
-    # if not img_files:
-        # raise FileNotFoundError("No AppImage file found in Linux appimage/ folder.")
-
-    # newest_deb = max(deb_files, key=lambda p: p.stat().st_mtime)
-    # newest_img = max(img_files, key=lambda p: p.stat().st_mtime)
-
-    # return newest_deb, newest_img
-
-# # ==========================================
-# # FTP helpers
-# # ==========================================
-# def ensure_remote_dir(ftp, remote):
-    # parts = [p for p in remote.strip("/").split("/") if p]
-    # for i in range(len(parts)):
-        # sub = "/" + "/".join(parts[: i + 1])
-        # try:
-            # ftp.cwd(sub)
-        # except ftplib.error_perm:
-            # ftp.mkd(sub)
-            # ftp.cwd(sub)
-
-# def upload_file(ftp, local: Path, remote_name: str):
-    # print(f"[uploading] {remote_name}")
-    # with local.open("rb") as f:
-        # ftp.storbinary(f"STOR {remote_name}", f)
-    # print(f"[ok] {remote_name}")
-
-# # ==========================================
-# # Main deploy logic
-# # ==========================================
-# def deploy(host, user, password):
-    # print("[info] Locating build artifacts...")
-
-    # win_msi, win_zip = newest_windows_files(SOURCE_WINDOWS)
-    # lin_deb, lin_img = newest_linux_files(SOURCE_LINUX)
-
-    # print("\n[info] Found:")
-    # print(" -", win_msi)
-    # print(" -", win_zip)
-    # print(" -", lin_deb)
-    # print(" -", lin_img)
-
-    # print("\n[info] Connecting to FTP...")
-
-    # with ftplib.FTP(host) as ftp:
-        # ftp.login(user=user, passwd=password)
-        # ensure_remote_dir(ftp, TARGET_DIR)
-        # ftp.cwd(TARGET_DIR)
-
-        # print("[info] Uploading files...")
-
-        # for f in [win_msi, win_zip, lin_deb, lin_img]:
-            # upload_file(ftp, f, f.name)
-
-    # print("\n[done] Release upload complete.")
-
-# # ==========================================
-# # CLI
-# # ==========================================
-# def main():
-    # parser = argparse.ArgumentParser(description="Upload release builds to Moviolabs FTP.")
-    # parser.add_argument("--host", default=DEFAULT_HOST)
-    # parser.add_argument("--user")
-    # parser.add_argument("--password")
-    # args = parser.parse_args()
-
-    # user = args.user or PRESET_USERNAME
-    # password = args.password or PRESET_PASSWORD
-
-    # deploy(args.host, user, password)
-
-# if __name__ == "__main__":
-    # main()

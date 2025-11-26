@@ -13,6 +13,7 @@ sys.stderr.reconfigure(encoding='utf-8')
 #   (FTP upload remains manual)
 
 import subprocess
+import shutil
 from pathlib import Path
 from datetime import datetime
 
@@ -22,10 +23,24 @@ ROOT = Path(__file__).resolve().parent
 PORTABLE_SCRIPT = ROOT / "build_windows_portable.py"
 MSI_SCRIPT      = ROOT / "build_windows_msi.py"
 
+# Get version number
+VERSION_INFO = ROOT / "utilities" / "version_info.py"
+BUILDNUMBER = "unknown"
+if VERSION_INFO.exists():
+    for line in VERSION_INFO.read_text(encoding="utf-8").splitlines():
+        if line.startswith("BUILDNUMBER"):
+            BUILDNUMBER = line.split("=")[1].strip().strip('"')
+            break
+
+# Versioned build directory
+BUILD_BASE = Path.home() / "Documents" / ".builds" / "mvc_calculator"
+VERSION_DIR = BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"
+BUILDFILES_DIR = VERSION_DIR / "buildfiles"
+VERSION_DIR.mkdir(parents=True, exist_ok=True)
+BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
+
 # Logging
-LOG_DIR = Path.home() / "Documents" / ".builds" / "mvc_calculator"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-LOG_FILE = LOG_DIR / f"windows_master_{datetime.now():%y.%m%d-%H%M%S}.log"
+LOG_FILE = BUILDFILES_DIR / f"windows_master_{datetime.now():%y.%m%d-%H%M%S}.log"
 
 def run_step(name, cmd):
     print(f"\n========== {name} ==========")
@@ -52,7 +67,48 @@ def run_step(name, cmd):
         print(f"\n❌ {name} failed (exit {proc.returncode})")
         sys.exit(proc.returncode)
 
+
+def organize_build_files():
+    """Move build artifacts to versioned directory structure."""
+    print(f"\n📁 Organizing build files to: {VERSION_DIR}")
+    
+    # MSI builds directory (where MSI and ZIP are created)
+    MSI_BUILDS = BUILD_BASE / "msi" / "builds"
+    
+    # Move MSI and ZIP files to version directory
+    for pattern in [f"MVC_Calculator-{BUILDNUMBER}.msi", f"MVC_Calculator-{BUILDNUMBER}-portable.zip"]:
+        source = MSI_BUILDS / pattern
+        if source.exists():
+            dest = VERSION_DIR / pattern
+            shutil.move(str(source), str(dest))
+            print(f"  ✓ Moved {pattern} to version directory")
+    
+    # Move other build files to buildfiles subdirectory
+    # Move MSI build artifacts (wixobj, wxs, etc.)
+    MSI_ROOT = BUILD_BASE / "msi"
+    for item in MSI_ROOT.iterdir():
+        if item.is_file() and item.suffix in [".wixobj", ".wxs", ".wixpdb"]:
+            dest = BUILDFILES_DIR / item.name
+            shutil.move(str(item), str(dest))
+            print(f"  ✓ Moved {item.name} to buildfiles")
+    
+    # Move MSI build directory contents (cabs, etc.) to buildfiles
+    if MSI_BUILDS.exists():
+        for item in MSI_BUILDS.iterdir():
+            if item.name not in [f"MVC_Calculator-{BUILDNUMBER}.msi", f"MVC_Calculator-{BUILDNUMBER}-portable.zip"]:
+                dest = BUILDFILES_DIR / item.name
+                if item.is_dir():
+                    if dest.exists():
+                        shutil.rmtree(dest)
+                    shutil.move(str(item), str(dest))
+                else:
+                    shutil.move(str(item), str(dest))
+                print(f"  ✓ Moved {item.name} to buildfiles")
+    
+    print(f"✅ Build files organized\n")
+
 print(f"\n🚀 FULL WINDOWS BUILD — logging to:\n{LOG_FILE}\n")
+print(f"📁 Build output directory: {VERSION_DIR}\n")
 
 # ------------------------------------------------------------
 # 1) ALWAYS REBUILD PYINSTALLER PORTABLE ONEDIR
@@ -64,197 +120,12 @@ run_step("PyInstaller Portable Build", [sys.executable, str(PORTABLE_SCRIPT)])
 # ------------------------------------------------------------
 run_step("MSI + ZIP Packaging", [sys.executable, str(MSI_SCRIPT)])
 
+# ------------------------------------------------------------
+# 3) ORGANIZE BUILD FILES INTO VERSIONED DIRECTORY
+# ------------------------------------------------------------
+organize_build_files()
+
 print("\n📦 Optional: Deploy via FTP (manual ONLY)")
 print("Run: python deploy_release_ftp.py")
 
 print("\n✅ WINDOWS BUILD COMPLETE\n")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# #!/usr/bin/env python3
-# # MASTER WINDOWS BUILD — MVC Calculator
-# # --------------------------------------
-# # Runs:
-# #   1) build_windows_portable.py  (PyInstaller onedir)
-# #   2) build_windows_msi.py       (MSI + ZIP)
-# #   (FTP upload is manual via deploy_release_ftp.py)
-
-# import subprocess
-# import sys
-# from pathlib import Path
-# from datetime import datetime
-
-# ROOT = Path(__file__).resolve().parent
-
-# # Correct new script names
-# PORTABLE = ROOT / "build_windows_portable.py"
-# MSI      = ROOT / "build_windows_msi.py"
-
-# LOG_DIR = Path.home() / "Documents" / ".builds" / "mvc_calculator"
-# LOG_DIR.mkdir(parents=True, exist_ok=True)
-# LOG_FILE = LOG_DIR / f"windows_master_{datetime.now():%y.%m%d-%H%M%S}.log"
-
-# def run_step(name, cmd):
-    # print(f"\n========== {name} ==========")
-    # with LOG_FILE.open("a", encoding="utf-8") as log:
-        # log.write(f"\n[{datetime.now():%H:%M:%S}] {name}\n")
-        # log.write("=" * 70 + "\n")
-
-        # proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                # stderr=subprocess.STDOUT, text=True)
-
-        # for line in proc.stdout:
-            # sys.stdout.write(line)
-            # log.write(line)
-
-        # proc.wait()
-        # log.write(f"\n[exit code] {proc.returncode}\n")
-        # log.flush()
-
-    # if proc.returncode != 0:
-        # print(f"\n❌ {name} failed (exit {proc.returncode})")
-        # sys.exit(proc.returncode)
-
-# print(f"\n🚀 FULL WINDOWS BUILD — logging to:\n{LOG_FILE}\n")
-
-# run_step("PyInstaller Portable Build", [sys.executable, str(PORTABLE)])
-# run_step("MSI + ZIP Packaging",       [sys.executable, str(MSI)])
-
-# print("\nOptional: Upload newest release?")
-# print("Run manually:   python deploy_release_ftp.py")
-
-# print("\n✅ WINDOWS BUILD COMPLETE\n")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# # #!/usr/bin/env python3
-# # # -*- coding: utf-8 -*-
-# # """
-# # MASTER BUILD SCRIPT — MVC Calculator
-# # ------------------------------------
-# # Full release pipeline:
-  # # 1️⃣ Run build_template.py (PyInstaller)
-  # # 2️⃣ Run build_template_msi.py (MSI + ZIP)
-  # # 3️⃣ Run release_to_github.py (GitHub upload)
-
-# # Keeps same version name (from utilities/version_info.py).
-# # Logs all steps under:
-  # # C:\\Users\\Scott\\Documents\\.builds\\mvc_calculator\\master_build_YY.MMDD-HHMMSS.log
-# # """
-
-# # import subprocess
-# # import sys
-# # from pathlib import Path
-# # from datetime import datetime
-
-# # # ============================================================
-# # # CONFIGURATION
-# # # ============================================================
-# # PROJECT_NAME = "MVC_Calculator"
-# # ROOT = Path(__file__).resolve().parent
-# # BUILD_SCRIPT = ROOT / "build_template.py"
-# # MSI_SCRIPT = ROOT / "build_template_msi.py"
-# # RELEASE_SCRIPT = ROOT / "release_to_github.py"
-# # VERSION_FILE = ROOT / "utilities" / "version_info.py"
-# # LOG_DIR = Path.home() / "Documents" / ".builds" / PROJECT_NAME.lower()
-# # LOG_FILE = LOG_DIR / f"master_build_{datetime.now():%y.%m%d-%H%M%S}.log"
-# # LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-# # # ============================================================
-# # # HELPER FUNCTIONS
-# # # ============================================================
-# # def run_step(name: str, cmd: list[str]) -> int:
-    # # """Run subprocess, streaming and logging output."""
-    # # print(f"\n========== {name} ==========")
-    # # print(" ".join(cmd))
-    # # with LOG_FILE.open("a", encoding="utf-8") as log:
-        # # log.write(f"\n[{datetime.now():%H:%M:%S}] {name}\n")
-        # # log.write("=" * 70 + "\n")
-        # # proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        # # for line in proc.stdout:
-            # # sys.stdout.write(line)
-            # # log.write(line)
-        # # proc.wait()
-        # # log.write(f"\n[exit code] {proc.returncode}\n")
-        # # log.flush()
-    # # return proc.returncode
-
-
-# # def read_buildnumber() -> str:
-    # # """Read BUILDNUMBER from version_info.py."""
-    # # if not VERSION_FILE.exists():
-        # # return "unknown"
-    # # for line in VERSION_FILE.read_text(encoding="utf-8").splitlines():
-        # # if line.strip().startswith("BUILDNUMBER"):
-            # # return line.split("=")[1].strip().strip('"')
-    # # return "unknown"
-
-
-# # # ============================================================
-# # # MAIN SEQUENCE
-# # # ============================================================
-# # def main():
-    # # print(f"\n🚀 MASTER BUILD: {PROJECT_NAME}")
-    # # print(f"📄 Log file → {LOG_FILE}\n")
-
-    # # # STEP 1 — PyInstaller build
-    # # code1 = run_step("PyInstaller Build", [sys.executable, str(BUILD_SCRIPT), "--onedir"])
-    # # if code1 != 0:
-        # # print(f"\n❌ PyInstaller failed (exit code {code1})")
-        # # sys.exit(code1)
-
-    # # # STEP 2 — Get build number for reference
-    # # build_number = read_buildnumber()
-    # # print(f"\n[OK] Using version tag: {build_number}\n")
-
-    # # # STEP 3 — MSI + ZIP
-    # # code2 = run_step("MSI + ZIP Packaging", [sys.executable, str(MSI_SCRIPT)])
-    # # if code2 != 0:
-        # # print(f"\n❌ MSI packaging failed (exit code {code2})")
-        # # sys.exit(code2)
-
-    # # # STEP 4 — GitHub Release
-    # # code3 = run_step("GitHub Release", [sys.executable, str(RELEASE_SCRIPT)])
-    # # if code3 != 0:
-        # # print(f"\n❌ GitHub release failed (exit code {code3})")
-        # # sys.exit(code3)
-
-    # # print("\n✅ ALL STEPS COMPLETED SUCCESSFULLY")
-    # # print(f"   Version: {build_number}")
-    # # print(f"   Log saved at: {LOG_FILE}")
-
-
-# # # ============================================================
-# # # ENTRY
-# # # ============================================================
-# # if __name__ == "__main__":
-    # # main()
