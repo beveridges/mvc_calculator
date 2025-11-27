@@ -28,10 +28,7 @@ APP_KEY = "mvc_calculator"
 ICON_PATH = Path(base_path("resources/icons", "icn_emg.ico")).resolve()
 PYI_BUILD_DIR = Path.home() / "Documents" / ".builds" / APP_KEY / "pyinstaller"
 ARCHIVE_BUILDS_DIR = PYI_BUILD_DIR / "builds"
-MSI_ROOT = Path.home() / "Documents" / ".builds" / APP_KEY / "msi"
-MSI_BUILDS = MSI_ROOT / "builds"
-MSI_ROOT.mkdir(parents=True, exist_ok=True)
-MSI_BUILDS.mkdir(parents=True, exist_ok=True)
+BUILD_BASE = Path.home() / "Documents" / ".builds" / APP_KEY
 
 # ------------------------------------------------------------------------------
 # Versioning — read from utilities/version_info.py
@@ -46,6 +43,12 @@ for line in VERSION_INFO.read_text(encoding="utf-8").splitlines():
     if line.startswith("BUILDNUMBER"):
         BUILDNUMBER = line.split("=")[1].strip().strip('"')
         break
+
+# Create versioned directory structure
+VERSION_DIR = BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"
+BUILDFILES_DIR = VERSION_DIR / "buildfiles"
+VERSION_DIR.mkdir(parents=True, exist_ok=True)
+BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
 
 def wix_version_from_build(build: str) -> str:
     numeric_parts = []
@@ -99,7 +102,7 @@ if not EXE_PATH.exists():
 # ------------------------------------------------------------------------------
 # Generate .wxs file for WiX
 # ------------------------------------------------------------------------------
-WXS_PATH = MSI_ROOT / f"{APP_BASENAME}.wxs"
+WXS_PATH = BUILDFILES_DIR / f"{APP_BASENAME}.wxs"
 wxs_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="{APP_DISPLAY_NAME}" Language="1033" Version="{WIX_VERSION}"
@@ -172,28 +175,55 @@ print(f"[OK] WXS file created at: {WXS_PATH}")
 # ------------------------------------------------------------------------------
 # Run WiX (candle + light)
 # ------------------------------------------------------------------------------
-os.chdir(MSI_ROOT)
+# Change to buildfiles directory where WXS file is located
+os.chdir(BUILDFILES_DIR)
 try:
+    # Run candle - outputs .wixobj to current directory (buildfiles)
     subprocess.run(["candle", f"{APP_BASENAME}.wxs"], check=True)
-    msi_path = MSI_BUILDS / f"{APP_BASENAME}-{BUILDNUMBER}.msi"
-    cab_path = MSI_BUILDS / "cab1.cab"
+    
+    # MSI goes to version directory (top level)
+    msi_path = VERSION_DIR / f"{APP_BASENAME}-{BUILDNUMBER}.msi"
+    
+    # CAB file goes to buildfiles directory
+    cab_path = BUILDFILES_DIR / "cab1.cab"
     if cab_path.exists():
         try:
             cab_path.unlink()
         except PermissionError:
             os.chmod(cab_path, 0o666)
             cab_path.unlink(missing_ok=True)
+    
+    # Remove old MSI if it exists
     if msi_path.exists():
         try:
             msi_path.unlink()
         except PermissionError:
             os.chmod(msi_path, 0o666)
             msi_path.unlink(missing_ok=True)
+    
+    # Run light - outputs MSI to version directory
+    wixobj_path = BUILDFILES_DIR / f"{APP_BASENAME}.wixobj"
     subprocess.run([
         "light", "-ext", "WixUIExtension",
-        f"{APP_BASENAME}.wixobj", "-o", str(msi_path)
+        str(wixobj_path), "-o", str(msi_path)
     ], check=True)
     print(f"\n✅ MSI created: {msi_path}")
+    
+    # Move wixpdb to buildfiles if it was created in version directory
+    wixpdb_name = f"{APP_BASENAME}-{BUILDNUMBER}.wixpdb"
+    wixpdb_src = VERSION_DIR / wixpdb_name
+    if wixpdb_src.exists():
+        wixpdb_dest = BUILDFILES_DIR / wixpdb_name
+        shutil.move(str(wixpdb_src), str(wixpdb_dest))
+        print(f"✅ Moved {wixpdb_name} to buildfiles")
+    
+    # Ensure cab file is in buildfiles (it should be created there, but check version_dir too)
+    cab_src = VERSION_DIR / "cab1.cab"
+    if cab_src.exists():
+        cab_dest = BUILDFILES_DIR / "cab1.cab"
+        shutil.move(str(cab_src), str(cab_dest))
+        print(f"✅ Moved cab1.cab to buildfiles")
+        
 except subprocess.CalledProcessError as e:
     print(f"[ERROR] WiX build failed: {e}")
     sys.exit(1)
@@ -201,7 +231,7 @@ except subprocess.CalledProcessError as e:
 # ------------------------------------------------------------------------------
 # Create portable ZIP (from dist folder)
 # ------------------------------------------------------------------------------
-ZIP_PATH = MSI_BUILDS / f"{APP_BASENAME}-{BUILDNUMBER}-portable.zip"
+ZIP_PATH = VERSION_DIR / f"{APP_BASENAME}-{BUILDNUMBER}-portable.zip"
 zip_base = ZIP_PATH.with_suffix("")
 if LATEST_BUILD_DIR.exists():
     print(f"[OK] Creating portable ZIP from {LATEST_BUILD_DIR.name}: {ZIP_PATH.name}")

@@ -16,31 +16,35 @@ PORTABLE_SCRIPT = SCRIPT_ROOT / "build_linux_portable.py"
 APPIMAGE_SCRIPT = SCRIPT_ROOT / "build_linux_appimage.py"
 DEB_SCRIPT      = SCRIPT_ROOT / "build_linux_deb.py"
 
-# Get version number
-VERSION_INFO = SCRIPT_ROOT / "utilities" / "version_info.py"
-BUILDNUMBER = "unknown"
-if VERSION_INFO.exists():
-    for line in VERSION_INFO.read_text(encoding="utf-8").splitlines():
-        if line.startswith("BUILDNUMBER"):
-            BUILDNUMBER = line.split("=")[1].strip().strip('"')
-            break
-
 # Uses local WSL home directory (correct)
 LINUX_ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
 LINUX_ROOT.mkdir(parents=True, exist_ok=True)
 
-LOG_FILE = LINUX_ROOT / f"linux_master_{datetime.now():%y.%m%d-%H%M%S}.log"
+# Temporary log location (will move to version directory after we know the build number)
+TEMP_LOG_DIR = LINUX_ROOT / "temp_logs"
+TEMP_LOG_DIR.mkdir(parents=True, exist_ok=True)
+TEMP_LOG_FILE = TEMP_LOG_DIR / f"linux_master_{datetime.now():%y.%m%d-%H%M%S}.log"
 
-# Windows versioned directory (where Linux builds will be copied)
+# Windows build base (version directory will be determined after reading build number)
 WIN_BUILD_BASE = Path("/mnt/c/Users/Scott/Documents/.builds/mvc_calculator")
-WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"
-WIN_BUILDFILES_DIR = WIN_VERSION_DIR / "buildfiles"
+
+def read_build_number():
+    """Read BUILDNUMBER from utilities/version_info.py (reads fresh each time)"""
+    VERSION_INFO = SCRIPT_ROOT / "utilities" / "version_info.py"
+    BUILDNUMBER = "unknown"
+    if VERSION_INFO.exists():
+        # Read fresh each time to get the latest version (after Windows builds increment it)
+        for line in VERSION_INFO.read_text(encoding="utf-8").splitlines():
+            if line.startswith("BUILDNUMBER"):
+                BUILDNUMBER = line.split("=")[1].strip().strip('"')
+                break
+    return BUILDNUMBER
 
 
-def run_step(name: str, cmd: list[str]):
+def run_step(name: str, cmd: list[str], log_file: Path):
     print(f"\n========== {name} ==========")
 
-    with LOG_FILE.open("a", encoding="utf-8") as log:
+    with log_file.open("a", encoding="utf-8") as log:
         log.write(f"\n[{datetime.now():%H:%M:%S}] {name}\n")
         log.write("=" * 70 + "\n")
 
@@ -67,7 +71,11 @@ def run_step(name: str, cmd: list[str]):
 # --------------------------------------------------------------
 # COPY RESULTING FILES TO WINDOWS DIRECTORY
 # --------------------------------------------------------------
-def copy_to_windows():
+def copy_to_windows(buildnumber: str):
+    """Copy Linux build artifacts to Windows versioned directory"""
+    WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{buildnumber}"
+    WIN_BUILDFILES_DIR = WIN_VERSION_DIR / "buildfiles"
+    
     WIN_VERSION_DIR.mkdir(parents=True, exist_ok=True)
     WIN_BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -82,6 +90,9 @@ def copy_to_windows():
 
     # Copy portable build and other files to buildfiles
     for item in LINUX_ROOT.iterdir():
+        # Skip temp_logs directory and main artifacts (already copied above)
+        if item.name == "temp_logs":
+            continue
         if item.name == "pyinstaller" or (item.is_file() and item.suffix not in [".deb", ".AppImage"]):
             dest = WIN_BUILDFILES_DIR / item.name
             if item.is_dir():
@@ -97,16 +108,38 @@ def copy_to_windows():
 
 
 def main():
-    print(f"\n🐧 FULL LINUX BUILD — logging to:\n{LOG_FILE}\n")
+    print(f"\n🐧 FULL LINUX BUILD — logging to:\n{TEMP_LOG_FILE}\n")
+    print("[INFO] Reading version from utilities/version_info.py (should match Windows build)\n")
 
-    run_step("Portable Linux Build", [sys.executable, str(PORTABLE_SCRIPT)])
-    run_step("AppImage Build",      [sys.executable, str(APPIMAGE_SCRIPT)])
-    run_step("DEB Package Build",   [sys.executable, str(DEB_SCRIPT)])
+    # Run all Linux builds
+    run_step("Portable Linux Build", [sys.executable, str(PORTABLE_SCRIPT)], TEMP_LOG_FILE)
+    run_step("AppImage Build",      [sys.executable, str(APPIMAGE_SCRIPT)], TEMP_LOG_FILE)
+    run_step("DEB Package Build",   [sys.executable, str(DEB_SCRIPT)], TEMP_LOG_FILE)
 
     print("\n✅ ALL LINUX ARTIFACTS BUILT SUCCESSFULLY\n")
+    
+    # Read build number AFTER builds complete (Windows builds have already incremented it)
+    BUILDNUMBER = read_build_number()
+    print(f"[INFO] Using build number: {BUILDNUMBER}\n")
+    
+    # Set up version directory structure
+    WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"
+    WIN_BUILDFILES_DIR = WIN_VERSION_DIR / "buildfiles"
+    WIN_BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Move log file to the correct version directory
+    LOG_FILE = WIN_BUILDFILES_DIR / TEMP_LOG_FILE.name
+    if TEMP_LOG_FILE.exists():
+        shutil.move(str(TEMP_LOG_FILE), str(LOG_FILE))
+        print(f"📁 Build output directory: {WIN_VERSION_DIR}")
+        print(f"   - DEB and AppImage will be copied to: {WIN_VERSION_DIR}")
+        print(f"   - Build artifacts will be in: {WIN_BUILDFILES_DIR}")
+        print(f"   - Log file moved to: {LOG_FILE}\n")
+    
+    # Copy files to Windows versioned directory
+    copy_to_windows(BUILDNUMBER)
 
 
 if __name__ == "__main__":
     main()
-    copy_to_windows()
 
