@@ -19,7 +19,7 @@ from telemetry.telemetry import log_startup, log_shutdown, log_event, log_error
 from telemetry.perf_monitor import start_performance_monitor, stop_performance_monitor
 from telemetry.notifier import record_launch_info, send_session_summary_email
 
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMessageBox
 
 # ============================================================
 #  Startup banner — shown before anything else
@@ -39,7 +39,8 @@ from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 from PyQt5.QtWidgets import (
     QSplashScreen, QMessageBox, QWidget, QVBoxLayout, QPushButton,
-    QMenu, QAction, QFrame, QLabel, QFileDialog
+    QMenu, QAction, QFrame, QLabel, QFileDialog, QDialog, QLineEdit,
+    QHBoxLayout, QTextEdit, QScrollArea
 )
 
 
@@ -86,6 +87,7 @@ from utilities.version_info import (
     GITREVHEAD, BUILDNUMBER, VERSIONNUMBER, VERSIONNAME, FRIENDLYVERSIONNAME,
     GITTAG, CONDAENVIRONMENTNAME, PYTHONVERSION, CONDAENVIRONMENTFILENAME
 )
+from utilities.license import load_and_validate_license, find_license_file, get_license_file_path
 from utilities.path_utils import base_path
 from sbui.consoleui.console_output import SBConsoleOutput
 
@@ -726,6 +728,228 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not open browser:\n{e}")
 
+    # ---------------- License Info Dialog ----------------
+    def show_license_info(self):
+        """Show dialog with HWID and license request information."""
+        from utilities.license import get_machine_id, get_country
+        
+        # Get machine information
+        hwid = get_machine_id()
+        country = get_country() or "Unknown"
+        
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Request License")
+        dialog.setMinimumWidth(700)
+        dialog.setMinimumHeight(600)
+        dialog.resize(700, 700)
+        
+        # Create scroll area for content
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        # Content widget
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        scroll.setWidget(content_widget)
+        
+        # Main dialog layout
+        main_layout = QVBoxLayout(dialog)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
+        
+        # Title
+        title = QLabel("<h2>Request License Key</h2>")
+        title.setStyleSheet("font-size: 16pt; font-weight: bold; margin-bottom: 10px;")
+        layout.addWidget(title)
+        
+        # Step-by-step instructions
+        steps_label = QLabel("<b>How to Request a License:</b>")
+        steps_label.setStyleSheet("font-size: 11pt; margin-top: 10px;")
+        layout.addWidget(steps_label)
+        
+        steps_text = QLabel(
+            "<ol>"
+            "<li><b>Copy the email template</b> below (it already includes your Hardware ID and Country)</li>"
+            "<li><b>Paste it into your email client</b> and send it to support@moviolabs.com</li>"
+            "<li><b>Wait for your license key</b> (you'll receive it via email)</li>"
+            "<li><b>Save the license key</b> as 'license.key' in the location shown below</li>"
+            "<li><b>Restart the application</b> to activate your license</li>"
+            "</ol>"
+        )
+        steps_text.setWordWrap(True)
+        steps_text.setStyleSheet("margin-left: 10px; margin-bottom: 15px;")
+        layout.addWidget(steps_text)
+        
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(separator)
+        
+        # Section header
+        info_header = QLabel("<b>Your Machine Information:</b>")
+        info_header.setStyleSheet("font-size: 11pt; margin-top: 10px;")
+        layout.addWidget(info_header)
+        
+        info_note = QLabel(
+            "<i>This information is automatically included in the email template below.</i>"
+        )
+        info_note.setWordWrap(True)
+        info_note.setStyleSheet("margin-bottom: 10px; color: #666;")
+        layout.addWidget(info_note)
+        
+        # HWID section (display only, not copyable)
+        hwid_label = QLabel("<b>Hardware ID (HWID):</b>")
+        hwid_label.setStyleSheet("margin-top: 5px;")
+        layout.addWidget(hwid_label)
+        
+        hwid_explanation = QLabel(
+            "This unique identifier is tied to your computer. Your license will only work on this machine."
+        )
+        hwid_explanation.setWordWrap(True)
+        hwid_explanation.setStyleSheet("font-size: 9pt; color: #666; margin-bottom: 5px;")
+        layout.addWidget(hwid_explanation)
+        
+        hwid_display = QLabel(f"<code style='font-family: Courier New; font-size: 10pt;'>{hwid}</code>")
+        hwid_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
+        hwid_display.setWordWrap(True)
+        layout.addWidget(hwid_display)
+        
+        # Country section (display only, not copyable)
+        country_label = QLabel("<b>Country:</b>")
+        country_label.setStyleSheet("margin-top: 10px;")
+        layout.addWidget(country_label)
+        
+        country_explanation = QLabel(
+            "Your license will be valid only in this country. This helps prevent unauthorized use."
+        )
+        country_explanation.setWordWrap(True)
+        country_explanation.setStyleSheet("font-size: 9pt; color: #666; margin-bottom: 5px;")
+        layout.addWidget(country_explanation)
+        
+        country_display = QLabel(f"<b style='font-size: 11pt;'>{country}</b>")
+        country_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
+        layout.addWidget(country_display)
+        
+        # Separator before email template
+        separator2 = QFrame()
+        separator2.setFrameShape(QFrame.HLine)
+        separator2.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(separator2)
+        
+        # Email template section
+        email_label = QLabel("<b>Quick Email Template:</b>")
+        email_label.setStyleSheet("font-size: 11pt; margin-top: 10px;")
+        layout.addWidget(email_label)
+        
+        email_note = QLabel(
+            "<i>You can copy this pre-filled email template and paste it into your email client.</i>"
+        )
+        email_note.setWordWrap(True)
+        email_note.setStyleSheet("margin-bottom: 5px; color: #666;")
+        layout.addWidget(email_note)
+        
+        email_template = f"""Subject: License Request for MVC Calculator
+
+Hello,
+
+I would like to request a license key for MVC Calculator.
+
+Hardware ID: {hwid}
+Country: {country}
+
+Thank you!"""
+        
+        email_text = QTextEdit()
+        email_text.setPlainText(email_template)
+        email_text.setReadOnly(True)
+        email_text.setMaximumHeight(150)
+        email_text.setStyleSheet("font-family: 'Courier New', monospace; padding: 5px;")
+        layout.addWidget(email_text)
+        
+        email_copy_btn = QPushButton("Copy Email Template")
+        email_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(email_template))
+        layout.addWidget(email_copy_btn)
+        
+        # Separator before license location
+        separator3 = QFrame()
+        separator3.setFrameShape(QFrame.HLine)
+        separator3.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(separator3)
+        
+        # License file location info
+        license_path = get_license_file_path()
+        license_location_label = QLabel("<b>Where to Save Your License Key:</b>")
+        license_location_label.setStyleSheet("font-size: 11pt; margin-top: 10px;")
+        layout.addWidget(license_location_label)
+        
+        location_instructions = QLabel(
+            "<b>After receiving your license key via email:</b><br>"
+            "1. Copy the entire license key text from the email<br>"
+            "2. Create a new text file named <b>license.key</b> (exactly this name)<br>"
+            "3. Paste the license key into this file and save it<br>"
+            "4. Place the file in the directory shown below<br>"
+            "5. Restart the application"
+        )
+        location_instructions.setWordWrap(True)
+        location_instructions.setStyleSheet("margin-bottom: 10px; margin-left: 10px;")
+        layout.addWidget(location_instructions)
+        
+        license_path_layout = QHBoxLayout()
+        license_path_input = QLineEdit()
+        license_path_input.setText(str(license_path))
+        license_path_input.setReadOnly(True)
+        license_path_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
+        license_path_copy_btn = QPushButton("Copy Path")
+        license_path_copy_btn.setStyleSheet("padding: 5px 15px;")
+        license_path_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(str(license_path)))
+        license_path_layout.addWidget(license_path_input)
+        license_path_layout.addWidget(license_path_copy_btn)
+        layout.addLayout(license_path_layout)
+        
+        location_note = QLabel(
+            "<b>Important:</b> This location persists across application updates. "
+            "Once you place your license here, you won't need to re-enter it when updating the software."
+        )
+        location_note.setWordWrap(True)
+        location_note.setStyleSheet("margin-top: 5px; margin-bottom: 10px; padding: 8px; background-color: #e8f4f8; border-left: 3px solid #2196F3;")
+        layout.addWidget(location_note)
+        
+        # Support info
+        separator4 = QFrame()
+        separator4.setFrameShape(QFrame.HLine)
+        separator4.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(separator4)
+        
+        support_info = QLabel(
+            f"<b>Need Help?</b><br>"
+            f"Email: <a href='mailto:support@moviolabs.com'>support@moviolabs.com</a><br>"
+            f"<i>Include your Hardware ID and Country in your message.</i>"
+        )
+        support_info.setWordWrap(True)
+        support_info.setOpenExternalLinks(True)
+        support_info.setStyleSheet("margin-top: 10px; padding: 10px; background-color: #f9f9f9;")
+        layout.addWidget(support_info)
+        
+        # Close button (outside scroll area)
+        close_btn = QPushButton("Close")
+        close_btn.setStyleSheet("padding: 8px 20px; font-size: 10pt;")
+        close_btn.clicked.connect(dialog.accept)
+        main_layout.addWidget(close_btn)
+        
+        dialog.exec_()
+    
+    def _copy_to_clipboard(self, text):
+        """Copy text to clipboard and show confirmation."""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        QMessageBox.information(self, "Copied", "Copied to clipboard!")
+
     # ---------------- Close/Cleanup ----------------
     def closeEvent(self, event):
         print("[INFO] Window is closing...")
@@ -794,6 +1018,40 @@ def main():
         os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 
         app = QtWidgets.QApplication(sys.argv)
+        
+        # License validation (only in frozen builds, must be after QApplication is created for dialogs)
+        from utilities.license import ENFORCE_LICENSE
+        if ENFORCE_LICENSE:
+            license_file = find_license_file()
+            if not license_file:
+                license_path = get_license_file_path()
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setWindowTitle("License Required")
+                msg.setText("License file not found")
+                msg.setInformativeText(
+                    f"Please place a valid license.key file in:\n\n"
+                    f"{license_path}\n\n"
+                    "This location persists across application updates.\n\n"
+                    "Contact support@moviolabs.com for a license key.\n"
+                    "Use Help → Request License... to get your Hardware ID."
+                )
+                msg.exec_()
+                sys.exit(1)
+            
+            is_valid, error = load_and_validate_license()
+            if not is_valid:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setWindowTitle("License Validation Failed")
+                msg.setText("Invalid License")
+                msg.setInformativeText(
+                    f"{error}\n\n"
+                    "This license key is not valid for this machine or has expired.\n"
+                    "Please contact support@moviolabs.com for assistance."
+                )
+                msg.exec_()
+                sys.exit(1)
         # ---------- WSLg ICON FIX (safe, no variable shadowing) ----------
         import platform as _plat
         import os as _os

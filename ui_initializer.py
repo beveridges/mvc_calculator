@@ -34,6 +34,7 @@ class UIInitializer:
         
         mw.aboutAction = QAction("&About")
         mw.indexAction = QAction("&Documentation")
+        mw.licenseInfoAction = QAction("&Request License...")
 
         mw.file_menu.addAction(mw.load_MAT_action)
         mw.file_menu.addAction(mw.importXMLmot_action)
@@ -43,6 +44,8 @@ class UIInitializer:
         mw.file_menu.addAction(mw.exitAction)
         
         mw.help_menu.addAction(mw.aboutAction)
+        mw.help_menu.addSeparator()
+        mw.help_menu.addAction(mw.licenseInfoAction)
         mw.help_menu.addAction(mw.indexAction)
 
         mw.load_MAT_action.setShortcut(QKeySequence("Ctrl+L"))
@@ -56,6 +59,7 @@ class UIInitializer:
         mw.exitAction.triggered.connect(mw.close)
         
         mw.aboutAction.triggered.connect(mw.launch_about)
+        mw.licenseInfoAction.triggered.connect(mw.show_license_info)
         mw.indexAction.triggered.connect(mw.launch_help)
 
         # mw.importDOTmot_action.triggered.connect(

@@ -7,6 +7,11 @@ theme:
 
 nav:
   - Home: index.md   # ✅ Properly indented and recognized
+  - User Guide: user-guide.md
+  - License: license.md
+  - Troubleshooting: troubleshooting.md
+  - Keyboard Shortcuts: keyboard-shortcuts.md
+  - File Formats: file-formats.md
 
 extra_css:
   - css/extra.css

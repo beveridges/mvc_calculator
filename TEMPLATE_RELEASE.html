@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MVC Calculator Releases</title>
+
+<style>
+/*
+ * PREDEFINED TAG COLOR SCHEME (10 tags):
+ * 1. API          - Blue (#448aff)
+ * 2. Security     - Green (#3fb950)
+ * 3. Performance  - Golden/Orange (#e3b341)
+ * 4. BugFix        - Red/Pink (#f85149)
+ * 5. Feature       - Purple (#a371f7)
+ * 6. UI            - Cyan/Teal (#38bdf8)
+ * 7. Documentation - Gray (#8b949e)
+ * 8. Breaking      - Dark Red (#da3633)
+ * 9. Enhancement   - Light Blue (#4facfe)
+ * 10. Testing      - Yellow/Amber (#fbbc05)
+ * 
+ * Tag names are normalized (case-insensitive, handles variations like "bug fix" -> "bugfix")
+ */
+:root {
+    --bg: #0d1117;
+    --panel: #11161f;
+    --border: #222738;
+    --text-main: #e6edf3;
+    --text-muted: #8b949e;
+    --header: #848d97;
+    --accent: #1f6feb;
+
+    /* Tag color scheme - 10 predefined tags */
+    --tag-api-bg: rgba(56, 139, 253, 0.15);
+    --tag-api-text: #448aff;
+
+    --tag-security-bg: rgba(46, 160, 67, 0.15);
+    --tag-security-text: #3fb950;
+
+    --tag-performance-bg: rgba(210, 153, 34, 0.15);
+    --tag-performance-text: #e3b341;
+
+    --tag-bugfix-bg: rgba(248, 81, 73, 0.15);
+    --tag-bugfix-text: #f85149;
+
+    --tag-feature-bg: rgba(163, 113, 247, 0.15);
+    --tag-feature-text: #a371f7;
+
+    --tag-ui-bg: rgba(56, 189, 248, 0.15);
+    --tag-ui-text: #38bdf8;
+
+    --tag-documentation-bg: rgba(139, 148, 158, 0.15);
+    --tag-documentation-text: #8b949e;
+
+    --tag-breaking-bg: rgba(218, 54, 51, 0.15);
+    --tag-breaking-text: #da3633;
+
+    --tag-enhancement-bg: rgba(79, 172, 254, 0.15);
+    --tag-enhancement-text: #4facfe;
+
+    --tag-testing-bg: rgba(251, 188, 5, 0.15);
+    --tag-testing-text: #fbbc05;
+}
+
+body {
+    margin: 0;
+    padding: 40px 20px;
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.page {
+    max-width: 980px;
+    margin: auto;
+    position: relative;
+}
+
+.top-header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 25px;
+}
+
+.logo {
+    height: 100px;
+}
+
+.release-section {
+    position: relative;
+    margin-bottom: 40px;
+}
+
+.release-left {
+    position: absolute;
+    left: -200px;
+    top: 0;
+    width: 180px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.release-left > div:first-child {
+    line-height: 24px;
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+}
+
+.release-left .tag {
+    display: inline-block;
+    margin: 6px 6px 0 0;
+}
+
+.section-title {
+    font-size: 24px;
+    margin: 0 0 8px;
+}
+
+.tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.tag-api           { background: var(--tag-api-bg);           color: var(--tag-api-text); }
+.tag-security      { background: var(--tag-security-bg);      color: var(--tag-security-text); }
+.tag-performance   { background: var(--tag-performance-bg);   color: var(--tag-performance-text); }
+.tag-bugfix        { background: var(--tag-bugfix-bg);         color: var(--tag-bugfix-text); }
+.tag-feature        { background: var(--tag-feature-bg);        color: var(--tag-feature-text); }
+.tag-ui             { background: var(--tag-ui-bg);             color: var(--tag-ui-text); }
+.tag-documentation  { background: var(--tag-documentation-bg);  color: var(--tag-documentation-text); }
+.tag-breaking       { background: var(--tag-breaking-bg);       color: var(--tag-breaking-text); }
+.tag-enhancement    { background: var(--tag-enhancement-bg);     color: var(--tag-enhancement-text); }
+.tag-testing        { background: var(--tag-testing-bg);        color: var(--tag-testing-text); }
+
+.release-description {
+    margin-top: 4px;
+    margin-bottom: 10px;
+    color: var(--text-muted);
+    font-size: 16px;
+}
+
+.release-notes-text h3 {
+    margin-top: 20px;
+    margin-bottom: 6px;
+    font-size: 16px;
+    color: var(--accent);
+}
+
+.release-notes-text ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.release-notes-text li {
+    margin-bottom: 6px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 18px;
+    margin-bottom: 32px;
+    font-size: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+thead {
+    background: #0f141b;
+}
+
+th {
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--header);
+    border-bottom: 1px solid var(--border);
+}
+
+td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+a.file-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-family: Consolas, "SF Mono", Menlo, monospace;
+}
+
+a.file-link:hover {
+    text-decoration: underline;
+}
+
+.size-col, .date-col {
+    color: var(--text-muted);
+}
+
+.desc-col {
+    color: var(--text-main);
+}
+
+hr.divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 34px 0 20px;
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- HEADER -->
+<div class="top-header">
+    <img class="logo" src="{{LOGO_PATH}}" alt="Moviolabs Logo">
+    <h1>MVC Calculator Releases</h1>
+</div>
+
+<!-- LATEST RELEASE SECTION -->
+<div class="release-section">
+    <div class="release-left">
+        <div>{{LATEST_DATE}}</div>
+        {{LATEST_TAGS}}
+    </div>
+
+    <!-- RIGHT CONTENT -->
+    <div>
+        <div class="section-title">Latest Release — {{LATEST_VERSION}}</div>
+
+    <div class="release-description">
+        {{LATEST_DESCRIPTION}}
+    </div>
+
+    <div class="release-notes-text">
+
+        <h3>What's New</h3>
+        <ul>
+            {{LATEST_WHATS_NEW}}
+        </ul>
+
+        <h3>Bug Fixes</h3>
+        <ul>
+            {{LATEST_BUG_FIXES}}
+        </ul>
+
+    </div>
+
+        <!-- FILE TABLE -->
+        {{LATEST_TABLE}}
+
+    </div>
+</div>
+
+<hr class="divider">
+
+<!-- PREVIOUS RELEASE SECTION -->
+{{PREV_VERSION}}
+
+</div>
+</body>
+</html>
