@@ -1,0 +1,11 @@
+
+API — Blue (#448aff)
+Security — Green (#3fb950)
+Performance — Golden/Orange (#e3b341)
+BugFix — Red/Pink (#f85149)
+Feature — Purple (#a371f7)
+UI — Cyan/Teal (#38bdf8)
+Documentation — Gray (#8b949e)
+Breaking — Dark Red (#da3633)
+Enhancement — Light Blue (#4facfe)
+Testing — Yellow/Amber (#fbbc05)

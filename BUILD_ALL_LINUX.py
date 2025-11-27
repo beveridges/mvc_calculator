@@ -80,20 +80,48 @@ def copy_to_windows(buildnumber: str):
     WIN_BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
 
     print(f"\n[INFO] Copying Linux build artifacts to Windows versioned directory:\n{WIN_VERSION_DIR}\n")
+    print(f"[INFO] Filtering files for version: {buildnumber}\n")
+    
+    # Diagnostic: List all files in LINUX_ROOT to help debug
+    print(f"[DEBUG] Files found in {LINUX_ROOT}:")
+    for item in sorted(LINUX_ROOT.iterdir()):
+        if item.is_file():
+            print(f"  - {item.name} (suffix: {item.suffix})")
+    print()
 
     # Copy DEB and AppImage to version directory (main artifacts)
+    # Only copy files that match the current build number
+    copied_count = 0
     for item in LINUX_ROOT.iterdir():
-        if item.suffix in [".deb", ".AppImage"]:
-            dest = WIN_VERSION_DIR / item.name
-            shutil.copy(item, dest)
-            print(f"  ✓ Copied {item.name} to version directory")
+        if item.is_file():
+            # Check file extension (case-insensitive for AppImage)
+            suffix_lower = item.suffix.lower()
+            if suffix_lower in [".deb", ".appimage"]:
+                # Check if file name contains the build number
+                if buildnumber in item.name:
+                    dest = WIN_VERSION_DIR / item.name
+                    shutil.copy(item, dest)
+                    print(f"  ✓ Copied {item.name} to version directory")
+                    copied_count += 1
+                else:
+                    print(f"  ⊘ Skipped {item.name} (version mismatch, expected {buildnumber})")
+    
+    if copied_count == 0:
+        print(f"  ⚠️  Warning: No matching build files found for version {buildnumber}")
+        print(f"     Checked directory: {LINUX_ROOT}")
+        print(f"     Looking for files containing: {buildnumber}")
 
     # Copy portable build and other files to buildfiles
+    # Skip main artifacts (.deb, .AppImage) which are already copied above
     for item in LINUX_ROOT.iterdir():
         # Skip temp_logs directory and main artifacts (already copied above)
         if item.name == "temp_logs":
             continue
-        if item.name == "pyinstaller" or (item.is_file() and item.suffix not in [".deb", ".AppImage"]):
+        # Skip .deb and .AppImage files (case-insensitive) - already copied to version directory
+        suffix_lower = item.suffix.lower() if item.is_file() else ""
+        if suffix_lower in [".deb", ".appimage"]:
+            continue
+        if item.name == "pyinstaller" or (item.is_file() and suffix_lower not in [".deb", ".appimage"]):
             dest = WIN_BUILDFILES_DIR / item.name
             if item.is_dir():
                 if dest.exists():

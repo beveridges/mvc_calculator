@@ -241,14 +241,7 @@ else:
     print("[WARN] No archived build folder found to zip.")
 
 # ------------------------------------------------------------------------------
-# Purge old builds (keep 3 latest)
+# Note: Old build purging is no longer needed with versioned directory structure.
+# Each version has its own directory, and old versions can be manually cleaned up if needed.
 # ------------------------------------------------------------------------------
-def purge_old_builds(build_dir: Path, keep: int = 3):
-    builds = sorted(build_dir.glob(f"{APP_BASENAME}-*"), key=lambda p: p.stat().st_mtime, reverse=True)
-    for old in builds[keep:]:
-        if old.is_file():
-            old.unlink()
-            print(f"[purged] {old}")
-
-purge_old_builds(MSI_BUILDS, keep=3)
 print("\n🎉 All done — MSI + ZIP ready!")

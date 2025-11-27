@@ -301,9 +301,19 @@ def build_table(files):
         mod = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
         desc = detect_description(f.name)
 
+        # Calculate relative path from BUILD_BASE to the file
+        # Files are in versioned directories like: MVC_Calculator-25.11-alpha.01.78/filename
+        try:
+            relative_path = f.relative_to(BUILD_BASE)
+            # Convert Windows path separators to forward slashes for web URLs
+            href = str(relative_path).replace("\\", "/")
+        except ValueError:
+            # Fallback if path calculation fails
+            href = f.name
+
         rows.append(
             "<tr>"
-            f"<td><a class='file-link' href='{f.name}'>{f.name}</a></td>"
+            f"<td><a class='file-link' href='{href}' download>{f.name}</a></td>"
             f"<td class='date-col'>{mod}</td>"
             f"<td class='size-col'>{size_str}</td>"
             f"<td class='desc-col'>{desc}</td>"
@@ -406,7 +416,11 @@ def main():
         if prev:
             # Load previous release notes
             prev_notes = load_notes(prev)
-            prev_date = prev_notes["date"] or "Date unknown"
+            prev_date = prev_notes["date"] or datetime.now().strftime("%d %b %Y")
+            prev_desc = prev_notes["description"] or f"Version {prev} release."
+            prev_whats_new_html = make_li_list(prev_notes["whats_new"]) if prev_notes["whats_new"] else "<li>No new features in this release.</li>"
+            prev_bug_fixes_html = make_li_list(prev_notes["bug_fixes"]) if prev_notes["bug_fixes"] else "<li>No bug fixes in this release.</li>"
+            
             prev_tags_html = " ".join(
                 f"<span class='tag tag-{normalize_tag_name(t)}'>{t}</span>"
                 for t in prev_notes["tags"]
@@ -415,14 +429,38 @@ def main():
             if prev_tags_html:
                 prev_tags_html = f"<div style='margin-top: 10px;'>{prev_tags_html}</div>"
             
+            # Previous release section - EXACT same structure as latest release
             prev_section = f'''<div class="release-section">
     <div class="release-left">
         <div>{prev_date}</div>
         {prev_tags_html}
     </div>
+
+    <!-- RIGHT CONTENT -->
     <div>
         <div class="section-title">Previous Release — {prev}</div>
+
+    <div class="release-description">
+        {prev_desc}
+    </div>
+
+    <div class="release-notes-text">
+
+        <h3>What's New</h3>
+        <ul>
+            {prev_whats_new_html}
+        </ul>
+
+        <h3>Bug Fixes</h3>
+        <ul>
+            {prev_bug_fixes_html}
+        </ul>
+
+    </div>
+
+        <!-- FILE TABLE -->
         {build_table(versions[prev])}
+
     </div>
 </div>'''
             html = html.replace("{{PREV_VERSION}}", prev_section)
