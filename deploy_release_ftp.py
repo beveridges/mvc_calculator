@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import re
+import ftplib
 from pathlib import Path
 from datetime import datetime
+from tqdm import tqdm
 
 
 BUILD_BASE = Path.home() / "Documents/.builds/mvc_calculator"
@@ -10,6 +12,12 @@ NOTES_DIR = BUILD_BASE
 
 TEMPLATE  = Path(__file__).parent / "TEMPLATE_RELEASE.html"
 OUTPUT    = BUILD_BASE / "index.html"
+
+# FTP Configuration (hardcoded)
+TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+DEFAULT_HOST = "ftp.moviolabs.com"
+DEFAULT_USER = "moviolab"
+DEFAULT_PASS = "xTQSz1g,n2we"
 
 def find_logo_path():
     """Find logo file in output directory or copy from resources."""
@@ -301,15 +309,8 @@ def build_table(files):
         mod = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
         desc = detect_description(f.name)
 
-        # Calculate relative path from BUILD_BASE to the file
-        # Files are in versioned directories like: MVC_Calculator-25.11-alpha.01.78/filename
-        try:
-            relative_path = f.relative_to(BUILD_BASE)
-            # Convert Windows path separators to forward slashes for web URLs
-            href = str(relative_path).replace("\\", "/")
-        except ValueError:
-            # Fallback if path calculation fails
-            href = f.name
+        # Use just filename for href (files uploaded to root of releases directory)
+        href = f.name
 
         rows.append(
             "<tr>"
@@ -329,6 +330,149 @@ def build_table(files):
         + "\n".join(rows) +
         "</tbody></table>"
     )
+
+
+def upload_file(ftp: ftplib.FTP, path: Path):
+    """Upload file to FTP with progress bar."""
+    total = path.stat().st_size
+    bar = tqdm(total=total, unit="B", unit_scale=True, desc=f"Uploading {path.name}")
+
+    def callback(chunk):
+        bar.update(len(chunk))
+
+    with path.open("rb") as f:
+        ftp.storbinary(f"STOR {path.name}", f, 8192, callback)
+
+    bar.close()
+
+
+def ensure_dir(ftp: ftplib.FTP, remote: str):
+    """Ensure remote directory exists, creating it if necessary."""
+    parts = remote.strip("/").split("/")
+    for i in range(1, len(parts) + 1):
+        sub = "/" + "/".join(parts[:i])
+        try:
+            ftp.cwd(sub)
+        except ftplib.error_perm:
+            ftp.mkd(sub)
+            ftp.cwd(sub)
+
+
+def get_existing_files(ftp: ftplib.FTP) -> dict[str, int]:
+    """Get list of existing files on FTP server with their sizes.
+    Returns dict mapping filename -> file_size_in_bytes."""
+    existing = {}
+    try:
+        files = ftp.nlst()
+        for filename in files:
+            try:
+                size = ftp.size(filename)
+                if size is not None:
+                    existing[filename] = size
+            except ftplib.error_perm:
+                # File might not exist or might be a directory, skip
+                pass
+    except Exception as e:
+        print(f"⚠️  Warning: Could not list existing files: {e}")
+    return existing
+
+
+def should_upload_file(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int]) -> bool:
+    """Check if file should be uploaded (skip if exists with same size)."""
+    filename = path.name
+    local_size = path.stat().st_size
+    
+    if filename in existing_files:
+        remote_size = existing_files[filename]
+        if local_size == remote_size:
+            print(f"  ⏭️  Skipping {filename} (already exists, same size: {local_size} bytes)")
+            return False
+        else:
+            print(f"  🔄 Re-uploading {filename} (size differs: local={local_size}, remote={remote_size})")
+            return True
+    
+    return True
+
+
+def upload_file_if_needed(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int]):
+    """Upload file only if it doesn't exist or has different size."""
+    if should_upload_file(ftp, path, existing_files):
+        upload_file(ftp, path)
+
+
+def upload_to_ftp(latest_version: str, prev_version: str | None, versions: dict, logo_path: str):
+    """Upload all files to FTP server."""
+    ftp = None
+    try:
+        print("\n🔌 Connecting to FTP...")
+        ftp = ftplib.FTP(DEFAULT_HOST)
+        ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
+        
+        ensure_dir(ftp, TARGET_DIR)
+        ftp.cwd(TARGET_DIR)
+        print(f"✓ Connected and changed to {TARGET_DIR}")
+        
+        # Get list of existing files on server
+        print("\n📋 Checking existing files on server...")
+        existing_files = get_existing_files(ftp)
+        if existing_files:
+            print(f"  Found {len(existing_files)} existing file(s)")
+        else:
+            print("  No existing files found (first upload)")
+        
+        # Upload logo
+        logo_file = BUILD_BASE / logo_path
+        if logo_file.exists():
+            print(f"\n📤 Logo: {logo_path}")
+            upload_file_if_needed(ftp, logo_file, existing_files)
+        else:
+            print(f"⚠️  Warning: Logo file not found: {logo_path}")
+        
+        # Upload latest release files
+        print(f"\n📤 Latest release ({latest_version}) files:")
+        for f in versions[latest_version]:
+            upload_file_if_needed(ftp, f, existing_files)
+        
+        # Upload latest release notes
+        version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
+        notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{latest_version}.txt"
+        if not notes_file.exists():
+            notes_file = BUILD_BASE / f"RELEASE_NOTES-{latest_version}.txt"
+        
+        if notes_file.exists():
+            print(f"\n📤 Release notes: {notes_file.name}")
+            upload_file_if_needed(ftp, notes_file, existing_files)
+        
+        # Upload previous release files (if exists)
+        if prev_version:
+            print(f"\n📤 Previous release ({prev_version}) files:")
+            for f in versions[prev_version]:
+                upload_file_if_needed(ftp, f, existing_files)
+            
+            # Upload previous release notes
+            prev_version_dir = BUILD_BASE / f"MVC_Calculator-{prev_version}"
+            prev_notes_file = prev_version_dir / "buildfiles" / f"RELEASE_NOTES-{prev_version}.txt"
+            if not prev_notes_file.exists():
+                prev_notes_file = BUILD_BASE / f"RELEASE_NOTES-{prev_version}.txt"
+            
+            if prev_notes_file.exists():
+                print(f"\n📤 Release notes: {prev_notes_file.name}")
+                upload_file_if_needed(ftp, prev_notes_file, existing_files)
+        
+        # Upload index.html (always upload as it changes)
+        print(f"\n📤 Uploading index.html (always updated)")
+        upload_file(ftp, OUTPUT)
+        
+        print("\n✅ FTP upload complete!")
+    except Exception as e:
+        print(f"❌ Error during FTP upload: {e}")
+        raise
+    finally:
+        if ftp:
+            try:
+                ftp.quit()
+            except:
+                pass
 
 
 def main():
@@ -494,8 +638,9 @@ def main():
                 if f.is_file() and f.suffix in [".msi", ".zip", ".deb", ".AppImage"]:
                     print(f"  - {f.name} ({f.stat().st_size / (1024*1024):.1f} MB)")
         
-        print(f"\n✅ Ready for FTP upload to releases folder")
-        print(f"   (FTP upload not yet implemented)")
+        # Upload to FTP
+        print(f"\n🚀 Starting FTP upload...")
+        upload_to_ftp(latest, prev, versions, logo_path)
         
     except Exception as e:
         print(f"ERROR: {e}")

@@ -88,7 +88,7 @@ If you just want to send a pre-generated license file:
 1. **Email** → **Autoresponders**
 2. **Add Autoresponder**
 3. **From**: Contains `@hfmdd.de`
-4. **Attach File**: Upload your `license.key` file
+4. **Attach File**: Upload your `license.key` file                                  
 5. **Body**: Instructions on where to place the license file
 6. **Enable** and **Create**
 
