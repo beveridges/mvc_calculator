@@ -17,6 +17,7 @@
  * 8. Breaking      - Dark Red (#da3633)
  * 9. Enhancement   - Light Blue (#4facfe)
  * 10. Testing      - Yellow/Amber (#fbbc05)
+ * 11. New Release   - Purple (#a371f7)
  * 
  * Tag names are normalized (case-insensitive, handles variations like "bug fix" -> "bugfix")
  */
@@ -59,6 +60,9 @@
 
     --tag-testing-bg: rgba(251, 188, 5, 0.15);
     --tag-testing-text: #fbbc05;
+
+    --tag-new-release-bg: rgba(163, 113, 247, 0.25);
+    --tag-new-release-text: #a371f7;
 }
 
 body {
@@ -135,6 +139,7 @@ body {
 .tag-breaking       { background: var(--tag-breaking-bg);       color: var(--tag-breaking-text); }
 .tag-enhancement    { background: var(--tag-enhancement-bg);     color: var(--tag-enhancement-text); }
 .tag-testing        { background: var(--tag-testing-bg);        color: var(--tag-testing-text); }
+.tag-new-release    { background: var(--tag-new-release-bg);    color: var(--tag-new-release-text); }
 
 .release-description {
     margin-top: 4px;

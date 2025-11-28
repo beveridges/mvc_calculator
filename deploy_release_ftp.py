@@ -180,11 +180,19 @@ def make_li_list(items):
     return "\n            ".join(f"<li>{i}</li>" for i in items)
 
 
+def format_tag_display(tag: str) -> str:
+    """Format tag for display. 'new-release' displays as 'NEW RELEASE' in all caps."""
+    normalized = normalize_tag_name(tag)
+    if normalized == "new-release":
+        return "NEW RELEASE"
+    return tag  # Display original tag text
+
+
 def normalize_tag_name(tag: str) -> str:
     """
     Normalize tag names to match predefined CSS classes.
     Predefined tags: api, security, performance, bugfix, feature, 
-                     ui, documentation, breaking, enhancement, testing
+                     ui, documentation, breaking, enhancement, testing, new-release
     """
     tag_lower = tag.lower().strip()
     
@@ -242,6 +250,12 @@ def normalize_tag_name(tag: str) -> str:
         "system testing": "testing",
         "system-testing": "testing",
         "test": "testing",
+        
+        # New Release variations
+        "new release": "new-release",
+        "new-release": "new-release",
+        "newrelease": "new-release",
+        "release": "new-release",
     }
     
     # Check direct match first
@@ -534,7 +548,7 @@ def main():
         bug_fixes_html = make_li_list(notes["bug_fixes"]) if notes["bug_fixes"] else "<li>No bug fixes in this release.</li>"
         
         latest_tags_html = " ".join(
-            f"<span class='tag tag-{normalize_tag_name(t)}'>{t}</span>"
+            f"<span class='tag tag-{normalize_tag_name(t)}'>{format_tag_display(t)}</span>"
             for t in notes["tags"]
             if t and t.strip()
         )
@@ -566,7 +580,7 @@ def main():
             prev_bug_fixes_html = make_li_list(prev_notes["bug_fixes"]) if prev_notes["bug_fixes"] else "<li>No bug fixes in this release.</li>"
             
             prev_tags_html = " ".join(
-                f"<span class='tag tag-{normalize_tag_name(t)}'>{t}</span>"
+                f"<span class='tag tag-{normalize_tag_name(t)}'>{format_tag_display(t)}</span>"
                 for t in prev_notes["tags"]
                 if t and t.strip()
             )

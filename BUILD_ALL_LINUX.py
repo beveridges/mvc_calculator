@@ -32,12 +32,34 @@ def read_build_number():
     """Read BUILDNUMBER from utilities/version_info.py (reads fresh each time)"""
     VERSION_INFO = SCRIPT_ROOT / "utilities" / "version_info.py"
     BUILDNUMBER = "unknown"
-    if VERSION_INFO.exists():
-        # Read fresh each time to get the latest version (after Windows builds increment it)
-        for line in VERSION_INFO.read_text(encoding="utf-8").splitlines():
+    
+    if not VERSION_INFO.exists():
+        print(f"❌ ERROR: version_info.py not found at {VERSION_INFO}")
+        print(f"   Make sure you've run BUILD_ALL_WINDOWS.py first!")
+        return BUILDNUMBER
+    
+    # Force read from disk (bypass any Python import cache)
+    # Read fresh each time to get the latest version (after Windows builds increment it)
+    try:
+        content = VERSION_INFO.read_text(encoding="utf-8")
+        for line in content.splitlines():
             if line.startswith("BUILDNUMBER"):
                 BUILDNUMBER = line.split("=")[1].strip().strip('"')
                 break
+    except Exception as e:
+        print(f"❌ ERROR: Could not read version_info.py: {e}")
+        return BUILDNUMBER
+    
+    # Clear any Python bytecode cache for this module
+    import py_compile
+    import os
+    pyc_file = VERSION_INFO.with_suffix('.pyc')
+    if pyc_file.exists():
+        try:
+            pyc_file.unlink()
+        except:
+            pass
+    
     return BUILDNUMBER
 
 
@@ -137,7 +159,59 @@ def copy_to_windows(buildnumber: str):
 
 def main():
     print(f"\n🐧 FULL LINUX BUILD — logging to:\n{TEMP_LOG_FILE}\n")
-    print("[INFO] Reading version from utilities/version_info.py (should match Windows build)\n")
+    
+    # Read build number BEFORE builds (Windows builds have already incremented it)
+    # This ensures we use the correct version and can verify it before building
+    VERSION_INFO_FILE = SCRIPT_ROOT / "utilities" / "version_info.py"
+    print(f"[INFO] Reading version from: {VERSION_INFO_FILE}")
+    
+    # Show file modification time to help debug sync issues
+    if VERSION_INFO_FILE.exists():
+        import time
+        mtime = VERSION_INFO_FILE.stat().st_mtime
+        mtime_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(mtime))
+        print(f"[INFO] File last modified: {mtime_str}")
+    
+    BUILDNUMBER = read_build_number()
+    print(f"[INFO] Build number read: {BUILDNUMBER}")
+    print(f"[INFO] ⚠️  VERIFY: This should match the Windows build number (v80)!")
+    print(f"[INFO] If this is wrong:")
+    print(f"   1. Make sure you've run BUILD_ALL_WINDOWS.py first")
+    print(f"   2. Check that version_info.py is synced between Windows and WSL")
+    print(f"   3. Try: git pull (if version_info.py is committed)")
+    print()
+    
+    # Verify the build number is reasonable (not "unknown")
+    if BUILDNUMBER == "unknown":
+        print(f"❌ ERROR: Could not read build number from version_info.py")
+        print(f"   File location: {SCRIPT_ROOT / 'utilities' / 'version_info.py'}")
+        print(f"   Make sure you've run BUILD_ALL_WINDOWS.py first!")
+        sys.exit(1)
+    
+    # Clear Python cache files to force fresh imports in build scripts
+    import glob
+    cache_pattern = str(SCRIPT_ROOT / "utilities" / "__pycache__" / "version_info*.pyc")
+    for pyc_file in glob.glob(cache_pattern):
+        try:
+            Path(pyc_file).unlink()
+            print(f"[INFO] Cleared cache file: {Path(pyc_file).name}")
+        except:
+            pass
+    
+    # Check if this looks like an old version (less than expected)
+    # This is a safety check - user should verify manually
+    try:
+        version_parts = BUILDNUMBER.split(".")
+        if len(version_parts) >= 4:
+            build_seq = int(version_parts[-1])
+            if build_seq < 80:  # Adjust this threshold as needed
+                print(f"⚠️  WARNING: Build number {BUILDNUMBER} seems low.")
+                print(f"   Expected v80 or higher. Verify this is correct!")
+                print(f"   If this is wrong, the build scripts will use the wrong version!\n")
+    except:
+        pass
+    
+    print()
 
     # Run all Linux builds
     run_step("Portable Linux Build", [sys.executable, str(PORTABLE_SCRIPT)], TEMP_LOG_FILE)
@@ -146,8 +220,14 @@ def main():
 
     print("\n✅ ALL LINUX ARTIFACTS BUILT SUCCESSFULLY\n")
     
-    # Read build number AFTER builds complete (Windows builds have already incremented it)
-    BUILDNUMBER = read_build_number()
+    # Re-read build number to confirm (should be the same)
+    BUILDNUMBER_FINAL = read_build_number()
+    if BUILDNUMBER_FINAL != BUILDNUMBER:
+        print(f"⚠️  WARNING: Build number changed during build!")
+        print(f"   Started with: {BUILDNUMBER}")
+        print(f"   Ended with: {BUILDNUMBER_FINAL}")
+        BUILDNUMBER = BUILDNUMBER_FINAL
+    
     print(f"[INFO] Using build number: {BUILDNUMBER}\n")
     
     # Set up version directory structure
