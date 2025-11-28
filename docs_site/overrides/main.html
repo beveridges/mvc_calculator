@@ -11,7 +11,7 @@
         // Create version div
         var versionDiv = document.createElement('div');
         versionDiv.className = 'inline-version';
-        versionDiv.style.cssText = 'text-align:center; font-size:0.6em; margin:2px 0 8px 0; color:#000; font-weight:500;';
+        versionDiv.style.cssText = 'text-align:center; margin:8px 0;';
         
         // Read version HTML from template file
         {% set version_html %}{% include "partials/version_inline.html" %}{% endset %}
@@ -20,6 +20,24 @@
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
+      }
+      
+      // Fix navigation links for local file:// protocol
+      // Convert directory links (ending with /) to index.html links
+      if (window.location.protocol === 'file:') {
+        var navLinks = document.querySelectorAll('.wy-menu a.reference.internal');
+        navLinks.forEach(function(link) {
+          var href = link.getAttribute('href');
+          if (href && href.endsWith('/') && !href.endsWith('/index.html')) {
+            // Convert ../troubleshooting/ to ../troubleshooting/index.html
+            link.setAttribute('href', href + 'index.html');
+          } else if (href && !href.includes('#') && !href.includes('.html') && !href.startsWith('#') && href !== '.') {
+            // Handle links that don't have .html extension and aren't anchors
+            if (!href.endsWith('/')) {
+              link.setAttribute('href', href + '/index.html');
+            }
+          }
+        });
       }
     });
   </script>

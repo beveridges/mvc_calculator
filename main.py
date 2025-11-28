@@ -702,18 +702,22 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         "About",
         f"{FRIENDLYVERSIONNAME}\nVersion {BUILDNUMBER}."
     )
-    # ---------------- Help launcher ----------------
+    # ---------------- Help launcher -----------------
     def launch_help(self):
         """Open the MkDocs help site."""
         # Use base_path() for frozen EXE compatibility
-        site_index = base_path("docs_site", "site", "index.html")
+        # Open user-guide.html directly instead of index.html
+        site_index = base_path("docs_site", "site", "user-guide", "index.html")
         if not os.path.exists(site_index):
-            QMessageBox.warning(
-                self,
-                "Help Not Available",
-                "This build does not include help files."
-            )
-            return
+            # Fallback to main index if user-guide doesn't exist
+            site_index = base_path("docs_site", "site", "index.html")
+            if not os.path.exists(site_index):
+                QMessageBox.warning(
+                    self,
+                    "Help Not Available",
+                    "This build does not include help files."
+                )
+                return
 
         file_url = urljoin('file:', urllib.request.pathname2url(os.path.abspath(site_index)))
         try:

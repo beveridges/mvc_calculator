@@ -6,7 +6,6 @@ theme:
   logo: img/icn_emg.png
 
 nav:
-  - Home: index.md   # ✅ Properly indented and recognized
   - User Guide: user-guide.md
   - License: license.md
   - Troubleshooting: troubleshooting.md
@@ -27,13 +26,23 @@ plugins:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - tables
   - codehilite
+
   - toc:
       permalink: true
       toc_depth: 6
-  - tables
-  - pymdownx.details
+
   - pymdownx.superfences
+  - pymdownx.blocks.caption
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.magiclink
+  - pymdownx.emoji
+
 
 
 

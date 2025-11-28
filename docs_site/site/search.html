@@ -26,15 +26,33 @@
         // Create version div
         var versionDiv = document.createElement('div');
         versionDiv.className = 'inline-version';
-        versionDiv.style.cssText = 'text-align:center; font-size:0.6em; margin:2px 0 8px 0; color:#000; font-weight:500;';
+        versionDiv.style.cssText = 'text-align:center; margin:8px 0;';
         
         // Read version HTML from template file
         
         
-        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.11-alpha.01.79</span> </div>";
+        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC CALCULATOR</span>   <div style=\"text-align: center; margin: 8px 0;\">     <img src=\"https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square\" alt=\"Build\" style=\"display: block; margin: 4px auto; border-radius: 0; width: auto; height: auto;\">     <img src=\"https://img.shields.io/badge/version-25.11--alpha.01.79-orange?style=flat-square\" alt=\"Version\" style=\"display: block; margin: 4px auto; border-radius: 0; width: auto; height: auto;\">   </div> </div>";
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
+      }
+      
+      // Fix navigation links for local file:// protocol
+      // Convert directory links (ending with /) to index.html links
+      if (window.location.protocol === 'file:') {
+        var navLinks = document.querySelectorAll('.wy-menu a.reference.internal');
+        navLinks.forEach(function(link) {
+          var href = link.getAttribute('href');
+          if (href && href.endsWith('/') && !href.endsWith('/index.html')) {
+            // Convert ../troubleshooting/ to ../troubleshooting/index.html
+            link.setAttribute('href', href + 'index.html');
+          } else if (href && !href.includes('#') && !href.includes('.html') && !href.startsWith('#') && href !== '.') {
+            // Handle links that don't have .html extension and aren't anchors
+            if (!href.endsWith('/')) {
+              link.setAttribute('href', href + '/index.html');
+            }
+          }
+        });
       }
     });
   </script>
@@ -57,10 +75,6 @@
       </div>
 
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <ul>
-                <li class="toctree-l1"><a class="reference internal" href="./.">Home</a>
-                </li>
-              </ul>
               <ul>
                 <li class="toctree-l1"><a class="reference internal" href="./user-guide/">User Guide</a>
                 </li>
