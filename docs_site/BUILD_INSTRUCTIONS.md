@@ -12,7 +12,7 @@ pip install mkdocs-material  # Optional: if using material theme
 Or if you're using conda:
 
 ```bash
-conda install -c conda-forge mkdocs
+conda install -c conda-forge mkdocs in the 
 ```
 
 ## Building the Documentation

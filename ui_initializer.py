@@ -1,12 +1,14 @@
 # ui_initializer.py
 
-from PyQt5.QtWidgets import QAction
-from PyQt5.QtGui import QKeySequence, QIcon
+from PyQt5.QtWidgets import QAction, QLabel
+from PyQt5.QtGui import QKeySequence, QIcon, QPixmap, QCursor, QMouseEvent
+from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtGui import QDesktopServices
 from PyQt5 import uic
 
 # -- CUSTOM ---------------------
 from plot_controller import PlotController
-from utilities.path_utils import base_path
+from utilities.path_utils import base_path, resource_path
 
 
 class UIInitializer:
@@ -61,6 +63,29 @@ class UIInitializer:
         mw.aboutAction.triggered.connect(mw.launch_about)
         mw.licenseInfoAction.triggered.connect(mw.show_license_info)
         mw.indexAction.triggered.connect(mw.launch_help)
+
+        # Set moviolabs logo image (Qt resource system not used, so set directly)
+        moviolabs_label = mw.findChild(QLabel, "lbl_moviolabs_url")
+        if moviolabs_label:
+            img_path = resource_path("icons", "moviolabs_TINY.png")
+            pixmap = QPixmap(img_path)
+            if not pixmap.isNull():
+                # Set the pixmap directly
+                moviolabs_label.setPixmap(pixmap)
+                moviolabs_label.setAlignment(Qt.AlignCenter)
+                # Make it clickable - override mousePressEvent
+                original_mousePressEvent = moviolabs_label.mousePressEvent
+                def click_handler(event: QMouseEvent):
+                    if event.button() == Qt.LeftButton:
+                        QDesktopServices.openUrl(QUrl("https://www.moviolabs.com"))
+                    else:
+                        original_mousePressEvent(event)
+                moviolabs_label.mousePressEvent = click_handler
+                moviolabs_label.setCursor(QCursor(Qt.PointingHandCursor))
+            else:
+                # Fallback: just set the link text if image not found
+                moviolabs_label.setText('<a href="https://www.moviolabs.com">moviolabs.com</a>')
+                moviolabs_label.setOpenExternalLinks(True)
 
         # mw.importDOTmot_action.triggered.connect(
         #     lambda: mw.plot_controller.load_dot_mot())

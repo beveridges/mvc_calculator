@@ -4,6 +4,7 @@
 import sys
 import shutil
 import subprocess
+import re
 from pathlib import Path
 from datetime import datetime
 
@@ -88,6 +89,72 @@ def run_step(name: str, cmd: list[str], log_file: Path):
     if process.returncode != 0:
         print(f"\n❌ {name} failed (exit {process.returncode})")
         sys.exit(process.returncode)
+
+
+# --------------------------------------------------------------
+# CLEANUP OLD BUILDS - KEEP ONLY CURRENT AND PREVIOUS
+# --------------------------------------------------------------
+def cleanup_old_builds(current_buildnumber: str):
+    """Remove old build files, keeping only current and previous builds."""
+    print(f"\n[INFO] Cleaning up old builds in {LINUX_ROOT}")
+    print(f"[INFO] Keeping: current ({current_buildnumber}) and previous build only\n")
+    
+    # Version pattern: e.g., "25.11-alpha.01.80"
+    VERSION_PATTERN = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
+    
+    # Find all versions in the directory
+    versions_found = set()
+    files_by_version = {}
+    
+    for item in LINUX_ROOT.iterdir():
+        if not item.is_file():
+            continue
+        
+        # Skip temp_logs and other non-build files
+        if item.name == "temp_logs" or item.suffix.lower() not in [".deb", ".appimage"]:
+            continue
+        
+        # Extract version from filename
+        match = VERSION_PATTERN.search(item.name)
+        if match:
+            version = match.group(1)
+            versions_found.add(version)
+            if version not in files_by_version:
+                files_by_version[version] = []
+            files_by_version[version].append(item)
+    
+    if not versions_found:
+        print(f"  [INFO] No versioned build files found to clean up")
+        return
+    
+    # Sort versions (newest first)
+    sorted_versions = sorted(versions_found, reverse=True)
+    
+    # Determine which versions to keep
+    # Keep the two newest versions (current build + previous build)
+    # Since cleanup runs after builds complete, current_buildnumber should be the newest
+    keep_versions = sorted_versions[:2] if len(sorted_versions) >= 2 else sorted_versions
+    
+    print(f"  [INFO] Found {len(versions_found)} version(s): {sorted_versions}")
+    print(f"  [INFO] Keeping versions: {keep_versions}")
+    
+    # Delete files from versions not in keep list
+    deleted_count = 0
+    for version, files in files_by_version.items():
+        if version not in keep_versions:
+            print(f"  [CLEANUP] Removing files for version {version}:")
+            for file in files:
+                try:
+                    file.unlink()
+                    print(f"    ✓ Deleted {file.name}")
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"    ❌ Failed to delete {file.name}: {e}")
+    
+    if deleted_count > 0:
+        print(f"\n  [INFO] Cleanup complete: removed {deleted_count} file(s)")
+    else:
+        print(f"\n  [INFO] No files to clean up (only current/previous builds present)")
 
 
 # --------------------------------------------------------------
@@ -229,6 +296,9 @@ def main():
         BUILDNUMBER = BUILDNUMBER_FINAL
     
     print(f"[INFO] Using build number: {BUILDNUMBER}\n")
+    
+    # Clean up old builds (keep only current and previous)
+    cleanup_old_builds(BUILDNUMBER)
     
     # Set up version directory structure
     WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"

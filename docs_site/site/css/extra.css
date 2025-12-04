@@ -9,6 +9,7 @@
   margin: 0 auto -10px auto !important;  /* Pull version text closer */
   padding-top: 0 !important;
   padding-bottom: 0 !important;
+  flex-shrink: 0; /* Prevent image from affecting layout */
 }
 
 /* Tighten spacing around the version label */
@@ -16,6 +17,22 @@
   margin-top: 0 !important;
   padding-top: 0 !important;
   margin-bottom: 10px !important;  /* Add a little room before the search bar */
+}
+
+/* Ensure the sidebar search container has proper layout */
+.wy-side-nav-search {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Prevent layout shifts when version block is inserted */
+.wy-side-nav-search > a {
+  flex-shrink: 0;
+}
+
+.wy-side-nav-search div[role="search"] {
+  flex-shrink: 0;
 }
 
 /* Optional: fine-tune space between the search bar and navigation menu */
@@ -68,6 +85,8 @@ div.bibliography a[href^="#ref-"] {
   gap: 4px;
   margin: 4px 0 8px 0;
   color: #111;
+  min-height: 0; /* Prevent flexbox from expanding */
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 /* Ensure badges are rectangular, not circular */
@@ -86,6 +105,9 @@ div.bibliography a[href^="#ref-"] {
   text-transform: uppercase;
   font-weight: 700;
   white-space: nowrap;
+  line-height: 1.2; /* Tight line height to prevent extra spacing */
+  margin: 0; /* Remove default margins */
+  padding: 0; /* Remove default padding */
 }
 
 .wy-side-nav-search .inline-version__badge {
@@ -96,7 +118,8 @@ div.bibliography a[href^="#ref-"] {
   background: none;
   color: #000;
   padding: 0;
-  margin-top: 0.1em;
+  margin: 0; /* Remove all margins */
+  line-height: 1.2; /* Tight line height */
 }
 
 /* Custom "Measurement Protocol" admonition styling */

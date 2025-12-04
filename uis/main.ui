@@ -316,6 +316,30 @@
             </item>
            </layout>
           </widget>
+          <widget class="QLabel" name="lbl_moviolabs_url">
+           <property name="geometry">
+            <rect>
+             <x>120</x>
+             <y>488</y>
+             <width>280</width>
+             <height>51</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>&lt;a href=&quot;https://www.moviolabs.com&quot;&gt;
+    &lt;img src=&quot;:/resources/icons/moviolabs_TINY.png&quot;&gt;
+&lt;/a&gt;</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::RichText</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="openExternalLinks">
+            <bool>true</bool>
+           </property>
+          </widget>
          </widget>
         </item>
        </layout>

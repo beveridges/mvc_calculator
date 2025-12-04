@@ -38,10 +38,22 @@
         // Read version HTML from template file
         
         
-        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC CALCULATOR</span>   <div style=\"text-align: center; margin: 8px 0;\">     <img src=\"https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square\" alt=\"Build\" style=\"display: block; margin: 4px auto; border-radius: 0; width: auto; height: auto;\">     <img src=\"https://img.shields.io/badge/version-25.11--alpha.01.79-orange?style=flat-square\" alt=\"Version\" style=\"display: block; margin: 4px auto; border-radius: 0; width: auto; height: auto;\">   </div> </div>";
+        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.11-alpha.01.80</span> </div>";
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
+        
+        // Force layout recalculation to fix spacing issues
+        requestAnimationFrame(function() {
+          // Trigger reflow by reading layout properties
+          var height = versionDiv.offsetHeight;
+          var parent = logoLink.parentNode;
+          if (parent) {
+            parent.style.display = 'none';
+            parent.offsetHeight; // Force reflow
+            parent.style.display = '';
+          }
+        });
       }
       
       // Fix navigation links for local file:// protocol
@@ -392,5 +404,5 @@ Kinesiological Electromyography.</em> Noraxon Inc.</p>
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2025-11-28 03:52:15.637871+00:00
+Build Date UTC : 2025-12-04 23:07:33.766545+00:00
 -->

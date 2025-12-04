@@ -1,10 +1,29 @@
 #!/usr/bin/env python3
+"""
+FTP Deployment Script for MVC Calculator Releases
+
+Usage:
+    # Generate index.html only (no upload)
+    python deploy_release_ftp.py
+    
+    # Upload files to FTP server
+    python deploy_release_ftp.py -u
+    python deploy_release_ftp.py --upload
+"""
 
 import re
+import argparse
 import ftplib
+import zipfile
 from pathlib import Path
 from datetime import datetime
-from tqdm import tqdm
+
+# Optional import for progress bar
+try:
+    from tqdm import tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
 
 
 BUILD_BASE = Path.home() / "Documents/.builds/mvc_calculator"
@@ -18,6 +37,10 @@ TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
 DEFAULT_HOST = "ftp.moviolabs.com"
 DEFAULT_USER = "moviolab"
 DEFAULT_PASS = "xTQSz1g,n2we"
+
+# MaxMSP Patch Configuration
+# Path to the MaxPatches directory containing MuscleMonitor.maxpat
+MAXPATCHES_SOURCE = Path.home() / "Dropbox/__PROJECTS__/.AUGMENTED_FEEDBACK_DRUMMERS/AUGMENTED_FEEDBACK_DRUMMERS/MaxPatches"
 
 def find_logo_path():
     """Find logo file in output directory or copy from resources."""
@@ -347,17 +370,25 @@ def build_table(files):
 
 
 def upload_file(ftp: ftplib.FTP, path: Path):
-    """Upload file to FTP with progress bar."""
+    """Upload file to FTP with progress bar (if tqdm is available)."""
     total = path.stat().st_size
-    bar = tqdm(total=total, unit="B", unit_scale=True, desc=f"Uploading {path.name}")
-
-    def callback(chunk):
-        bar.update(len(chunk))
-
-    with path.open("rb") as f:
-        ftp.storbinary(f"STOR {path.name}", f, 8192, callback)
-
-    bar.close()
+    
+    if HAS_TQDM:
+        bar = tqdm(total=total, unit="B", unit_scale=True, desc=f"Uploading {path.name}")
+        
+        def callback(chunk):
+            bar.update(len(chunk))
+        
+        with path.open("rb") as f:
+            ftp.storbinary(f"STOR {path.name}", f, 8192, callback)
+        
+        bar.close()
+    else:
+        # Fallback: upload without progress bar
+        print(f"  Uploading {path.name} ({total / (1024*1024):.1f} MB)...")
+        with path.open("rb") as f:
+            ftp.storbinary(f"STOR {path.name}", f, 8192)
+        print(f"  ✓ Uploaded: {path.name}")
 
 
 def ensure_dir(ftp: ftplib.FTP, remote: str):
@@ -406,6 +437,73 @@ def should_upload_file(ftp: ftplib.FTP, path: Path, existing_files: dict[str, in
             return True
     
     return True
+
+
+def check_maxmsp_dependencies() -> tuple[bool, list[str], dict[str, Path]]:
+    """
+    Check for all required MaxMSP patch dependencies.
+    Returns: (all_found, missing_files, found_files_dict)
+    """
+    required_files = {
+        # Main patch
+        "MuscleMonitor.maxpat": MAXPATCHES_SOURCE / "MuscleMonitor.maxpat",
+        
+        # JavaScript files
+        "xml_reader.js": MAXPATCHES_SOURCE / "xml_reader.js",
+        "filternans": MAXPATCHES_SOURCE / "filternans",
+        "capture_event": MAXPATCHES_SOURCE / "capture_event",
+        
+        # MaxMSP abstractions
+        "slot_A.maxpat": MAXPATCHES_SOURCE / "slot_A.maxpat",
+        "slot_B.maxpat": MAXPATCHES_SOURCE / "slot_B.maxpat",
+        
+        # Audio files
+        "audio/snare1.wav": MAXPATCHES_SOURCE / "audio" / "snare1.wav",
+        "audio/snare2.wav": MAXPATCHES_SOURCE / "audio" / "snare2.wav",
+        "audio/snare3.wav": MAXPATCHES_SOURCE / "audio" / "snare3.wav",
+        "audio/snare4.wav": MAXPATCHES_SOURCE / "audio" / "snare4.wav",
+        "audio/AdditionalSounds/Mtrnm1.wav": MAXPATCHES_SOURCE / "audio" / "AdditionalSounds" / "Mtrnm1.wav",
+        
+        # Image files
+        "images/axes.png": MAXPATCHES_SOURCE / "images" / "axes.png",
+    }
+    
+    missing = []
+    found = {}
+    
+    for rel_path, full_path in required_files.items():
+        if full_path.exists():
+            found[rel_path] = full_path
+        else:
+            missing.append(rel_path)
+    
+    all_found = len(missing) == 0
+    return all_found, missing, found
+
+
+def create_maxmsp_zip(output_path: Path, found_files: dict[str, Path]) -> bool:
+    """
+    Create a zip file containing the MaxMSP patch and all dependencies.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        print(f"\n📦 Creating MaxMSP patch zip file: {output_path.name}")
+        
+        with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for rel_path, full_path in found_files.items():
+                # Add file to zip preserving directory structure
+                zipf.write(full_path, rel_path)
+                print(f"  ✓ Added: {rel_path}")
+        
+        zip_size = output_path.stat().st_size
+        print(f"✓ Created zip file: {output_path.name} ({zip_size / (1024*1024):.2f} MB)")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error creating MaxMSP zip file: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 def upload_file_if_needed(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int]):
@@ -477,6 +575,12 @@ def upload_to_ftp(latest_version: str, prev_version: str | None, versions: dict,
         print(f"\n📤 Uploading index.html (always updated)")
         upload_file(ftp, OUTPUT)
         
+        # Upload MaxMSP patch zip if it exists
+        maxmsp_zip = BUILD_BASE / "MuscleMonitor-maxmsp-patch.zip"
+        if maxmsp_zip.exists():
+            print(f"\n📤 Uploading MaxMSP patch zip: {maxmsp_zip.name}")
+            upload_file_if_needed(ftp, maxmsp_zip, existing_files)
+        
         print("\n✅ FTP upload complete!")
     except Exception as e:
         print(f"❌ Error during FTP upload: {e}")
@@ -490,6 +594,15 @@ def upload_to_ftp(latest_version: str, prev_version: str | None, versions: dict,
 
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="FTP Deployment Script for MVC Calculator",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("-u", "--upload", action="store_true", 
+                      help="Upload files to FTP server (default: only generate index.html locally)")
+    args = parser.parse_args()
+    
     try:
         print(f"Scanning for builds in versioned directories:")
         print(f"  BUILD_BASE: {BUILD_BASE}")
@@ -637,6 +750,33 @@ def main():
         print(f"✓ index.html generated at: {OUTPUT}")
         print(f"  File size: {OUTPUT.stat().st_size} bytes")
         
+        # Check and create MaxMSP patch zip
+        print(f"\n🔍 Checking MaxMSP patch dependencies...")
+        print(f"  Source directory: {MAXPATCHES_SOURCE}")
+        
+        if not MAXPATCHES_SOURCE.exists():
+            print(f"  ⚠️  Warning: MaxPatches source directory not found: {MAXPATCHES_SOURCE}")
+            print(f"  Skipping MaxMSP patch zip creation.")
+        else:
+            all_found, missing, found_files = check_maxmsp_dependencies()
+            
+            if not all_found:
+                print(f"  ⚠️  Warning: Missing {len(missing)} required file(s):")
+                for m in missing:
+                    print(f"    - {m}")
+                print(f"  Attempting to create zip with available files...")
+            else:
+                print(f"  ✓ All required dependencies found!")
+            
+            if found_files:
+                maxmsp_zip = BUILD_BASE / "MuscleMonitor-maxmsp-patch.zip"
+                if create_maxmsp_zip(maxmsp_zip, found_files):
+                    print(f"  ✓ MaxMSP patch zip ready for upload")
+                else:
+                    print(f"  ❌ Failed to create MaxMSP patch zip")
+            else:
+                print(f"  ❌ No MaxMSP files found, skipping zip creation")
+        
         # Summary of files ready for FTP upload
         print(f"\n📦 Files ready for FTP upload:")
         print(f"  1. {OUTPUT.name} ({OUTPUT.stat().st_size} bytes)")
@@ -645,12 +785,22 @@ def main():
         else:
             print(f"  2. {logo_path} (⚠️  not found)")
         
+        maxmsp_zip = BUILD_BASE / "MuscleMonitor-maxmsp-patch.zip"
+        if maxmsp_zip.exists():
+            print(f"  3. {maxmsp_zip.name} ({maxmsp_zip.stat().st_size / (1024*1024):.2f} MB)")
+        
         print(f"\n📁 Build files in version directory:")
         version_dir = BUILD_BASE / f"MVC_Calculator-{latest}"
         if version_dir.exists():
             for f in sorted(version_dir.iterdir()):
                 if f.is_file() and f.suffix in [".msi", ".zip", ".deb", ".AppImage"]:
                     print(f"  - {f.name} ({f.stat().st_size / (1024*1024):.1f} MB)")
+        
+        # Upload to FTP only if -u/--upload flag is provided
+        if not args.upload:
+            print(f"\n[INFO] Skipping FTP upload (use -u/--upload to upload files)")
+            print(f"       Generated index.html at: {OUTPUT}")
+            return
         
         # Upload to FTP
         print(f"\n🚀 Starting FTP upload...")

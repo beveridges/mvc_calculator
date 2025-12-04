@@ -20,6 +20,18 @@
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
+        
+        // Force layout recalculation to fix spacing issues
+        requestAnimationFrame(function() {
+          // Trigger reflow by reading layout properties
+          var height = versionDiv.offsetHeight;
+          var parent = logoLink.parentNode;
+          if (parent) {
+            parent.style.display = 'none';
+            parent.offsetHeight; // Force reflow
+            parent.style.display = '';
+          }
+        });
       }
       
       // Fix navigation links for local file:// protocol
