@@ -1,7 +1,7 @@
 # Welcome to MVC Calculator
 
 ![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
-![Version](https://img.shields.io/badge/version-25.11--alpha.01.80-orange?style=flat-square)
+![Version](https://img.shields.io/badge/version-25.12--alpha.01.01-orange?style=flat-square)
 
 ## What is MVC Calculator?
 
@@ -47,7 +47,7 @@ installation.
 
 ## Features
 
-- MATLAB&#174 `.mat` file importer  
+- MATLAB<sup>&#174;</sup> `.mat` file importer  
 - Detect and visualize MVC bursts interactively  
 - Export processed MVC results data to XML  
 - Import XML
@@ -67,7 +67,7 @@ Four (or six, depending on the sensor configuration) , .mat files are
 loaded into the software
 
 1.  Open **MVC Calculator** and load your `.mat` file from the recording
-    system recorded by Qualisys or Noraxon systems.  
+    system recorded by QualisysAB<sup>&#174;</sup> or Noraxon<sup>&#174;</sup> systems.  
 2.  Use the **Energy Detection** tool to locate candidate MVC bursts.  
 3.  Fine-tune burst regions using the graphical selector.  
 4.  Press **Save Results** to store computed MVC metrics.
@@ -125,7 +125,7 @@ What follows are thea series of videos demonstrating the primary functions of MV
 ### Scenario 1:  Performing the MVC Calculation
 Making an MVC Calculation is very straight forward, it involves:
 
-1.  Importing MATLAB&#174 files
+1.  Importing MATLAB<sup>&#174;</sup> files
 2.  Selecting bursts in the sEMG signal
 3.  Performing the calculation
 4.  Exportiong the saved data
@@ -186,11 +186,11 @@ modify the two numbers corresponding to `BEST_OF` and
     `./config/defaults.py` → variable `BEST_OF`.
 
 !!! note
-    Noraxon / Qualisys record all sensors by default.
+    Noraxon<sup>&#174;</sup> / QualisysAB<sup>&#174;</sup> record all sensors by default.
     It’s the user’s responsibility to identify which sensors are relevant
     for MVC computation.
 
 ## References
 
 Konrad, P. (2005). *The ABC of EMG: A Practical Introduction to
-Kinesiological Electromyography.* Noraxon Inc.
+Kinesiological Electromyography.* Noraxon<sup>&#174;</sup> Inc.

@@ -1,16 +1,19 @@
 # User Guide
 
+![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
+![Version](https://img.shields.io/badge/version-25.12--alpha.01.01-orange?style=flat-square)
+
 ## Table of Contents
 
 - [Preamble](#preamble)
 - [MVC Calculator Download Options](#mvc-calculator-download-options)
-- [Installation](#installation)
 - [Getting Started](#getting-started)
 - [File Operations](#file-operations)
 - [Working with sEMG Data](#working-with-semg-data)
 - [Burst Detection](#burst-detection)
 - [Processing and Calculations](#processing-and-calculations)
 - [Exporting Results](#exporting-results)
+- [Sending Log Files for Support](#sending-log-files-for-support)
 - [Batch Processing](#batch-processing)
 - [Tips and Best Practices](#tips-and-best-practices)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
@@ -41,13 +44,13 @@ To address this, the MVC Calculator allows users to manually define MVC bursts, 
 The implementation of MVC signals is a two-stage process.   
 
 #### Stage 1
-First, sEMG signals representing the MVC are recorded using Noraxon/Qualisys systems. These signals are then processed in MVC Calculator (see [Figure 1](#fig-mvc)). As noted earlier, the workflow can involve a combination of automatic and manual steps. Once the processing is complete, the final MVC values are saved in XML format.
+First, sEMG signals representing the MVC are recorded using Noraxon<sup>&#174;</sup>/QualisysAB<sup>&#174;</sup> systems. These signals are then processed in MVC Calculator (see [Figure 1](#fig-mvc)). As noted earlier, the workflow can involve a combination of automatic and manual steps. Once the processing is complete, the final MVC values are saved in XML format.
 
 ![MVC recording process](img/how_it_fits_mvc_creation.png){#fig-mvc .mvc-figure}
-Figure 1: The Maximum Voluntary Contraction (MVC) recording process.
+Figure 1: The Maximum Voluntary Contraction (MVC) recording/calculation process.
 
 #### Stage 2
-The MVC XML files are imported into Max, where they are used on-the-fly to normalize the incoming live sEMG signals. Once normalized, these signals are then used to drive the biofeedback system—for example, to change the triggered sample. [Figure 2](#fig-max) 
+The MVC XML files are [imported into Max](#importing-mvc-calculator-xml-files-into-max), where they are used on-the-fly to normalize the incoming live sEMG signals. Once normalized, these signals are then used to drive the biofeedback system—for example, to change the triggered sample. [Figure 2](#fig-max) 
 
 ![MVC in Max](img/max_in_mvc.png){#fig-max .mvc-figure}
 Figure 2: MVC values being used in Max.
@@ -98,9 +101,9 @@ A standard Windows installer (similar to installing Chrome)
 
 **Cons**
 
-- ❌ Requires admin rights  
 - ❌ Not portable  
 - ❌ Must reinstall to move to another machine  
+- ❌ Requires admin rights  
 
 ---
 
@@ -268,7 +271,7 @@ Figure 3: The MVC Calculator UI.
 
 ### Loading Your First File
 
-1. Click **Import MAT files** button or use `Ctrl+L` (or File → Import MAT files)
+1. Click **Import MAT files** button or use <kbd>Ctrl</kbd> + <kbd>L</kbd> (or File → Import MAT files)
 2. Navigate to your `.mat` file location
 3. Select one or more files (for batch processing)
 4. Click **Open**
@@ -281,16 +284,15 @@ The application will load and display your sEMG data in the plotting area.
 
 ### Importing MAT Files
 
-MVC Calculator supports MATLAB `.mat` files from:
-
-- **Qualisys** QTM / **Noraxon** EMG systems
-
-**Keyboard Shortcut**: `Ctrl+L`
+MVC Calculator supports MATLAB `.mat` files exported from the IMM **QualisysAB<sup>&#174;</sup>** QTM / **Noraxon<sup>&#174;</sup>** sEMG system.
 
 To load mat files:
 
-1. Click **Import MAT files** or use `Ctrl+L` (or File → Import MAT files)
-2. Select one or more `.mat` files
+1. Click the **Import MAT files** button or use <kbd>Ctrl</kbd> + <kbd>L</kbd> (or File → Import MAT files)
+2. Click the **Select files** button
+3. Select one or more `.mat` files
+4. With the files selected, you can choose Remove Selected to delete only those files, or Clear Files to remove all files
+5. When you are happy with the siles you have selected, use the **Import Files** button
 3. The application will automatically detect and load the sEMG data
 4. Each file will appear as a separate tab in the plotting area
 
@@ -298,7 +300,7 @@ To load mat files:
 
 To load previously saved MVC calculations:
 
-1. Click **Import XML file** or use `Ctrl+X` (or File → Import XML file)
+1. Click the **Import XML file** button or use <kbd>Ctrl</kbd> + <kbd>X</kbd> (or File → Import XML file or use the shortcut )
 2. Navigate to your saved `.xml` file
 3. Click **Open**
 
@@ -308,7 +310,7 @@ This will restore your previous burst selections and calculated MVC values.
 
 After processing your data:
 
-1. Click **Export XML file** or use `Ctrl+E` (or File → Export XML file)
+1. Click **Export XML file** or use <kbd>Ctrl</kbd> + <kbd>E</kbd> (or File → Export XML file)
 2. Choose a location and filename
 3. Click **Save**
 
@@ -334,12 +336,12 @@ When you load a `.mat` file, MVC Calculator displays:
 
 ### Navigating Multiple Sensors
 
-If you've loaded multiple files (e.g., 4 or 6 sensors):
+If you’ve loaded multiple files (e.g., 4 or 6 sensors), the interface displays four key elements (see [Figure 4](#fig-working_with_semg_ui):
 
 1. **Tabs** – Each sensor appears as a tab at the top of the plotting area.  
 2. **EMG channel selection buttons** – These highlighted buttons allow you to select the desired EMG channel.  
 3. **Clear all selections button** – Clears any burst selections made in the active EMG channel.  
-4. **Active EMG channel** – The currently selected sensor is highlighted.
+4. **Active EMG channel** – The currently selected sensor is highlighted with a bold rectangle around the corresponding plot.
 
 
 <figure class="screenshot" id="fig-working_with_semg_ui">
@@ -380,7 +382,7 @@ Figure 4: MVC Calculator interface displaying sEMG signals extracted from the lo
 
 MVC Calculator automatically processes sEMG signals using:
 
-- **Bandpass Filtering**: Removes noise outside the 50-500 Hz range (default)
+- **Bandpass Filtering**: Removes noise outside the 10-500 Hz range (default)
 - **RMS Calculation**: Computes root mean square for signal smoothing
 - **Hampel Filtering**: Removes outliers and artifacts
 
@@ -392,26 +394,29 @@ These processing steps are applied automatically when you load data.
 
 ### Energy Detection Tool
 
-The **Energy Detection** tool helps you locate candidate MVC bursts automatically:
+The **Energy Detection** tool automatically scans your signal and highlights regions that are likely to contain MVC bursts.  To use the Energy Detection Tool you must: 
 
-1. Click the **Energy Detection** button (or use the menu)
-2. Adjust the detection parameters:
-   - **Minimum Silence Duration**: Time between bursts (default: 80ms)
-   - **Minimum Sound Duration**: Minimum burst length (default: 200ms)
-3. Click **Detect** or **Apply**
+1. Use the **EMG channel select** button ![selection button](img/selection_button.png) to make your channel selection
+2. Click the **Energy Detection** button 
+3. Three orange selections will be made automagically
+4. At this point, you can either **Calculate MVC** for the selected channel or refine the selections manually.
 
-The tool will highlight potential burst regions on the plot.
+!!! Note
+	Selection refinement is done by Shift-clicking to delete the current selection and creating a new one.
 
 ### Manual Burst Selection
 
-After using Energy Detection (or instead of it):
-
 1. **Click and Drag**: Click on the plot and drag to select a burst region
-2. **Visual Feedback**: Selected regions are highlighted
-3. **Multiple Selections**: You can select multiple bursts per sensor
-4. **Clear Selection**: Use the clear button (broom icon) to remove a selection
+2. **Visual Feedback**: Selected regions are highlighted in orange
+3. **Multiple Selections**: Multiple bursts can be selected for each sensor. The selection limit is defined by the measurement protocol and managed through the BEST_OF variable.
+4. **Remove a Single Selection**:  Shift-click (right) to remove a single selection
+4. **Clear All Selections**: Use the clear button ![broom icon](img/broom_icon.png)(broom icon) to remove all selections
 
-### Selecting Multiple Bursts
+!!! Note Measurement protocol and Burst selection
+	MVC Calculator limits the number of bursts you can select. The default is 3 bursts, but you can change this by editing the BEST_OF variable in `./config/defaults.py.`
+	
+	
+<!-- ### Selecting Multiple Bursts
 
 For the "best of 3" protocol:
 
@@ -420,38 +425,79 @@ For the "best of 3" protocol:
 3. Select your **third** burst region
 4. The application will automatically identify the maximum value
 
-You can select more than 3 bursts if needed - the system will find the maximum.
+You can select more than 3 bursts if needed - the system will find the maximum. -->
 
 ---
 
 ## Processing and Calculations
 
-### Running the MVC Calculation
+### Understanding the MVC Calculation
 
-Once you've selected bursts for all sensors:
+The MVC (Maximum Voluntary Contraction) calculation is performed in the following stages:
 
-1. Review your selections in the console/log area
-2. Click the **Process** or **Calculate** button
-3. The application will:
-   - Extract the maximum value from each sensor's selected bursts
-   - Calculate the MVC value (typically the peak RMS value)
-   - Display results in the console
+1. The signal is processed, producing a value that represents muscle activity at each time point.
+2. For each selected burst region, this signal is divided into 500 ms windows. The mean value of each window is calculated, and the highest of these means is taken as the Maximum Contraction or **Maximum Voluntary Contraction (MVC)**.
 
-### Understanding MVC Values
+### Processing a single file 
 
-The MVC (Maximum Voluntary Contraction) value represents:
-- The **peak amplitude** from your selected burst regions
-- Used for **normalization** in subsequent analyses
-- Typically the **highest value** from your "best of 3" trials
+With a single .mat file loaded (one tab) and your bursts selected:
+
+1.  Review your selections in the plotting area
+2.  Press the **Calculate MVC** button
+3.  The software will then:
+	- Compute the MVC value (usually the mean amplitude of the highest 500 ms window, as described by Konrad, 2005)
+	- Output the results to the console
+	
+!!! note
+	If you only need the MVC values for this single sensor (one .mat file), you can now press Export XML file (or use File → Export XML file) to finish the process.
+
 
 ### Batch Processing
 
-When processing multiple sensors:
+Batch processing lets you run the MVC calculation across all sensors at once. Each sensor appears in a separate tab (one tab per .mat file), so you can easily navigate and verify the data before or after running the batch.
 
-1. **Select bursts for each sensor** using the tabs
+1. Repeat the '[Processing a single file](#processing-a-single-file)' for each tab (.mat file) 
 2. **Red indicators** will show which sensors still need selections
 3. Once all sensors have selections, click **Process**
 4. Results are calculated for all sensors simultaneously
+
+
+1. Select bursts for each sensor
+   Move through the tabs and repeat the steps described in [Processing a single file](#processing-a-single-file) for each .mat file.  This involves reviewing the signal in the plotting area and selecting the required burst regions.
+
+2. Use the red indicators as a guide
+   Tabs with red indicators show which sensors still require burst selections.
+   Tabs lose the indicator once valid selections have been made (see[Figure 5](#fig-red-in-tabs)
+
+3. Ensure all sensors have valid selections
+   Batch processing can only begin once every sensor (every tab) has at least one valid burst selection.
+
+4. Click the **Batch calculate MVC** button
+   Once all selections are complete, press Process to run the MVC calculation for all sensors simultaneously.
+
+5. View results
+   The software will:
+   - Compute the MVC value for each sensor independently
+   - Display the results in the console
+   - Prepare the output for export (e.g., XML file generation)
+
+
+<figure class="screenshot" id="fig-red-in-tabs">
+
+<img
+    src="img/red_in_tabs.png"
+    data-full="img/red_in_tabs.png"
+    width="700"
+    alt="MVC Calculator UI"
+    class="lightbox-trigger"
+  />
+<figcaption aria-hidden="true">
+</figcaption>
+Figure 5: If you forget to make a burst selection during batch processing, any tab without a valid selection is marked with a red dot.
+</figure>
+
+!!! note
+    If you only need MVC values from one sensor (one .mat file), you may bypass batch processing and directly select Export XML file after computing MVC for that sensor.
 
 ---
 
@@ -462,27 +508,100 @@ When processing multiple sensors:
 The exported XML file contains:
 
 ```xml
-<mvc_results>
-  <sensor name="EMG_1">
-    <burst start="1.23" end="2.45" mvc_value="0.456"/>
-    <burst start="5.67" end="6.89" mvc_value="0.512"/>
-    <burst start="10.11" end="11.33" mvc_value="0.489"/>
-    <max_mvc>0.512</max_mvc>
-  </sensor>
-  <!-- Additional sensors... -->
-</mvc_results>
+<?xml version='1.0' encoding='utf-8'?>
+<MVCResults>
+	<ExportInfo>
+		<Date>2025-12-06</Date>
+		<Time>21:28:24</Time>
+	</ExportInfo>
+	<File name="P05_MVC_Right_FLEX_DIG_SUP.mat">
+		<Row>3</Row>
+		<MVC>804.7818496050679</MVC>
+		<Bursts>
+			<Burst id="1">
+				<Start>16219</Start>
+				<End>39555</End>
+			</Burst>
+			<Burst id="2">
+				<Start>91265</Start>
+				<End>115474</End>
+			</Burst>
+			<Burst id="3">
+				<Start>196201</Start>
+				<End>211145</End>
+			</Burst>
+		</Bursts>
+	</File>
+</MVCResults>
 ```
 
 ### Using Exported Data
 
 The exported XML can be:
+
 - **Imported back** into MVC Calculator for review
 - **Used in other analysis software** that supports XML
-- **Archived** for record-keeping and reproducibility
+- **[Imported into the MuscleMonitor Max patch](#importing-mvc-calculator-xml-files-into-max)** for real-time sEMG signal normalisation
 
 ---
 
-## Batch Processing
+## Sending Log Files for Support
+
+If you encounter issues or need technical support, you can send your session log file directly from MVC Calculator. This helps support staff diagnose problems more quickly.
+
+To send a log file:
+
+  1. Click the **Send log file** button in the console area
+  2. A dialog will appear where you can optionally add a message describing the issue or any relevant details
+  3. Enter your message (optional) and click **OK**
+  4. A progress indicator will show while the email is being sent
+  5. You will receive a confirmation message: "The email was sent successfully"
+
+The log file and your optional message will be sent to the support team for analysis.
+
+<figure class="screenshot" id="fig-send-log">
+
+<img
+    src="img/send_log_dialog.png"
+    data-full="img/send_log_dialog.png"
+    width="400"
+    alt="Send Log File Dialog"
+    class="lightbox-trigger"
+  />
+<figcaption aria-hidden="true">
+</figcaption>
+Figure 7: The Send Log File dialog allows you to add an optional message before sending your session log to support.
+</figure>
+
+---
+
+## Importing MVC Calculator XML Files into Max
+This part of the MuscleMonitor interface allows you to load the MVC values generated by MVC Calculator. These values are used as a normalizing factor so that incoming EMG signals can be normalized in real time.
+
+As noted earlier, each .mat file contains recordings from all muscles included in the measurement protocol. For example, if the protocol involves four muscles, each .mat file will always contain four signal channels.
+
+In MuscleMonitor, you must therefore match each target muscle to the correct channel. This section of the UI is dedicated to making that mapping clear and easy to configure (see[Figure 6](#max_mvc_coeffs).
+
+<figure class="screenshot" id="max_mvc_coeffs">
+
+<img
+    src="img/max_mvc_coeffs.png"
+    data-full="img/max_mvc_coeffs.png"
+    width="700"
+    alt="MAX"
+    class="lightbox-trigger"
+  />
+<figcaption aria-hidden="true">
+</figcaption>
+Figure 6: MuscleMonitor Max interface showing the mvc coefficients section
+</figure>
+
+
+!!! note
+	Even though the dropdown menu automatically populates the MVC value, this value is not fixed. You can make fine adjustments by editing the number box in the usual way.
+
+
+<!-- ## Batch Processing
 
 ### Processing Multiple Files
 
@@ -491,13 +610,12 @@ To process multiple sensor files at once:
 1. **Load all files**: Use Import MAT files and select multiple files (or load them one by one)
 2. **Switch between sensors**: Use the tabs or radio buttons
 3. **Select bursts for each**: Make sure each sensor has at least one burst selected
-4. **Process all**: Click Process to calculate MVC values for all sensors
+4. **Process all**: Click Process to calculate MVC values for all sensors -->
 
-### Visual Indicators
+<!-- ### Visual Indicators
 
-- **Green/Active Tab**: Sensor has burst selections
 - **Red Indicator**: Sensor needs burst selection before processing
-- **Console Messages**: Check the console for status of each sensor
+- **Console Messages**: Check the console for status of each sensor -->
 
 ---
 
@@ -535,12 +653,19 @@ To process multiple sensor files at once:
 
 | Action | Shortcut |
 |--------|----------|
-| Import MAT files | `Ctrl+L` |
-| Import XML file | `Ctrl+X` |
-| Export XML file | `Ctrl+E` |
-| Exit Application | `Ctrl+Q` |
+| Import MAT files | <kbd>Ctrl</kbd> + <kbd>L</kbd> |
+| Import XML file | <kbd>Ctrl</kbd> + <kbd>X</kbd> |
+| Export XML file | <kbd>Ctrl</kbd> + <kbd>E</kbd> |
+| Exit Application | <kbd>Ctrl</kbd> + <kbd>Q</kbd> |
 
 For a complete list, see [Keyboard Shortcuts](keyboard-shortcuts.md).
+
+---
+
+## References
+
+Konrad, P. (2005). *The ABC of EMG: A Practical Introduction to
+Kinesiological Electromyography.* Noraxon<sup>&#174;</sup> Inc.
 
 ---
 

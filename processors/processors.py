@@ -208,7 +208,7 @@ class Processor:
         signal_corrected[signal_corrected > 9800] = 0.0
     
         # Bandpass filter
-        fcutlow, fcuthigh = 50.0, 500.0
+        fcutlow, fcuthigh = 10.0, 500.0
         if fcuthigh >= 0.5 * DEFAULT_SEMG_FREQUENCY:
             raise ValueError("fcuthigh must be < Nyquist")
         b, a = butter(

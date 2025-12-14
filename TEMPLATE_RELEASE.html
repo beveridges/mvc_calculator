@@ -274,5 +274,105 @@ hr.divider {
 {{PREV_VERSION}}
 
 </div>
+
+<script>
+(function() {
+    'use strict';
+    
+    // Track file download
+    function notifyDownload(filename) {
+        const data = {
+            type: 'file_download',
+            filename: filename,
+            url: window.location.href,
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            referrer: document.referrer || 'direct',
+            ip: ''  // IP will be detected server-side
+        };
+        
+        // Send to PHP tracker (silent - no console output)
+        fetch('track_download.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        }).catch(() => {
+            // Silently fail - tracking should not interfere with downloads
+        });
+    }
+    
+    // Track download clicks - use capture phase to catch before navigation
+    document.addEventListener('click', function(e) {
+        // Check if clicked element or parent is a download link
+        const link = e.target.closest('a.file-link') || 
+                     (e.target.tagName === 'A' && e.target.classList.contains('file-link') ? e.target : null);
+        
+        if (link && link.href) {
+            const filename = link.textContent.trim() || link.href.split('/').pop();
+            const isDownloadLink = link.hasAttribute('download') || 
+                                   /\.(zip|msi|exe|dmg|pkg|deb|appimage)$/i.test(link.href);
+            
+            if (isDownloadLink) {
+                console.log('[TRACKING] Download detected:', filename); // DEBUG
+                
+                // Prepare tracking data
+                const data = {
+                    type: 'file_download',
+                    filename: filename,
+                    url: window.location.href,
+                    timestamp: new Date().toISOString(),
+                    userAgent: navigator.userAgent,
+                    referrer: document.referrer || 'direct',
+                    ip: ''
+                };
+                
+                // Use sendBeacon first (most reliable for downloads - works even if page unloads)
+                if (navigator.sendBeacon) {
+                    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+                    const sent = navigator.sendBeacon('track_download.php', blob);
+                    console.log('[TRACKING] sendBeacon result:', sent); // DEBUG
+                }
+                
+                // Also try fetch as backup (with error handling)
+                fetch('track_download.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                })
+                .then(response => {
+                    console.log('[TRACKING] Response status:', response.status); // DEBUG
+                    return response.json();
+                })
+                .then(result => {
+                    console.log('[TRACKING] Full Response:', result); // DEBUG
+                    if (result.email_sent === false || result.email_sent === 0) {
+                        console.error('[TRACKING] ❌ EMAIL FAILED TO SEND!'); // DEBUG
+                        console.error('[TRACKING] Error:', result.error || 'Unknown error'); // DEBUG
+                        console.error('[TRACKING] Error Detail:', result.error_detail || 'No details available'); // DEBUG
+                        console.error('[TRACKING] Failed recipients:', result.failed_recipients); // DEBUG
+                        if (result.smtp_errors) {
+                            console.error('[TRACKING] SMTP Errors:', result.smtp_errors); // DEBUG
+                        }
+                        console.error('[TRACKING] SMTP Host:', result.smtp_host || 'N/A'); // DEBUG
+                        console.error('[TRACKING] SMTP Port:', result.smtp_port || 'N/A'); // DEBUG
+                        console.error('[TRACKING] SMTP User:', result.smtp_user || 'N/A'); // DEBUG
+                        console.error('[TRACKING] From:', result.email_from || 'N/A'); // DEBUG
+                        console.error('[TRACKING] To:', result.email_to || 'N/A'); // DEBUG
+                        console.error('[TRACKING] Check:', result.check_logs || 'Server PHP error logs'); // DEBUG
+                        console.error('[TRACKING] Full error object:', JSON.stringify(result, null, 2)); // DEBUG
+                    } else if (result.email_sent === true || result.email_sent === 1) {
+                        console.log('[TRACKING] ✅ Email sent successfully to:', result.recipients); // DEBUG
+                    } else {
+                        console.warn('[TRACKING] ⚠️ Email status unknown:', result.email_sent); // DEBUG
+                    }
+                })
+                .catch(err => {
+                    console.error('[TRACKING] Fetch error:', err); // DEBUG
+                });
+            }
+        }
+    }, true);
+})();
+</script>
 </body>
 </html>

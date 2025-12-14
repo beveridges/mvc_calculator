@@ -73,6 +73,7 @@ PATTERNS = [
     "MVC_Calculator-*-alpha.*-portable.zip",
     "mvc-calculator_*_amd64.deb",
     "MVC_Calculator-*-alpha.*-x86_64.AppImage",
+    "MuscleMonitor-maxmsp-patch-*-alpha.*.zip",
 ]
 
 VERSION_RE = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
@@ -329,15 +330,45 @@ def scan_builds():
 def detect_description(filename: str):
     fn = filename.lower()
     if fn.endswith(".msi"): return "Windows installer"
+    if "maxmsp" in fn and fn.endswith(".zip"): return "MaxMSP patch and dependencies"
     if fn.endswith(".zip"): return "Portable ZIP build"
     if fn.endswith(".deb"): return "Linux .deb package"
     if fn.endswith(".appimage"): return "Linux AppImage"
     return "Build File"
 
 
+def get_file_sort_priority(filename: str) -> tuple[int, str]:
+    """Get sort priority for files to group by platform.
+    Returns (priority, filename) where lower priority = appears first.
+    Priority order:
+    1. Windows MSI
+    2. Windows ZIP (portable)
+    3. Linux DEB
+    4. Linux AppImage
+    5. MaxMSP zip
+    6. Other files
+    """
+    fn = filename.lower()
+    if fn.endswith(".msi"):
+        return (1, filename)  # Windows MSI first
+    elif fn.endswith(".zip") and "portable" in fn:
+        return (2, filename)  # Windows ZIP second
+    elif fn.endswith(".deb"):
+        return (3, filename)  # Linux DEB third
+    elif fn.endswith(".appimage"):
+        return (4, filename)  # Linux AppImage fourth
+    elif "maxmsp" in fn and fn.endswith(".zip"):
+        return (5, filename)  # MaxMSP zip fifth
+    else:
+        return (6, filename)  # Other files last
+
+
 def build_table(files):
     rows = []
-    for f in sorted(files, key=lambda x: x.name.lower()):
+    # Sort files: Windows files together, Linux files together
+    sorted_files = sorted(files, key=lambda x: get_file_sort_priority(x.name))
+    
+    for f in sorted_files:
         size_bytes = f.stat().st_size
         if size_bytes < 1024 * 1024:
             size_str = f"{size_bytes / 1024:.0f}K"
@@ -422,8 +453,11 @@ def get_existing_files(ftp: ftplib.FTP) -> dict[str, int]:
     return existing
 
 
-def should_upload_file(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int]) -> bool:
-    """Check if file should be uploaded (skip if exists with same size)."""
+def should_upload_file(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int], force: bool = False) -> bool:
+    """Check if file should be uploaded (skip if exists with same size, unless force=True)."""
+    if force:
+        return True
+    
     filename = path.name
     local_size = path.stat().st_size
     
@@ -506,13 +540,105 @@ def create_maxmsp_zip(output_path: Path, found_files: dict[str, Path]) -> bool:
         return False
 
 
-def upload_file_if_needed(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int]):
-    """Upload file only if it doesn't exist or has different size."""
-    if should_upload_file(ftp, path, existing_files):
+def upload_file_if_needed(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int], force: bool = False):
+    """Upload file only if it doesn't exist or has different size (unless force=True)."""
+    if should_upload_file(ftp, path, existing_files, force=force):
         upload_file(ftp, path)
 
 
-def upload_to_ftp(latest_version: str, prev_version: str | None, versions: dict, logo_path: str):
+def find_maxmsp_zip(latest_version: str | None = None) -> Path | None:
+    """Find the MaxMSP patch zip file in versioned directories.
+    Only returns versioned filenames (MuscleMonitor-maxmsp-patch-{version}.zip).
+    Does NOT return old unversioned files (MuscleMonitor-maxmsp-patch.zip).
+    """
+    maxmsp_zip = None
+    if latest_version:
+        version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
+        maxmsp_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{latest_version}.zip"
+    
+    # If not found in specific version, scan for latest version directory
+    if not maxmsp_zip or not maxmsp_zip.exists():
+        # Find all version directories and get the latest one
+        version_dirs = sorted(BUILD_BASE.glob("MVC_Calculator-*"), reverse=True)
+        for version_dir in version_dirs:
+            if version_dir.is_dir():
+                # Extract version from directory name
+                dir_version = version_dir.name.replace("MVC_Calculator-", "")
+                potential_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{dir_version}.zip"
+                if potential_zip.exists():
+                    maxmsp_zip = potential_zip
+                    break
+    
+    # DO NOT fallback to old naming convention - only return versioned files
+    return maxmsp_zip if (maxmsp_zip and maxmsp_zip.exists()) else None
+
+
+def upload_maxmsp_only(force: bool = False):
+    """Upload only the MaxMSP patch zip file."""
+    try:
+        print("\n🔌 Connecting to FTP...")
+        ftp = ftplib.FTP(DEFAULT_HOST)
+        ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
+        
+        ensure_dir(ftp, TARGET_DIR)
+        ftp.cwd(TARGET_DIR)
+        print(f"✓ Connected and changed to {TARGET_DIR}")
+        
+        # Get list of existing files on server
+        print("\n📋 Checking existing files on server...")
+        existing_files = get_existing_files(ftp)
+        if existing_files:
+            print(f"  Found {len(existing_files)} existing file(s)")
+        else:
+            print("  No existing files found (first upload)")
+        
+        # Find and upload MaxMSP zip
+        maxmsp_zip = find_maxmsp_zip()
+        if maxmsp_zip:
+            print(f"\n📤 Uploading MaxMSP patch zip: {maxmsp_zip.name}")
+            upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force)
+            print("\n✅ MaxMSP patch upload complete!")
+        else:
+            print("\n❌ MaxMSP patch zip not found!")
+            print(f"  Searched in: {BUILD_BASE}")
+            print("  Expected filename pattern: MuscleMonitor-maxmsp-patch-{version}.zip")
+            return False
+        
+        ftp.quit()
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error uploading MaxMSP patch: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def upload_auxiliary_files(ftp: ftplib.FTP, existing_files: dict[str, int], include_test: bool = False, latest_version: str | None = None, force: bool = False):
+    """Upload auxiliary/non-release files (PHP scripts, etc.)."""
+    # Upload PHP tracking script
+    php_tracker = Path(__file__).parent / "track_download.php"
+    if php_tracker.exists():
+        print(f"\n📤 Uploading download tracker: track_download.php")
+        upload_file_if_needed(ftp, php_tracker, existing_files, force=force)
+    else:
+        print(f"⚠️  Warning: track_download.php not found")
+    
+    # Upload test script if requested
+    if include_test:
+        test_tracker = Path(__file__).parent / "test_track_download.php"
+        if test_tracker.exists():
+            print(f"\n📤 Uploading test script: test_track_download.php")
+            upload_file_if_needed(ftp, test_tracker, existing_files, force=force)
+    
+    # Upload MaxMSP patch zip if it exists
+    maxmsp_zip = find_maxmsp_zip(latest_version)
+    if maxmsp_zip:
+        print(f"\n📤 Uploading MaxMSP patch zip: {maxmsp_zip.name}")
+        upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force)
+
+
+def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions: dict, logo_path: str, upload_auxiliary: bool = True, include_test: bool = False, force: bool = False):
     """Upload all files to FTP server."""
     ftp = None
     try:
@@ -536,50 +662,80 @@ def upload_to_ftp(latest_version: str, prev_version: str | None, versions: dict,
         logo_file = BUILD_BASE / logo_path
         if logo_file.exists():
             print(f"\n📤 Logo: {logo_path}")
-            upload_file_if_needed(ftp, logo_file, existing_files)
+            upload_file_if_needed(ftp, logo_file, existing_files, force=force)
         else:
             print(f"⚠️  Warning: Logo file not found: {logo_path}")
         
-        # Upload latest release files
-        print(f"\n📤 Latest release ({latest_version}) files:")
-        for f in versions[latest_version]:
-            upload_file_if_needed(ftp, f, existing_files)
-        
-        # Upload latest release notes
-        version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
-        notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{latest_version}.txt"
-        if not notes_file.exists():
-            notes_file = BUILD_BASE / f"RELEASE_NOTES-{latest_version}.txt"
-        
-        if notes_file.exists():
-            print(f"\n📤 Release notes: {notes_file.name}")
-            upload_file_if_needed(ftp, notes_file, existing_files)
-        
-        # Upload previous release files (if exists)
-        if prev_version:
-            print(f"\n📤 Previous release ({prev_version}) files:")
-            for f in versions[prev_version]:
-                upload_file_if_needed(ftp, f, existing_files)
+        # Upload release files only if versions exist
+        if latest_version and versions:
+            # Upload latest release files
+            print(f"\n📤 Latest release ({latest_version}) files:")
+            maxmsp_in_versions = False
+            for f in versions[latest_version]:
+                # Check if this is the MaxMSP zip (to avoid duplicate upload)
+                if "maxmsp" in f.name.lower() and f.name.endswith(".zip"):
+                    maxmsp_in_versions = True
+                    print(f"  ✓ Found MaxMSP zip in scan: {f.name}")
+                upload_file_if_needed(ftp, f, existing_files, force=force)
             
-            # Upload previous release notes
-            prev_version_dir = BUILD_BASE / f"MVC_Calculator-{prev_version}"
-            prev_notes_file = prev_version_dir / "buildfiles" / f"RELEASE_NOTES-{prev_version}.txt"
-            if not prev_notes_file.exists():
-                prev_notes_file = BUILD_BASE / f"RELEASE_NOTES-{prev_version}.txt"
+            # Also upload MaxMSP zip if it exists and wasn't already uploaded
+            if not maxmsp_in_versions:
+                print(f"\n🔍 MaxMSP zip not found in scan_builds(), searching separately...")
+                maxmsp_zip = find_maxmsp_zip(latest_version)
+                if maxmsp_zip:
+                    print(f"📤 MaxMSP patch zip: {maxmsp_zip.name}")
+                    upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force)
+                else:
+                    print(f"\n⚠️  MaxMSP patch zip not found for version {latest_version}")
+                    version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
+                    expected_path = version_dir / f"MuscleMonitor-maxmsp-patch-{latest_version}.zip"
+                    print(f"   Expected location: {expected_path}")
+                    if version_dir.exists():
+                        print(f"   Version directory exists. Files in directory:")
+                        for f in sorted(version_dir.glob("*.zip")):
+                            print(f"     - {f.name}")
+                    else:
+                        print(f"   Version directory does not exist: {version_dir}")
             
-            if prev_notes_file.exists():
-                print(f"\n📤 Release notes: {prev_notes_file.name}")
-                upload_file_if_needed(ftp, prev_notes_file, existing_files)
+            # Upload latest release notes
+            version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
+            notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{latest_version}.txt"
+            if not notes_file.exists():
+                notes_file = BUILD_BASE / f"RELEASE_NOTES-{latest_version}.txt"
+            
+            if notes_file.exists():
+                print(f"\n📤 Release notes: {notes_file.name}")
+                upload_file_if_needed(ftp, notes_file, existing_files, force=force)
+            
+            # Upload previous release files (if exists)
+            if prev_version:
+                print(f"\n📤 Previous release ({prev_version}) files:")
+                for f in versions[prev_version]:
+                    upload_file_if_needed(ftp, f, existing_files, force=force)
+                
+                # Upload previous release notes
+                prev_version_dir = BUILD_BASE / f"MVC_Calculator-{prev_version}"
+                prev_notes_file = prev_version_dir / "buildfiles" / f"RELEASE_NOTES-{prev_version}.txt"
+                if not prev_notes_file.exists():
+                    prev_notes_file = BUILD_BASE / f"RELEASE_NOTES-{prev_version}.txt"
+                
+                if prev_notes_file.exists():
+                    print(f"\n📤 Release notes: {prev_notes_file.name}")
+                    upload_file_if_needed(ftp, prev_notes_file, existing_files, force=force)
         
-        # Upload index.html (always upload as it changes)
-        print(f"\n📤 Uploading index.html (always updated)")
-        upload_file(ftp, OUTPUT)
+        # Upload index.html if it exists (may not exist if no builds found)
+        if OUTPUT.exists():
+            print(f"\n📤 Uploading index.html")
+            if force:
+                upload_file(ftp, OUTPUT)
+            else:
+                upload_file_if_needed(ftp, OUTPUT, existing_files, force=force)
+        else:
+            print(f"⚠️  Info: index.html not found - skipping (normal if no builds exist)")
         
-        # Upload MaxMSP patch zip if it exists
-        maxmsp_zip = BUILD_BASE / "MuscleMonitor-maxmsp-patch.zip"
-        if maxmsp_zip.exists():
-            print(f"\n📤 Uploading MaxMSP patch zip: {maxmsp_zip.name}")
-            upload_file_if_needed(ftp, maxmsp_zip, existing_files)
+        # Upload auxiliary files if requested
+        if upload_auxiliary:
+            upload_auxiliary_files(ftp, existing_files, include_test=include_test, latest_version=latest_version, force=force)
         
         print("\n✅ FTP upload complete!")
     except Exception as e:
@@ -594,6 +750,10 @@ def upload_to_ftp(latest_version: str, prev_version: str | None, versions: dict,
 
 
 def main():
+    # Record start time
+    start_time = datetime.now()
+    start_timestamp = start_time.strftime("%Y-%m-%d %H:%M:%S")
+    
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         description="FTP Deployment Script for MVC Calculator",
@@ -601,7 +761,56 @@ def main():
     )
     parser.add_argument("-u", "--upload", action="store_true", 
                       help="Upload files to FTP server (default: only generate index.html locally)")
+    parser.add_argument("--upload-auxiliary", action="store_true",
+                      help="Upload auxiliary files (track_download.php, etc.) even when no builds are found")
+    parser.add_argument("--upload-maxmsp-only", action="store_true",
+                      help="Upload only the MaxMSP patch zip file (skips all other files)")
+    parser.add_argument("--force", action="store_true",
+                      help="Force upload even if file already exists with same size (overwrites existing files)")
+    parser.add_argument("--include-test", action="store_true",
+                      help="Include test_track_download.php for debugging")
+    parser.add_argument("--upload-html", action="store_true",
+                      help="Upload index.html even when no builds are found (if it exists locally)")
     args = parser.parse_args()
+    
+    # Print header with start timestamp
+    print("="*60)
+    print("MVC CALCULATOR - FTP Deployment Script")
+    print("="*60)
+    print(f"Started at: {start_timestamp}")
+    print(f"Project Root: {Path(__file__).resolve().parent}")
+    print("="*60)
+    print()
+    
+    # Handle --upload-maxmsp-only flag early (before build scanning)
+    if args.upload_maxmsp_only:
+        if not args.upload:
+            print("⚠️  Warning: --upload-maxmsp-only requires -u/--upload flag")
+            print("  Use: python deploy_release_ftp.py -u --upload-maxmsp-only")
+            # Calculate duration even on early return
+            end_time = datetime.now()
+            end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+            duration = end_time - start_time
+            duration_seconds = duration.total_seconds()
+            print("\n" + "="*60)
+            print(f"Exited at: {end_timestamp}")
+            print(f"Duration: {duration_seconds:.2f} seconds")
+            print("="*60)
+            return
+        print("\n📦 MaxMSP Patch Only Upload Mode")
+        success = upload_maxmsp_only(force=args.force)
+        # Calculate duration for maxmsp-only mode
+        end_time = datetime.now()
+        end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        duration = end_time - start_time
+        duration_seconds = duration.total_seconds()
+        print("\n" + "="*60)
+        print("✅ MAXMSP UPLOAD COMPLETED" if success else "❌ MAXMSP UPLOAD FAILED")
+        print("="*60)
+        print(f"Completed at: {end_timestamp}")
+        print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+        print("="*60)
+        return
     
     try:
         print(f"Scanning for builds in versioned directories:")
@@ -611,6 +820,125 @@ def main():
         if not versions:
             print("No builds found.")
             print(f"Checked patterns: {PATTERNS}")
+            
+            # If --upload-auxiliary is set, allow uploading auxiliary files only
+            if args.upload_auxiliary and args.upload:
+                print("\n📤 Uploading auxiliary files only (no builds found)...")
+                logo_path = find_logo_path()
+                # Create a minimal FTP connection just for auxiliary files
+                try:
+                    ftp = ftplib.FTP(DEFAULT_HOST)
+                    ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
+                    ensure_dir(ftp, TARGET_DIR)
+                    ftp.cwd(TARGET_DIR)
+                    existing_files = get_existing_files(ftp)
+                    
+                    # Upload index.html if it exists (always upload if available)
+                    if OUTPUT.exists():
+                        print(f"\n📤 Uploading index.html")
+                        if args.force:
+                            upload_file(ftp, OUTPUT)
+                        else:
+                            upload_file_if_needed(ftp, OUTPUT, existing_files, force=args.force)
+                    elif args.upload_html:
+                        print(f"⚠️  index.html not found at {OUTPUT}")
+                    
+                    # Try to find latest version for MaxMSP zip lookup
+                    version_dirs = sorted(BUILD_BASE.glob("MVC_Calculator-*"), reverse=True)
+                    latest_ver = version_dirs[0].name.replace("MVC_Calculator-", "") if version_dirs else None
+                    upload_auxiliary_files(ftp, existing_files, include_test=args.include_test, latest_version=latest_ver, force=args.force)
+                    ftp.quit()
+                    print("✓ Auxiliary files uploaded successfully")
+                    
+                    # Calculate duration for auxiliary-only upload
+                    end_time = datetime.now()
+                    end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+                    duration = end_time - start_time
+                    duration_seconds = duration.total_seconds()
+                    print("\n" + "="*60)
+                    print("✅ AUXILIARY FILES UPLOAD COMPLETED")
+                    print("="*60)
+                    print(f"Completed at: {end_timestamp}")
+                    print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+                    print("="*60)
+                except Exception as e:
+                    # Calculate duration even on error
+                    end_time = datetime.now()
+                    end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+                    duration = end_time - start_time
+                    duration_seconds = duration.total_seconds()
+                    print("\n" + "="*60)
+                    print("❌ AUXILIARY FILES UPLOAD FAILED")
+                    print("="*60)
+                    print(f"Failed at: {end_timestamp}")
+                    print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+                    print("="*60)
+                    print(f"ERROR: {e}")
+                    import traceback
+                    traceback.print_exc()
+                return
+            elif args.upload_auxiliary:
+                print("  Use -u/--upload along with --upload-auxiliary to upload files")
+            else:
+                print("  Use --upload-auxiliary with -u/--upload to upload auxiliary files (track_download.php, etc.) even when no builds are found")
+            
+            # Check if index.html exists locally and offer to upload it
+            if OUTPUT.exists() and args.upload_html and args.upload:
+                print(f"\n📤 Found existing index.html, uploading...")
+                try:
+                    ftp = ftplib.FTP(DEFAULT_HOST)
+                    ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
+                    ensure_dir(ftp, TARGET_DIR)
+                    ftp.cwd(TARGET_DIR)
+                    existing_files = get_existing_files(ftp)
+                    if args.force:
+                        upload_file(ftp, OUTPUT)
+                    else:
+                        upload_file_if_needed(ftp, OUTPUT, existing_files, force=args.force)
+                    ftp.quit()
+                    print("✓ index.html uploaded successfully")
+                    
+                    # Calculate duration for html-only upload
+                    end_time = datetime.now()
+                    end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+                    duration = end_time - start_time
+                    duration_seconds = duration.total_seconds()
+                    print("\n" + "="*60)
+                    print("✅ INDEX.HTML UPLOAD COMPLETED")
+                    print("="*60)
+                    print(f"Completed at: {end_timestamp}")
+                    print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+                    print("="*60)
+                except Exception as e:
+                    # Calculate duration even on error
+                    end_time = datetime.now()
+                    end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+                    duration = end_time - start_time
+                    duration_seconds = duration.total_seconds()
+                    print("\n" + "="*60)
+                    print("❌ INDEX.HTML UPLOAD FAILED")
+                    print("="*60)
+                    print(f"Failed at: {end_timestamp}")
+                    print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+                    print("="*60)
+                    print(f"ERROR: {e}")
+                    import traceback
+                    traceback.print_exc()
+            elif OUTPUT.exists() and not args.upload_html:
+                print(f"\n💡 Tip: Found existing index.html at {OUTPUT}")
+                print(f"  Use --upload-html with -u/--upload to upload it to the server")
+            
+            # Calculate duration when no builds found and no upload requested
+            end_time = datetime.now()
+            end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+            duration = end_time - start_time
+            duration_seconds = duration.total_seconds()
+            print("\n" + "="*60)
+            print("✅ SCAN COMPLETED (NO BUILDS FOUND)")
+            print("="*60)
+            print(f"Completed at: {end_timestamp}")
+            print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+            print("="*60)
             return
 
         print(f"Found {len(versions)} version(s): {sorted(versions.keys(), reverse=True)}")
@@ -750,7 +1078,7 @@ def main():
         print(f"✓ index.html generated at: {OUTPUT}")
         print(f"  File size: {OUTPUT.stat().st_size} bytes")
         
-        # Check and create MaxMSP patch zip
+        # Check and create MaxMSP patch zip in versioned directory
         print(f"\n🔍 Checking MaxMSP patch dependencies...")
         print(f"  Source directory: {MAXPATCHES_SOURCE}")
         
@@ -769,9 +1097,12 @@ def main():
                 print(f"  ✓ All required dependencies found!")
             
             if found_files:
-                maxmsp_zip = BUILD_BASE / "MuscleMonitor-maxmsp-patch.zip"
+                # Create zip in the versioned directory with versioned filename
+                version_dir = BUILD_BASE / f"MVC_Calculator-{latest}"
+                version_dir.mkdir(parents=True, exist_ok=True)
+                maxmsp_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{latest}.zip"
                 if create_maxmsp_zip(maxmsp_zip, found_files):
-                    print(f"  ✓ MaxMSP patch zip ready for upload")
+                    print(f"  ✓ MaxMSP patch zip created: {maxmsp_zip.name}")
                 else:
                     print(f"  ❌ Failed to create MaxMSP patch zip")
             else:
@@ -785,8 +1116,9 @@ def main():
         else:
             print(f"  2. {logo_path} (⚠️  not found)")
         
-        maxmsp_zip = BUILD_BASE / "MuscleMonitor-maxmsp-patch.zip"
-        if maxmsp_zip.exists():
+        # Check for MaxMSP zip in versioned directory (versioned filename only)
+        maxmsp_zip = find_maxmsp_zip(latest)
+        if maxmsp_zip:
             print(f"  3. {maxmsp_zip.name} ({maxmsp_zip.stat().st_size / (1024*1024):.2f} MB)")
         
         print(f"\n📁 Build files in version directory:")
@@ -800,13 +1132,49 @@ def main():
         if not args.upload:
             print(f"\n[INFO] Skipping FTP upload (use -u/--upload to upload files)")
             print(f"       Generated index.html at: {OUTPUT}")
+            # Calculate duration when skipping upload
+            end_time = datetime.now()
+            end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+            duration = end_time - start_time
+            duration_seconds = duration.total_seconds()
+            print("\n" + "="*60)
+            print("✅ INDEX GENERATION COMPLETED")
+            print("="*60)
+            print(f"Completed at: {end_timestamp}")
+            print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+            print("="*60)
             return
         
         # Upload to FTP
         print(f"\n🚀 Starting FTP upload...")
-        upload_to_ftp(latest, prev, versions, logo_path)
+        upload_to_ftp(latest, prev, versions, logo_path, upload_auxiliary=True, include_test=args.include_test, force=args.force)
+        
+        # Calculate and display duration on success
+        end_time = datetime.now()
+        end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        duration = end_time - start_time
+        duration_seconds = duration.total_seconds()
+        
+        print("\n" + "="*60)
+        print("✅ DEPLOYMENT COMPLETED SUCCESSFULLY!")
+        print("="*60)
+        print(f"Completed at: {end_timestamp}")
+        print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+        print("="*60)
         
     except Exception as e:
+        # Calculate duration even on error
+        end_time = datetime.now()
+        end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        duration = end_time - start_time
+        duration_seconds = duration.total_seconds()
+        
+        print("\n" + "="*60)
+        print("❌ DEPLOYMENT FAILED")
+        print("="*60)
+        print(f"Failed at: {end_timestamp}")
+        print(f"Duration: {duration_seconds:.2f} seconds ({duration_seconds/60:.2f} minutes)")
+        print("="*60)
         print(f"ERROR: {e}")
         import traceback
         traceback.print_exc()

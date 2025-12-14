@@ -2,12 +2,47 @@
 
 {% block extrahead %}
   {{ super() }}
+  {# Redirect root index page to user-guide - runs immediately #}
+  <script>
+    (function() {
+      var currentPath = window.location.pathname;
+      // Detect if we're on the root index page
+      var isRootIndex = (currentPath === '/' || 
+                        currentPath === '/index.html' || 
+                        (currentPath.endsWith('/index.html') && currentPath.split('/').filter(function(p) { return p && p !== 'index.html' && p !== ''; }).length === 0));
+      
+      // Redirect any root index page to user-guide
+      if (isRootIndex) {
+        // Redirect to user-guide
+        if (window.location.protocol === 'file:') {
+          // For file:// protocol, construct relative path
+          var currentDir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+          if (currentDir === '') currentDir = '/';
+          window.location.replace('file://' + currentDir + '/user-guide/index.html');
+        } else {
+          // For http:// protocol
+          var baseUrl = window.location.protocol + '//' + window.location.host;
+          window.location.replace(baseUrl + '/user-guide/');
+        }
+      }
+    })();
+  </script>
   {# Inject version between logo and search using JavaScript #}
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       var logoLink = document.querySelector('.wy-side-nav-search > a');
       var searchDiv = document.querySelector('.wy-side-nav-search div[role="search"]');
       if (logoLink && searchDiv && logoLink.parentNode) {
+        // Make logo non-clickable by removing href and preventing click
+        logoLink.removeAttribute('href');
+        logoLink.style.cursor = 'default';
+        logoLink.style.pointerEvents = 'none';
+        logoLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        });
+        
         // Create version div
         var versionDiv = document.createElement('div');
         versionDiv.className = 'inline-version';
@@ -21,16 +56,51 @@
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
         
-        // Force layout recalculation to fix spacing issues
+        // Force layout recalculation to fix spacing issues and sidebar scroll position
+        // Use multiple requestAnimationFrame calls to ensure it happens after all rendering
         requestAnimationFrame(function() {
-          // Trigger reflow by reading layout properties
-          var height = versionDiv.offsetHeight;
-          var parent = logoLink.parentNode;
-          if (parent) {
-            parent.style.display = 'none';
-            parent.offsetHeight; // Force reflow
-            parent.style.display = '';
-          }
+          requestAnimationFrame(function() {
+            // Trigger reflow by reading layout properties
+            var height = versionDiv.offsetHeight;
+            var parent = logoLink.parentNode;
+            if (parent) {
+              parent.style.display = 'none';
+              parent.offsetHeight; // Force reflow
+              parent.style.display = '';
+            }
+            
+            // Ensure sidebar is scrolled to top - try multiple selectors
+            var sidebar = document.querySelector('.wy-side-scroll');
+            if (sidebar) {
+              sidebar.scrollTop = 0;
+            }
+            
+            // Also check for the navigation menu container
+            var navMenu = document.querySelector('.wy-menu');
+            if (navMenu && navMenu.parentElement) {
+              var navContainer = navMenu.parentElement;
+              if (navContainer.scrollTop !== undefined) {
+                navContainer.scrollTop = 0;
+              }
+            }
+            
+            // Check for wy-nav-side (the main sidebar container)
+            var navSide = document.querySelector('.wy-nav-side');
+            if (navSide && navSide.scrollTop !== undefined) {
+              navSide.scrollTop = 0;
+            }
+            
+            // One more frame to ensure everything is settled
+            requestAnimationFrame(function() {
+              // Final check - scroll all possible sidebar containers to top
+              var allSidebars = document.querySelectorAll('.wy-side-scroll, .wy-nav-side, .wy-menu-vertical');
+              allSidebars.forEach(function(sb) {
+                if (sb && sb.scrollTop !== undefined) {
+                  sb.scrollTop = 0;
+                }
+              });
+            });
+          });
         });
       }
       

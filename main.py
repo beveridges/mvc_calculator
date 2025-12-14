@@ -5,7 +5,9 @@ Moviolabs download page.
 https://moviolabs.com/downloads/MVC_Calculator/releases/
 USERNAME: imm.qtm.machine
 PASSWORD: Nc)D6J(Fs1q+t=&x
-                
+
+USERNAME telemetry
+PASSWORD: uGc84!qy~erQ?nlz
 '''
 from __future__ import print_function
 import os, sys, time, logging, faulthandler
@@ -704,20 +706,18 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     )
     # ---------------- Help launcher -----------------
     def launch_help(self):
-        """Open the MkDocs help site."""
+        """Open the MkDocs help site - ALWAYS opens user-guide, never index.html."""
         # Use base_path() for frozen EXE compatibility
-        # Open user-guide.html directly instead of index.html
+        # ALWAYS open user-guide.html directly - NEVER show index.html
         site_index = base_path("docs_site", "site", "user-guide", "index.html")
         if not os.path.exists(site_index):
-            # Fallback to main index if user-guide doesn't exist
-            site_index = base_path("docs_site", "site", "index.html")
-            if not os.path.exists(site_index):
-                QMessageBox.warning(
-                    self,
-                    "Help Not Available",
-                    "This build does not include help files."
-                )
-                return
+            # Do NOT fallback to index.html - show error instead
+            QMessageBox.warning(
+                self,
+                "Help Not Available",
+                f"This build does not include help files.\n\nExpected location:\n{site_index}"
+            )
+            return
 
         file_url = urljoin('file:', urllib.request.pathname2url(os.path.abspath(site_index)))
         try:

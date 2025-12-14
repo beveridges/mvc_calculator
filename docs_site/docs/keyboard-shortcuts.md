@@ -4,10 +4,10 @@
 
 | Action | Shortcut | Menu Location |
 |--------|----------|---------------|
-| Import MAT files | `Ctrl+L` | File → Import MAT files |
-| Import XML file | `Ctrl+X` | File → Import XML file |
-| Export XML file | `Ctrl+E` | File → Export XML file |
-| Exit Application | `Ctrl+Q` | File → Exit |
+| Import MAT files | <kbd>Ctrl</kbd> + <kbd>L</kbd> | File → Import MAT files |
+| Import XML file | <kbd>Ctrl</kbd> + <kbd>X</kbd> | File → Import XML file |
+| Export XML file | <kbd>Ctrl</kbd> + <kbd>E</kbd> | File → Export XML file |
+| Exit Application | <kbd>Ctrl</kbd> + <kbd>Q</kbd> | File → Exit |
 
 ## Navigation
 
@@ -39,9 +39,9 @@
 
 ### Using Shortcuts
 
-1. **Import Files Quickly**: Use `Ctrl+L` to quickly load new files
-2. **Save Frequently**: Use `Ctrl+E` to export results regularly
-3. **Quick Exit**: Use `Ctrl+Q` to close the application
+1. **Import Files Quickly**: Use <kbd>Ctrl</kbd> + <kbd>L</kbd> to quickly load new files
+2. **Save Frequently**: Use <kbd>Ctrl</kbd> + <kbd>E</kbd> to export results regularly
+3. **Quick Exit**: Use <kbd>Ctrl</kbd> + <kbd>Q</kbd> to close the application
 
 ### Mouse Operations
 
@@ -51,11 +51,11 @@
 
 ### Workflow Optimization
 
-1. Load files with `Ctrl+L`
+1. Load files with <kbd>Ctrl</kbd> + <kbd>L</kbd>
 2. Use Energy Detection tool (button click)
 3. Fine-tune selections with mouse
 4. Process with button click
-5. Export with `Ctrl+E`
+5. Export with <kbd>Ctrl</kbd> + <kbd>E</kbd>
 
 ---
 
@@ -72,16 +72,16 @@ For now, use the menu bar if you prefer mouse navigation over keyboard shortcuts
 ### Windows
 
 - All shortcuts work as listed
-- `Ctrl` key is used (not `Cmd`)
+- <kbd>Ctrl</kbd> key is used (not <kbd>Cmd</kbd>)
 
 ### Linux
 
 - All shortcuts work as listed
-- `Ctrl` key is used
+- <kbd>Ctrl</kbd> key is used
 
 ### Mac (if supported)
 
-- `Ctrl` may need to be `Cmd` (check menu for actual shortcuts)
+- <kbd>Ctrl</kbd> may need to be <kbd>Cmd</kbd> (check menu for actual shortcuts)
 - Some shortcuts may differ
 
 ---

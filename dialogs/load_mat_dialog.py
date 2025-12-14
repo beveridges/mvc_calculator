@@ -70,7 +70,12 @@ class LoadMat(QDialog):
         uic.loadUi(ui_path, self)
 
         self.setWindowIcon(QIcon(resource_path("icons", "icn_matlab.png")))
+        # Set minimum width to accommodate larger button text
+        self.setMinimumWidth(720)
         self.paths = []
+
+        # Increase font sizes for better readability
+        self._increase_font_sizes()
 
         # Buttons
         self.btnSelectFiles.clicked.connect(lambda: self.select_files("*.mat"))
@@ -91,6 +96,27 @@ class LoadMat(QDialog):
         self._thread = None
         self._worker = None
         self._progress = None
+
+    # ---------------------- FONT SIZE INCREASE ----------------------
+    def _increase_font_sizes(self):
+        """Increase font sizes for all UI elements in the dialog."""
+        # Increase button font sizes to 11pt
+        button_font_size = 11
+        for button in [self.btnSelectFiles, self.btnImport, self.btnClose, 
+                      self.btnClear, self.btnRemoveSelected]:
+            if button:
+                font = button.font()
+                font.setPointSize(button_font_size)
+                button.setFont(font)
+        
+        # Increase list widget font size to 11pt
+        if self.listFiles:
+            font = self.listFiles.font()
+            font.setPointSize(11)
+            self.listFiles.setFont(font)
+        
+        # Increase progress dialog label font size (will be applied when dialog is created)
+        # This is handled in _ensure_progress_dialog
 
     # ---------------------- CLEAR BUTTON ----------------------
     def clear_list(self):
@@ -162,11 +188,27 @@ class LoadMat(QDialog):
         dlg.setAutoReset(False)
         dlg.setMinimumDuration(0)
         dlg.setValue(0)
+        # Make the progress dialog wider so the progress bar is easier to see
+        dlg.setMinimumWidth(500)
 
         bar = dlg.findChild(QProgressBar)
         if bar:
             bar.setTextVisible(True)
             bar.setFormat("%p%")
+            # Increase progress bar font size
+            font = bar.font()
+            font.setPointSize(11)
+            bar.setFont(font)
+        
+        # Increase progress dialog label font size
+        # Find the label in the progress dialog
+        from PyQt5.QtWidgets import QLabel
+        labels = dlg.findChildren(QLabel)
+        for label in labels:
+            font = label.font()
+            font.setPointSize(11)
+            label.setFont(font)
+        
         dlg.show()
         QCoreApplication.processEvents()
         return dlg

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Download Tracking Test</title>
+</head>
+<body>
+    <h1>Download Tracking Test</h1>
+    <p>This page tests if download tracking is working.</p>
+    
+    <h2>Test Download Link</h2>
+    <p><a href="MVC_Calculator-25.12-alpha.01.00.msi" class="file-link" download>Test Download: MVC_Calculator-25.12-alpha.01.00.msi</a></p>
+    
+    <h2>Console Output</h2>
+    <p>Open browser console (F12) to see tracking messages.</p>
+    <div id="status"></div>
+    
+    <script>
+    (function() {
+        'use strict';
+        
+        // Track file download
+        function notifyDownload(filename) {
+            const data = {
+                type: 'file_download',
+                filename: filename,
+                url: window.location.href,
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                referrer: document.referrer || 'direct',
+                ip: ''
+            };
+            
+            console.log('Sending download notification:', data);
+            
+            // Send to PHP tracker
+            fetch('track_download.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                console.log('Tracking response:', result);
+                document.getElementById('status').innerHTML = 
+                    '<p style="color: green;">✓ Tracking sent! Check response in console.</p>' +
+                    '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            })
+            .catch(err => {
+                console.error('Tracking error:', err);
+                document.getElementById('status').innerHTML = 
+                    '<p style="color: red;">✗ Error: ' + err.message + '</p>';
+            });
+        }
+        
+        // Track download clicks - use capture phase to catch before navigation
+        document.addEventListener('click', function(e) {
+            // Check if clicked element or parent is a download link
+            const link = e.target.closest('a.file-link') || 
+                         (e.target.tagName === 'A' && e.target.classList.contains('file-link') ? e.target : null);
+            
+            if (link && link.href) {
+                const filename = link.textContent.trim() || link.href.split('/').pop();
+                const isDownloadLink = link.hasAttribute('download') || 
+                                       /\.(zip|msi|exe|dmg|pkg|deb|appimage)$/i.test(link.href);
+                
+                if (isDownloadLink) {
+                    console.log('Download link clicked:', filename);
+                    
+                    // Prepare tracking data
+                    const data = {
+                        type: 'file_download',
+                        filename: filename,
+                        url: window.location.href,
+                        timestamp: new Date().toISOString(),
+                        userAgent: navigator.userAgent,
+                        referrer: document.referrer || 'direct',
+                        ip: ''
+                    };
+                    
+                    // Use sendBeacon first (most reliable for downloads - works even if page unloads)
+                    if (navigator.sendBeacon) {
+                        const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+                        const sent = navigator.sendBeacon('track_download.php', blob);
+                        console.log('sendBeacon result:', sent);
+                    }
+                    
+                    // Also try fetch as backup
+                    notifyDownload(filename);
+                }
+            }
+        }, true);
+    })();
+    </script>
+</body>
+</html>
+

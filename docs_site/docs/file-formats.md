@@ -4,28 +4,19 @@
 
 MVC Calculator supports the following file formats:
 
-1. **MATLAB `.mat` files** - For importing sEMG data
+1. **MATLAB<sup>&#174;</sup> `.mat` files** - For importing sEMG data
 2. **XML files** - For importing/exporting MVC calculation results
 
 ---
 
-## MATLAB .mat Files
+## MATLAB<sup>&#174;</sup> .mat Files
 
 ### Overview
 
-MVC Calculator imports sEMG data from MATLAB `.mat` files, typically exported from:
-- **Qualisys** motion capture systems
-- **Noraxon** EMG recording systems
-- Other systems that export standard MATLAB format
+MVC Calculator imports sEMG data from MATLAB<sup>&#174;</sup> `.mat` files, exported from the IMM **QualisysAB<sup>&#174;</sup>**/**Noraxon<sup>&#174;</sup>** motion capture configuration.
 
-### File Structure
 
-The application automatically detects the first non-metadata variable in the `.mat` file. The expected structure:
 
-```
-.mat file
-├── Variable containing sEMG data (time series)
-└── Metadata variables (starting with "__")
 ```
 
 ### Data Format
@@ -51,7 +42,7 @@ You can load:
 ### Common Issues
 
 **Problem**: File loads but shows error
-- **Solution**: Verify file is valid MATLAB format, try opening in MATLAB first
+- **Solution**: Verify file is valid MATLAB<sup>&#174;</sup> format, try opening in MATLAB<sup>&#174;</sup> first
 
 **Problem**: No signal displayed
 - **Solution**: Check that data variable is properly named and contains time series data
@@ -267,10 +258,10 @@ See [Troubleshooting Guide](troubleshooting.md) for:
 
 ## Technical Details
 
-### MATLAB File Reading
+### MATLAB<sup>&#174;</sup> File Reading
 
-MVC Calculator uses `scipy.io.loadmat()` to read MATLAB files:
-- Supports MATLAB v5, v6, v7, and v7.3 formats
+MVC Calculator uses `scipy.io.loadmat()` to read MATLAB<sup>&#174;</sup> files:
+- Supports MATLAB<sup>&#174;</sup> v5, v6, v7, and v7.3 formats
 - Automatically handles compressed files
 - Extracts first non-metadata variable
 

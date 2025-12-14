@@ -253,7 +253,7 @@
                </font>
               </property>
               <property name="text">
-               <string>Load MATLAB files</string>
+               <string>Import MAT files</string>
               </property>
              </widget>
             </item>
@@ -271,7 +271,7 @@
                </font>
               </property>
               <property name="text">
-               <string>Export results</string>
+               <string>Export XML file</string>
               </property>
              </widget>
             </item>
