@@ -109,7 +109,7 @@ wxs_content = f"""<?xml version="1.0" encoding="UTF-8"?>
            Manufacturer="Moviolabs" UpgradeCode="9a1f9b7a-d0b3-4b8a-aad9-2d2b06c9a111">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
 
-    <MediaTemplate />
+    <MediaTemplate EmbedCab="yes" />
     <Icon Id="AppIcon.ico" SourceFile="{ICON_PATH}" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
 
@@ -223,6 +223,14 @@ try:
         cab_dest = BUILDFILES_DIR / "cab1.cab"
         shutil.move(str(cab_src), str(cab_dest))
         print(f"✅ Moved cab1.cab to buildfiles")
+    
+    # CRITICAL: Copy CAB file to same directory as MSI (installer expects it there)
+    # Even with EmbedCab="yes", we copy it as a safeguard
+    cab_in_buildfiles = BUILDFILES_DIR / "cab1.cab"
+    if cab_in_buildfiles.exists():
+        cab_with_msi = msi_path.parent / "cab1.cab"
+        shutil.copy2(str(cab_in_buildfiles), str(cab_with_msi))
+        print(f"✅ Copied cab1.cab to MSI directory: {cab_with_msi}")
         
 except subprocess.CalledProcessError as e:
     print(f"[ERROR] WiX build failed: {e}")
