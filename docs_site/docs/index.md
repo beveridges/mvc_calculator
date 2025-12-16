@@ -1,7 +1,7 @@
 # Welcome to MVC Calculator
 
 ![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
-![Version](https://img.shields.io/badge/version-25.12--alpha.01.01-orange?style=flat-square)
+![Version](https://img.shields.io/badge/version-25.12--alpha.01.14-orange?style=flat-square)
 
 <script>
   // Immediate redirect to user-guide - runs before page renders

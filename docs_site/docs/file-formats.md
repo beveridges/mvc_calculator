@@ -15,13 +15,10 @@ MVC Calculator supports the following file formats:
 
 MVC Calculator imports sEMG data from MATLAB<sup>&#174;</sup> `.mat` files, exported from the IMM **QualisysAB<sup>&#174;</sup>**/**Noraxon<sup>&#174;</sup>** motion capture configuration.
 
-
-
-```
-
 ### Data Format
 
 The sEMG data should be:
+
 - **Time series data**: Array or matrix of signal values
 - **Sampling frequency**: Default assumed 1500 Hz (configurable)
 - **Units**: Typically in millivolts (mV) or microvolts (µV)
@@ -29,6 +26,7 @@ The sEMG data should be:
 ### Loading Multiple Files
 
 You can load:
+
 - **Single file**: One sensor's data
 - **Multiple files**: 4 or 6 sensors (typical configuration)
 - **Batch processing**: All files processed together
@@ -42,12 +40,15 @@ You can load:
 ### Common Issues
 
 **Problem**: File loads but shows error
+
 - **Solution**: Verify file is valid MATLAB<sup>&#174;</sup> format, try opening in MATLAB<sup>&#174;</sup> first
 
 **Problem**: No signal displayed
+
 - **Solution**: Check that data variable is properly named and contains time series data
 
 **Problem**: Wrong sampling frequency
+
 - **Solution**: Adjust `DEFAULT_SEMG_FREQUENCY` in `config/defaults.py`
 
 ---
@@ -57,6 +58,7 @@ You can load:
 ### Overview
 
 MVC Calculator exports results in XML format, containing:
+
 - Selected burst regions for each sensor
 - Calculated MVC values
 - Metadata (timestamps, file paths, etc.)
@@ -104,30 +106,36 @@ MVC Calculator exports results in XML format, containing:
 ### XML Elements
 
 #### Root Element: `<mvc_results>`
+
 - Contains all MVC calculation results
 
 #### Metadata Section: `<metadata>`
+
 - **`<version>`**: XML format version
 - **`<timestamp>`**: When the calculation was performed
 - **`<application>`**: Application name and version
 
 #### Sensor Section: `<sensor>`
+
 - **`name`**: Sensor identifier (e.g., "EMG_1", "EMG_2")
 - **`source_file`**: Path to original `.mat` file
 
 #### Burst Section: `<burst>`
+
 - **`<start_time>`**: Start time of burst (seconds)
 - **`<end_time>`**: End time of burst (seconds)
 - **`<mvc_value>`**: Calculated MVC value for this burst
 - **`<rms_value>`**: RMS value for this burst
 
 #### Summary: `<max_mvc>`
+
 - Maximum MVC value from all bursts (the "best of 3" result)
 - **`<selected_burst_index>`**: Which burst had the maximum value (0-indexed)
 
 ### Importing XML Files
 
 When you import an XML file:
+
 - Burst selections are restored
 - MVC values are restored
 - You can review and modify selections
@@ -145,12 +153,14 @@ When you import an XML file:
 
 ### Recommended Naming
 
-For `.mat` files:
+**For `.mat` files:**
+
 - Use descriptive names: `Participant01_Sensor1.mat`
 - Include sensor information: `EMG_Leg_Left.mat`
 - Avoid special characters: Use underscores instead of spaces
 
-For XML exports:
+**For XML exports:**
+
 - Include participant ID: `Participant01_MVC_Results.xml`
 - Include date: `MVC_Results_2024-01-15.xml`
 - Be descriptive: `Session1_Baseline_MVC.xml`
@@ -188,6 +198,7 @@ When you load a `.mat` file, MVC Calculator automatically:
 ### Processing Parameters
 
 Default parameters (configurable in `config/defaults.py`):
+
 - **Sampling Frequency**: 1500 Hz
 - **Bandpass Filter**: 20-450 Hz
 - **RMS Window**: 50 ms
@@ -200,6 +211,7 @@ Default parameters (configurable in `config/defaults.py`):
 ### What Gets Exported
 
 When you export to XML:
+
 - ✅ All selected burst regions
 - ✅ Calculated MVC values
 - ✅ Maximum MVC value (best of 3)
@@ -244,6 +256,7 @@ When you export to XML:
 ### .mat File Issues
 
 See [Troubleshooting Guide](troubleshooting.md) for:
+
 - Files that won't load
 - Incorrect data display
 - Format compatibility issues
@@ -261,6 +274,7 @@ See [Troubleshooting Guide](troubleshooting.md) for:
 ### MATLAB<sup>&#174;</sup> File Reading
 
 MVC Calculator uses `scipy.io.loadmat()` to read MATLAB<sup>&#174;</sup> files:
+
 - Supports MATLAB<sup>&#174;</sup> v5, v6, v7, and v7.3 formats
 - Automatically handles compressed files
 - Extracts first non-metadata variable
@@ -268,6 +282,7 @@ MVC Calculator uses `scipy.io.loadmat()` to read MATLAB<sup>&#174;</sup> files:
 ### XML Generation
 
 XML files are generated using Python's `xml.etree.ElementTree`:
+
 - UTF-8 encoding
 - Human-readable format
 - Valid XML structure

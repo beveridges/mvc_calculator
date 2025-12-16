@@ -122,7 +122,7 @@
       - Each sensor needs separate selections
 
    5. **Clear Previous Selections**:
-      - Use the clear button ![broom icon](img/broom_icon.png)(broom icon) (broom icon) if needed
+      - Use the clear button ![broom icon](user-guide/img/broom_icon.png) if needed
       - Try selecting a different region
 
 ---
@@ -298,24 +298,27 @@ When contacting support@moviolabs.com, include:
 ### Checking Configuration
 
 Default settings are in `config/defaults.py`:
-   - `BEST_OF`: Number of trials for "best of X" (default: 3)
-   - `DEFAULT_SEMG_FREQUENCY`: Sampling frequency in Hz (default: 1500)
+
+- `BEST_OF`: Number of trials for "best of X" (default: 3)
+- `DEFAULT_SEMG_FREQUENCY`: Sampling frequency in Hz (default: 1500)
 
 If you modify these, ensure values are appropriate for your data.
 
 ### Debug Mode
 
 During alpha phase:
-   - A terminal window shows detailed information
-   - Check this for error messages and warnings
-   - Log level can be adjusted in the code
+
+- A terminal window shows detailed information
+- Check this for error messages and warnings
+- Log level can be adjusted in the code
 
 ### File Format Verification
 
 To verify your `.mat` file structure:
-   1. Open in MATLAB<sup>&#174;</sup> and check variable names
-   2. Ensure data is in expected format (time series)
-   3. Check sampling frequency matches your settings
+
+1. Open in MATLAB<sup>&#174;</sup> and check variable names
+2. Ensure data is in expected format (time series)
+3. Check sampling frequency matches your settings
 
 ---
 

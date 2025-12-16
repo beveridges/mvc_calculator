@@ -732,10 +732,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not open browser:\n{e}")
 
-    # ---------------- License Info Dialog ----------------
+    # ---------------- License Info Dialog ---------------- 
     def show_license_info(self):
         """Show dialog with HWID and license request information."""
-        from utilities.license import get_machine_id, get_country
+        from pathlib import Path
+        from utilities.license import get_machine_id, get_country, get_license_file_path
         
         # Get machine information
         hwid = get_machine_id()
@@ -767,21 +768,21 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         main_layout.addWidget(scroll)
         
         # Title
-        title = QLabel("<h2>Request License Key</h2>")
-        title.setStyleSheet("font-size: 16pt; font-weight: bold; margin-bottom: 10px;")
+        title = QLabel("Request License Key")
+        title.setStyleSheet("font-size: 20pt; font-weight: bold; color: #2c3e50; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #3498db;")
         layout.addWidget(title)
         
         # Step-by-step instructions
-        steps_label = QLabel("<b>How to Request a License:</b>")
-        steps_label.setStyleSheet("font-size: 11pt; margin-top: 10px;")
+        steps_label = QLabel("How to Request a License")
+        steps_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #34495e; margin-top: 15px; margin-bottom: 8px;")
         layout.addWidget(steps_label)
         
         steps_text = QLabel(
             "<ol>"
             "<li><b>Copy the email template</b> below (it already includes your Hardware ID and Country)</li>"
             "<li><b>Paste it into your email client</b> and send it to support@moviolabs.com</li>"
-            "<li><b>Wait for your license key</b> (you'll receive it via email)</li>"
-            "<li><b>Save the license key</b> as 'license.key' in the location shown below</li>"
+            "<li><b>Wait for your license.key file</b> (you'll receive it as an email attachment)</li>"
+            "<li><b>Download and save the license.key file</b> to one of the locations shown below</li>"
             "<li><b>Restart the application</b> to activate your license</li>"
             "</ol>"
         )
@@ -796,8 +797,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         layout.addWidget(separator)
         
         # Section header
-        info_header = QLabel("<b>Your Machine Information:</b>")
-        info_header.setStyleSheet("font-size: 11pt; margin-top: 10px;")
+        info_header = QLabel("Your Machine Information")
+        info_header.setStyleSheet("font-size: 14pt; font-weight: bold; color: #34495e; margin-top: 15px; margin-bottom: 8px;")
         layout.addWidget(info_header)
         
         info_note = QLabel(
@@ -808,8 +809,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         layout.addWidget(info_note)
         
         # HWID section (display only, not copyable)
-        hwid_label = QLabel("<b>Hardware ID (HWID):</b>")
-        hwid_label.setStyleSheet("margin-top: 5px;")
+        hwid_label = QLabel("Hardware ID (HWID)")
+        hwid_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #2c3e50; margin-top: 12px; margin-bottom: 5px;")
         layout.addWidget(hwid_label)
         
         hwid_explanation = QLabel(
@@ -825,8 +826,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         layout.addWidget(hwid_display)
         
         # Country section (display only, not copyable)
-        country_label = QLabel("<b>Country:</b>")
-        country_label.setStyleSheet("margin-top: 10px;")
+        country_label = QLabel("Country")
+        country_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #2c3e50; margin-top: 12px; margin-bottom: 5px;")
         layout.addWidget(country_label)
         
         country_explanation = QLabel(
@@ -847,8 +848,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         layout.addWidget(separator2)
         
         # Email template section
-        email_label = QLabel("<b>Quick Email Template:</b>")
-        email_label.setStyleSheet("font-size: 11pt; margin-top: 10px;")
+        email_label = QLabel("Quick Email Template")
+        email_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #34495e; margin-top: 15px; margin-bottom: 8px;")
         layout.addWidget(email_label)
         
         email_note = QLabel(
@@ -887,38 +888,64 @@ Thank you!"""
         layout.addWidget(separator3)
         
         # License file location info
-        license_path = get_license_file_path()
-        license_location_label = QLabel("<b>Where to Save Your License Key:</b>")
-        license_location_label.setStyleSheet("font-size: 11pt; margin-top: 10px;")
+        license_location_label = QLabel("Where to Save Your License Key")
+        license_location_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #34495e; margin-top: 15px; margin-bottom: 8px;")
         layout.addWidget(license_location_label)
         
         location_instructions = QLabel(
-            "<b>After receiving your license key via email:</b><br>"
-            "1. Copy the entire license key text from the email<br>"
-            "2. Create a new text file named <b>license.key</b> (exactly this name)<br>"
-            "3. Paste the license key into this file and save it<br>"
-            "4. Place the file in the directory shown below<br>"
-            "5. Restart the application"
+            "<b>After receiving your license.key file via email:</b><br>"
+            "1. Download the attached <b>license.key</b> file from the email<br>"
+            "2. Save the file to one of the locations shown below (keep the exact filename)<br>"
+            "3. Restart the application to activate your license"
         )
         location_instructions.setWordWrap(True)
         location_instructions.setStyleSheet("margin-bottom: 10px; margin-left: 10px;")
         layout.addWidget(location_instructions)
         
-        license_path_layout = QHBoxLayout()
-        license_path_input = QLineEdit()
-        license_path_input.setText(str(license_path))
-        license_path_input.setReadOnly(True)
-        license_path_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
-        license_path_copy_btn = QPushButton("Copy Path")
-        license_path_copy_btn.setStyleSheet("padding: 5px 15px;")
-        license_path_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(str(license_path)))
-        license_path_layout.addWidget(license_path_input)
-        license_path_layout.addWidget(license_path_copy_btn)
-        layout.addLayout(license_path_layout)
+        # Recommended location (generic path - directory only)
+        recommended_path = "%APPDATA%\\MVC_Calculator\\"
+        recommended_label = QLabel("1. Recommended Location (persists across updates)")
+        recommended_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #27ae60; margin-top: 12px; margin-bottom: 5px;")
+        layout.addWidget(recommended_label)
+        
+        recommended_path_layout = QHBoxLayout()
+        recommended_path_input = QLineEdit()
+        recommended_path_input.setText(recommended_path)
+        recommended_path_input.setReadOnly(True)
+        recommended_path_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
+        recommended_path_copy_btn = QPushButton("Copy Path")
+        recommended_path_copy_btn.setStyleSheet("padding: 5px 15px;")
+        recommended_path_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(recommended_path))
+        recommended_path_layout.addWidget(recommended_path_input)
+        recommended_path_layout.addWidget(recommended_path_copy_btn)
+        layout.addLayout(recommended_path_layout)
+        
+        # Legacy location (example path - directory only)
+        legacy_path = "C:\\Program Files\\MVC_Calculator\\"
+        legacy_label = QLabel("2. Alternative Legacy Location (example)")
+        legacy_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #e67e22; margin-top: 12px; margin-bottom: 5px;")
+        layout.addWidget(legacy_label)
+        
+        legacy_path_display = QLabel(f"<code style='font-family: Courier New; font-size: 10pt;'>{legacy_path}</code>")
+        legacy_path_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
+        legacy_path_display.setWordWrap(True)
+        layout.addWidget(legacy_path_display)
+
+        # Portable version location (placeholder - directory only)
+        portable_path = "<portable unzip folder>\\MVC_Calculator\\"
+        portable_label = QLabel("3. Portable Version (example)")
+        portable_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #e67e22; margin-top: 12px; margin-bottom: 5px;")
+        layout.addWidget(portable_label)
+
+        portable_path_display = QLabel(f"<code style='font-family: Courier New; font-size: 10pt;'>{portable_path}</code>")
+        portable_path_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
+        portable_path_display.setWordWrap(True)
+        layout.addWidget(portable_path_display)
         
         location_note = QLabel(
-            "<b>Important:</b> This location persists across application updates. "
-            "Once you place your license here, you won't need to re-enter it when updating the software."
+            "<b>Note:</b> Save the license.key file in one of these directories. "
+            "The recommended location (%APPDATA%\\MVC_Calculator\\) persists across application updates. "
+            "The legacy location (same directory as executable) and the portable unzip folder also work but may be lost during updates."
         )
         location_note.setWordWrap(True)
         location_note.setStyleSheet("margin-top: 5px; margin-bottom: 10px; padding: 8px; background-color: #e8f4f8; border-left: 3px solid #2196F3;")
@@ -931,13 +958,13 @@ Thank you!"""
         layout.addWidget(separator4)
         
         support_info = QLabel(
-            f"<b>Need Help?</b><br>"
-            f"Email: <a href='mailto:support@moviolabs.com'>support@moviolabs.com</a><br>"
-            f"<i>Include your Hardware ID and Country in your message.</i>"
+            f"<b style='font-size: 13pt;'>Need Help?</b><br>"
+            f"Email: <a href='mailto:support@moviolabs.com' style='color: #3498db;'>support@moviolabs.com</a><br>"
+            f"<i style='color: #7f8c8d;'>Include your Hardware ID and Country in your message.</i>"
         )
         support_info.setWordWrap(True)
         support_info.setOpenExternalLinks(True)
-        support_info.setStyleSheet("margin-top: 10px; padding: 10px; background-color: #f9f9f9;")
+        support_info.setStyleSheet("margin-top: 15px; padding: 12px; background-color: #ecf0f1; border-radius: 5px; border-left: 4px solid #3498db;")
         layout.addWidget(support_info)
         
         # Close button (outside scroll area)

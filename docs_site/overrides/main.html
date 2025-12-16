@@ -37,6 +37,7 @@
         logoLink.removeAttribute('href');
         logoLink.style.cursor = 'default';
         logoLink.style.pointerEvents = 'none';
+      
         logoLink.addEventListener('click', function(e) {
           e.preventDefault();
           e.stopPropagation();
@@ -117,6 +118,37 @@
             // Handle links that don't have .html extension and aren't anchors
             if (!href.endsWith('/')) {
               link.setAttribute('href', href + '/index.html');
+            }
+          }
+        });
+        
+        // Fix figure image links for file:// protocol
+        // Convert relative image paths to absolute paths based on current location
+        var images = document.querySelectorAll('figure img, .screenshot img, img.mvc-figure, .rst-content img');
+        images.forEach(function(img) {
+          var src = img.getAttribute('src');
+          if (src && !src.match(/^(https?:|data:|#)/)) {
+            // Relative path - convert to absolute path
+            var currentPath = window.location.pathname;
+            var currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
+            if (currentDir === '') currentDir = '/';
+            
+            // Handle different path formats
+            if (src.startsWith('../')) {
+              // Already relative, should work
+            } else if (src.startsWith('/')) {
+              // Absolute from root - keep as is
+            } else {
+              // Relative to current directory
+              var basePath = currentDir;
+              if (basePath.endsWith('/')) {
+                basePath = basePath.slice(0, -1);
+              }
+              // Remove any intermediate directories (like user-guide/)
+              var pathParts = basePath.split('/').filter(function(p) { return p && p !== 'index.html'; });
+              // Reconstruct path
+              var newPath = '/' + pathParts.join('/') + '/' + src;
+              img.setAttribute('src', newPath);
             }
           }
         });

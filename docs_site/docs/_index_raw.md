@@ -1,7 +1,7 @@
 # Welcome to MVC Calculator
 
 ![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
-![Version](https://img.shields.io/badge/version-25.12--alpha.01.01-orange?style=flat-square)
+![Version](https://img.shields.io/badge/version-25.12--alpha.01.14-orange?style=flat-square)
 
 ## What is MVC Calculator?
 
@@ -105,8 +105,8 @@ The interface for MVC Calculator is very simple. It comprises:
 
 <figure class="screenshot">
   <img
-    src="img/screenshots/full_ui.png"
-    data-full="img/screenshots/full_ui.png"
+    src="../img/screenshots/full_ui.png"
+    data-full="../img/screenshots/full_ui.png"
     width="700"
     alt="MVC Calculator UI"
     class="lightbox-trigger"
@@ -136,8 +136,8 @@ The following video will demonstrate this process.
 
 <figure class="screenshot">
   <img
-    src="img/screenshots/video_placeholder.png"
-    data-full="img/screenshots/video_placeholder.png"
+    src="../img/screenshots/video_placeholder.png"
+    data-full="../img/screenshots/video_placeholder.png"
     width="700"
     alt="Video Placeholder"
     class="lightbox-trigger"
@@ -150,8 +150,8 @@ The majority of the time you will be processing multiple files (In our case four
 
 <figure class="screenshot">
   <img
-    src="img/screenshots/video_placeholder.png"
-    data-full="img/screenshots/video_placeholder.png"
+    src="../img/screenshots/video_placeholder.png"
+    data-full="../img/screenshots/video_placeholder.png"
     width="700"
     alt="Video Placeholder"
     class="lightbox-trigger"
@@ -163,8 +163,8 @@ The majority of the time you will be processing multiple files (In our case four
 XML is the format the system uses to save MVC calculations
 <figure class="screenshot">
   <img
-    src="img/screenshots/video_placeholder.png"
-    data-full="img/screenshots/video_placeholder.png"
+    src="../img/screenshots/video_placeholder.png"
+    data-full="../img/screenshots/video_placeholder.png"
     width="700"
     alt="Video Placeholder"
     class="lightbox-trigger"

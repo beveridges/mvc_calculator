@@ -1,5 +1,10 @@
 /* 8-bit font import - must be at top */
+/* Use fallback fonts for offline/MSI builds - external font may not load via file:// protocol */
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+/* Fallback font stack for when external font fails to load */
+.font-8bit, footer .footer-8bit {
+  font-family: 'Press Start 2P', 'Courier New', 'Courier', monospace;
+}
 
 .wy-side-nav-search .wy-dropdown > a img,
 .wy-side-nav-search > a img {
@@ -134,7 +139,7 @@ div.bibliography a[href^="#ref-"] {
 }
 
 .wy-side-nav-search .inline-version__badge {
-  font-size: 1.5em;
+  font-size: 1.3em;
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: none;
@@ -242,6 +247,13 @@ footer .footer-8bit {
   image-rendering: pixelated;
   -webkit-font-smoothing: none;
   -moz-osx-font-smoothing: unset;
+}
+
+/* Ensure version badges in sidebar are always visible */
+.wy-side-nav-search .inline-version__badge {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 

@@ -2,7 +2,8 @@
 
 ## Overview
 
-   MVC Calculator uses a hardware-locked license system to ensure proper software usage and prevent unauthorized distribution.
+MVC Calculator uses a hardware-locked license system to ensure proper software usage and prevent unauthorized distribution.
+
 ---
 
 ## Requesting a License
@@ -13,27 +14,42 @@ If you have an `@hfmdd.de` email address:
 
 1. Send an email to **support@moviolabs.com** from your `@hfmdd.de` account
 2. Your license will be sent **automatically** via email
-3. Follow the [licence installation instructions](#installing-your-licence) below
+3. Follow the [license installation instructions](#installing-your-license) below
 
 ### For Other Users
 
 1. Go to **Help** → **Request License...** in the application menu
-2. Or contact **support@moviolabs.com** with:
-   - Your email address
-   - Your country code (2-letter ISO, e.g., "US", "CO", "GB")
-   - Any special requirements
+2. **Copy the email template** (it already includes your Hardware ID and Country)
+3. **Paste it into your email client** and send it to **support@moviolabs.com**
+4. **Wait for your license.key file** (you'll receive it as an email attachment)
+5. Follow the [license installation instructions](#installing-your-license) below
+
+The dialog automatically includes:
+   - Your **Hardware ID (HWID)** - a unique identifier tied to your computer
+   - Your **Country** - detected automatically from your system settings
+
+!!! note
+    The email template in the dialog is pre-filled with your machine information. You can also contact support@moviolabs.com directly if you prefer, but be sure to include your Hardware ID and Country code.
 
 ---
 
 ## Installing Your License
 
-### Step 1: Receive License File
+### Step 1: Receive License Key File
 
-You will receive a `license.key` file via email
+You will receive a `license.key` file attached to your email.
 
-### Step 2: Place License File
+### Step 2: Save License File
 
-**Recommended Location (Windows)**:
+**After receiving your license.key file via email:**
+
+1. **Download the attached `license.key` file** from the email
+2. **Save the file** to one of the locations shown below (keep the exact filename `license.key`)
+3. **Restart the application** to activate your license
+
+### Step 3: Choose a Location
+
+**Recommended Location (Windows)** - persists across updates:
 ```
 %APPDATA%\MVC_Calculator\license.key
 ```
@@ -48,11 +64,12 @@ To find this folder:
 
 **Alternative Locations** (the application will check these automatically):
 
-   - Same folder as the executable
+   - Same folder as the executable (e.g., `C:\Program Files\MVC_Calculator\license.key`)
+   - Portable version folder (e.g., `<portable unzip folder>\MVC_Calculator\license.key`)
    - Your home directory
    - Current working directory
 
-### Step 3: Restart Application
+### Step 4: Restart Application
 
 Close and restart MVC Calculator. The license will be validated automatically.
 
@@ -167,18 +184,6 @@ Contact support@moviolabs.com if you're unsure.
 
 ---
 
-## Development and Testing
-
-### Development Mode
-
-When running MVC Calculator from source code (not as a compiled executable):
-
-   - **License checking is disabled** by default
-   - This allows developers to test without a license
-   - Production builds always require a valid license
-
----
-
 ## Support
 
 For license-related issues:
@@ -186,39 +191,6 @@ For license-related issues:
    - **Email**: support@moviolabs.com
    - **Include**: Your email address, error messages, and any relevant details
    - **Response Time**: Typically within 1-2 business days
-
----
-
-## Technical Details
-
-### Hardware Fingerprint (HWID)
-
-The license system generates a unique hardware ID from:
-
-   - CPU/Motherboard UUID
-   - Disk serial number
-   - Windows Machine GUID
-
-This ensures the license is tied to your specific computer.
-
-### Country Detection
-
-The system detects your country using:
-
-   - **Primary**: Windows locale/region settings (offline)
-   - **Fallback**: IP geolocation API (if offline method fails)
-
-This prevents VPN-based license bypassing.
-
-### License Format
-
-Licenses are base64-encoded and contain:
-
-   - Email address
-   - Country code (2-letter ISO)
-   - Hardware ID (SHA256 hash)
-   - Expiration date (if applicable)
-   - Cryptographic signature (HMAC-SHA256)
 
 ---
 

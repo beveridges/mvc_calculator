@@ -16,7 +16,6 @@
 - [Sending Log Files for Support](#sending-log-files-for-support)
 - [Batch Processing](#batch-processing)
 - [Tips and Best Practices](#tips-and-best-practices)
-- [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Additional Resources](#additional-resources)
 
 ---
@@ -410,7 +409,7 @@ The **Energy Detection** tool automatically scans your signal and highlights reg
 2. **Visual Feedback**: Selected regions are highlighted in orange
 3. **Multiple Selections**: Multiple bursts can be selected for each sensor. The selection limit is defined by the measurement protocol and managed through the BEST_OF variable.
 4. **Remove a Single Selection**:  Shift-click (right) to remove a single selection
-4. **Clear All Selections**: Use the clear button ![broom icon](img/broom_icon.png)(broom icon) to remove all selections
+4. **Clear All Selections**: Use the clear button ![broom icon](img/broom_icon.png) to remove all selections
 
 !!! Note Measurement protocol and Burst selection
 	MVC Calculator limits the number of bursts you can select. The default is 3 bursts, but you can change this by editing the BEST_OF variable in `./config/defaults.py.`
@@ -649,19 +648,6 @@ To process multiple sensor files at once:
 
 ---
 
-## Keyboard Shortcuts
-
-| Action | Shortcut |
-|--------|----------|
-| Import MAT files | <kbd>Ctrl</kbd> + <kbd>L</kbd> |
-| Import XML file | <kbd>Ctrl</kbd> + <kbd>X</kbd> |
-| Export XML file | <kbd>Ctrl</kbd> + <kbd>E</kbd> |
-| Exit Application | <kbd>Ctrl</kbd> + <kbd>Q</kbd> |
-
-For a complete list, see [Keyboard Shortcuts](keyboard-shortcuts.md).
-
----
-
 ## References
 
 Konrad, P. (2005). *The ABC of EMG: A Practical Introduction to
@@ -671,8 +657,8 @@ Kinesiological Electromyography.* Noraxon<sup>&#174;</sup> Inc.
 
 ## Additional Resources
 
+- [License Information](license.md)
 - [Troubleshooting Guide](troubleshooting.md)
 - [File Formats](file-formats.md)
-- [License Information](license.md)
-- [Measurement Protocol](index.md#measurement-protocol-suggestions)
+- [Keyboard Shortcuts](keyboard-shortcuts.md)
 

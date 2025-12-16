@@ -52,6 +52,7 @@
         logoLink.removeAttribute('href');
         logoLink.style.cursor = 'default';
         logoLink.style.pointerEvents = 'none';
+      
         logoLink.addEventListener('click', function(e) {
           e.preventDefault();
           e.stopPropagation();
@@ -66,7 +67,7 @@
         // Read version HTML from template file
         
         
-        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.12-alpha.01.01</span> </div>";
+        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.12-alpha.01.14</span> </div>";
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
@@ -135,6 +136,37 @@
             }
           }
         });
+        
+        // Fix figure image links for file:// protocol
+        // Convert relative image paths to absolute paths based on current location
+        var images = document.querySelectorAll('figure img, .screenshot img, img.mvc-figure, .rst-content img');
+        images.forEach(function(img) {
+          var src = img.getAttribute('src');
+          if (src && !src.match(/^(https?:|data:|#)/)) {
+            // Relative path - convert to absolute path
+            var currentPath = window.location.pathname;
+            var currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
+            if (currentDir === '') currentDir = '/';
+            
+            // Handle different path formats
+            if (src.startsWith('../')) {
+              // Already relative, should work
+            } else if (src.startsWith('/')) {
+              // Absolute from root - keep as is
+            } else {
+              // Relative to current directory
+              var basePath = currentDir;
+              if (basePath.endsWith('/')) {
+                basePath = basePath.slice(0, -1);
+              }
+              // Remove any intermediate directories (like user-guide/)
+              var pathParts = basePath.split('/').filter(function(p) { return p && p !== 'index.html'; });
+              // Reconstruct path
+              var newPath = '/' + pathParts.join('/') + '/' + src;
+              img.setAttribute('src', newPath);
+            }
+          }
+        });
       }
     });
   </script>
@@ -158,19 +190,19 @@
 
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul>
-                <li class="toctree-l1"><a class="reference internal" href="./.">Home</a>
-                </li>
-              </ul>
-              <ul>
                 <li class="toctree-l1"><a class="reference internal" href="./user-guide/">User Guide</a>
                 </li>
               </ul>
               <ul>
-                <li class="toctree-l1"><a class="reference internal" href="./license/">License</a>
+                <li class="toctree-l1"><a class="reference internal" href="./license/">License Information</a>
                 </li>
               </ul>
               <ul>
-                <li class="toctree-l1"><a class="reference internal" href="./troubleshooting/">Troubleshooting</a>
+                <li class="toctree-l1"><a class="reference internal" href="./troubleshooting/">Troubleshooting Guide</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="./file-formats/">File Formats</a>
                 </li>
               </ul>
               <ul>

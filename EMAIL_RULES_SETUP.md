@@ -21,7 +21,159 @@ This guide shows how to set up email rules in cPanel or CubeSquare for two types
 ### Goal
 Automatically send a license immediately when an email arrives from any `@hfmdd.de` account.
 
-### Method 1: Email Filter + Autoresponder (Recommended - No Code)
+### Option 1: Server-Side Email Processing Script (Recommended - Full Automation)
+
+This is a Python script that monitors incoming emails via IMAP and automatically generates unique license keys for each @hfmdd.de user.
+
+#### Features
+- ✅ Automatically detects emails from @hfmdd.de domain
+- ✅ Generates unique license keys per email address
+- ✅ Uses wildcard HWID (license works on any machine for @hfmdd.de users)
+- ✅ Prevents duplicate license generation (24-hour cooldown)
+- ✅ Archives processed emails
+- ✅ Comprehensive logging
+
+#### Prerequisites
+- Python 3.6 or higher
+- Access to IMAP server (mail.moviolabs.com)
+- Environment variable `SUPPORT_EMAIL_PASSWORD` set with email password
+
+#### Setup Instructions
+
+1. **Set Environment Variable:**
+   ```bash
+   # Windows (PowerShell)
+   $env:SUPPORT_EMAIL_PASSWORD = "your_password_here"
+   
+   # Windows (Command Prompt)
+   set SUPPORT_EMAIL_PASSWORD=your_password_here
+   
+   # Linux/Mac
+   export SUPPORT_EMAIL_PASSWORD="your_password_here"
+   ```
+
+2. **Configure Settings (Optional):**
+   Edit `scripts/auto_license_config.py` to customize:
+   - Poll interval (default: 60 seconds)
+   - Country code (default: "DE")
+   - Expiration days (default: 0 = no expiration)
+   - Log file location
+
+3. **Run the Script:**
+   ```bash
+   # Direct execution
+   python scripts/auto_license_email_handler.py
+   
+   # Or use service wrapper (recommended)
+   python scripts/run_auto_license_service.py
+   ```
+
+4. **Run as Service:**
+
+   **Windows (Task Scheduler):**
+   - Open Task Scheduler
+   - Create Basic Task
+   - Trigger: "When the computer starts"
+   - Action: "Start a program"
+   - Program: `pythonw.exe` (runs without console window)
+   - Arguments: `C:\path\to\MVC_CALCULATOR\scripts\run_auto_license_service.py`
+   - Start in: `C:\path\to\MVC_CALCULATOR\scripts`
+
+   **Linux (systemd):**
+   Create `/etc/systemd/system/mvc-auto-license.service`:
+   ```ini
+   [Unit]
+   Description=MVC Calculator Auto-License Email Handler
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=your_user
+   WorkingDirectory=/path/to/MVC_CALCULATOR/scripts
+   Environment="SUPPORT_EMAIL_PASSWORD=your_password"
+   ExecStart=/usr/bin/python3 /path/to/MVC_CALCULATOR/scripts/run_auto_license_service.py
+   Restart=always
+   RestartSec=10
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+   Then:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable mvc-auto-license
+   sudo systemctl start mvc-auto-license
+   ```
+
+#### How It Works
+
+1. Script connects to IMAP server (mail.moviolabs.com)
+2. Polls inbox every 60 seconds for unread emails
+3. Filters emails from @hfmdd.de domain
+4. **For @hfmdd.de emails:**
+   - Extracts sender email address
+   - Checks if license already sent (24-hour cooldown)
+   - Generates license key with:
+     - Sender's email address
+     - Country: "DE"
+     - Wildcard HWID (works on any machine)
+     - No expiration (configurable)
+   - Sends license key via email to sender
+   - Archives processed email to "Processed_Licenses" folder
+5. **For other emails (non-@hfmdd.de):**
+   - Email is marked as read (configurable - see `NON_HFMDD_EMAIL_ACTION` in config)
+   - Remains in inbox for manual processing
+   - You will need to generate and send the license manually using `generate_license.py`
+6. Logs all activity
+
+#### Files Created
+- `scripts/auto_license_email_handler.py` - Main email processing script
+- `scripts/auto_license_config.py` - Configuration file
+- `scripts/license_email_template.txt` - Email template
+- `scripts/run_auto_license_service.py` - Service wrapper
+- `scripts/processed_emails.json` - Tracks processed emails (auto-created)
+- `scripts/auto_license_handler.log` - Log file (auto-created)
+
+#### Monitoring
+
+Check the log file for activity:
+```bash
+# View recent logs
+tail -f scripts/auto_license_handler.log
+
+# Search for errors
+grep ERROR scripts/auto_license_handler.log
+```
+
+#### Handling Non-@hfmdd.de Emails
+
+By default, emails from other domains are **marked as read** and left in your inbox for manual processing. You can configure this behavior in `auto_license_config.py`:
+
+```python
+# Options: "leave_unread", "mark_read", "move_to_folder"
+NON_HFMDD_EMAIL_ACTION = "mark_read"  # Default: mark as read
+NON_HFMDD_EMAIL_FOLDER = "Manual_Review"  # If using "move_to_folder"
+```
+
+**Options:**
+- `"leave_unread"` - Leave email unread in inbox (you'll see it in unread)
+- `"mark_read"` - Mark as read (default - inbox stays clean, but you can still see it)
+- `"move_to_folder"` - Move to "Manual_Review" folder automatically
+
+**For manual license generation:**
+```bash
+python generate_license.py user@example.com US 365
+```
+
+#### Troubleshooting
+
+- **"IMAP_PASSWORD not set"**: Set the `SUPPORT_EMAIL_PASSWORD` environment variable
+- **Connection errors**: Verify IMAP server settings in `auto_license_config.py`
+- **License not sent**: Check log file for errors
+- **Duplicate licenses**: The script has a 24-hour cooldown per email address
+- **Non-@hfmdd.de emails**: These require manual processing - check your inbox or "Manual_Review" folder
+
+### Method 1: Email Filter + Autoresponder (No Code - Simple)
 
 This uses cPanel's built-in features - no code required!
 

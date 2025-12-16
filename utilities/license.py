@@ -25,8 +25,20 @@ logger = logging.getLogger(__name__)
 
 # Only enforce license in frozen (PyInstaller) builds
 # Allow override via environment variable: LICENSE_CHECK=1 or LICENSE_CHECK=0
+# Also check for DEV_BUILD flag in version_info (set by --dev build flag)
 import os
 ENFORCE_LICENSE = getattr(sys, "frozen", False)
+
+# Check for DEV_BUILD flag (license-free dev builds)
+try:
+    from utilities.version_info import DEV_BUILD
+    if DEV_BUILD:
+        ENFORCE_LICENSE = False
+except (ImportError, AttributeError):
+    # version_info.py might not have DEV_BUILD (old builds or dev mode)
+    pass
+
+# Allow override via environment variable: LICENSE_CHECK=1 or LICENSE_CHECK=0
 if "LICENSE_CHECK" in os.environ:
     ENFORCE_LICENSE = os.environ.get("LICENSE_CHECK", "").lower() not in ("0", "false")
 
@@ -36,6 +48,9 @@ LICENSE_SECRET = b"moviolabs_license_secret_key_2024_change_in_production"
 
 # License file location (in same directory as executable or in user data)
 LICENSE_FILENAME = "license.key"
+
+# Wildcard HWID for @hfmdd.de users (allows license to work on any machine)
+WILDCARD_HWID_HFMDD = "WILDCARD_HFMDD_DE"
 
 
 def get_machine_id() -> str:
@@ -172,13 +187,24 @@ def get_country() -> Optional[str]:
     return get_country_online()
 
 
-def generate_license_key(email: str, country: str, hwid: str, expiration_days: Optional[int] = None) -> str:
+def generate_license_key(email: str, country: str, hwid: str, expiration_days: Optional[int] = None, use_wildcard_hwid: bool = False) -> str:
     """
     Generate a license key with embedded email, country, HWID, and optional expiration.
     
     Format: base64(email|country|hwid|expiration|signature)
+    
+    Args:
+        email: User's email address
+        country: 2-letter ISO country code
+        hwid: Hardware ID (ignored if use_wildcard_hwid=True)
+        expiration_days: Days until expiration (0 = no expiration)
+        use_wildcard_hwid: If True, use wildcard HWID (allows license on any machine)
     """
     expiration = expiration_days or 0  # 0 = no expiration
+    
+    # Use wildcard HWID if requested (for @hfmdd.de users)
+    if use_wildcard_hwid:
+        hwid = WILDCARD_HWID_HFMDD
     
     # Create payload
     payload = f"{email}|{country}|{hwid}|{expiration}"
@@ -404,8 +430,17 @@ def load_and_validate_license() -> Tuple[bool, Optional[str]]:
     current_hwid = get_machine_id()
     current_country = get_country()
     
-    # Check HWID match
-    if license_data["hwid"] != current_hwid:
+    # Check HWID match (skip for wildcard HWID if email is from @hfmdd.de)
+    if license_data["hwid"] == WILDCARD_HWID_HFMDD:
+        # Wildcard HWID: check if email domain is @hfmdd.de
+        email_domain = license_data["email"].split("@")[-1].lower() if "@" in license_data["email"] else ""
+        if email_domain == "hfmdd.de":
+            # Skip HWID check for @hfmdd.de users with wildcard license
+            logger.info(f"Wildcard license detected for {license_data['email']} - skipping HWID validation")
+        else:
+            # Wildcard HWID but not @hfmdd.de - invalid
+            return False, "Wildcard license is only valid for @hfmdd.de email addresses."
+    elif license_data["hwid"] != current_hwid:
         return False, "License key is not valid for this machine. Hardware ID mismatch."
     
     # Check country match

@@ -16,6 +16,7 @@ import subprocess
 import shutil
 from pathlib import Path
 from datetime import datetime
+import re
 
 ROOT = Path(__file__).resolve().parent
 
@@ -42,6 +43,100 @@ def read_build_number():
                 BUILDNUMBER = line.split("=")[1].strip().strip('"')
                 break
     return BUILDNUMBER
+
+def cleanup_old_version_directories(build_base: Path, keep: int = 3):
+    """Keep only the last N version directories in the root build directory."""
+    if not build_base.exists():
+        return
+    
+    print(f"\n[CLEANUP] Cleaning up old version directories in {build_base}")
+    print(f"[CLEANUP] Keeping only the last {keep} builds\n")
+    
+    # Find all version directories (MVC_Calculator-{version})
+    version_pattern = re.compile(r"^MVC_Calculator-(\d{2}\.\d{2}-[^.]+\.\d{2}\.\d{2})$")
+    version_dirs = []
+    
+    for item in build_base.iterdir():
+        if not item.is_dir():
+            continue
+        # Skip special directories
+        if item.name in ["pyinstaller", "temp_logs"]:
+            continue
+        # Check if it matches version directory pattern
+        if version_pattern.match(item.name):
+            version_dirs.append(item)
+    
+    if len(version_dirs) <= keep:
+        print(f"[CLEANUP] Only {len(version_dirs)} version directory(ies) found, nothing to clean up")
+        return
+    
+    # Sort by modification time (newest first)
+    version_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    
+    # Keep the newest N, delete the rest
+    to_delete = version_dirs[keep:]
+    kept = version_dirs[:keep]
+    
+    print(f"[CLEANUP] Found {len(version_dirs)} version directory(ies)")
+    print(f"[CLEANUP] Keeping {len(kept)} directory(ies):")
+    for vdir in kept:
+        print(f"  ✓ {vdir.name}")
+    
+    if to_delete:
+        print(f"[CLEANUP] Deleting {len(to_delete)} old directory(ies):")
+        for vdir in to_delete:
+            try:
+                shutil.rmtree(vdir, ignore_errors=True)
+                print(f"  ✓ Deleted {vdir.name}")
+            except Exception as e:
+                print(f"  ✗ Failed to delete {vdir.name}: {e}")
+    else:
+        print(f"[CLEANUP] No directories to delete")
+    
+    print()
+
+def cleanup_pyinstaller_artifacts(build_base: Path):
+    """Delete pyinstaller/builds, dist, and work directories after build completes."""
+    pyinstaller_dir = build_base / "pyinstaller"
+    if not pyinstaller_dir.exists():
+        return
+    
+    print(f"\n[CLEANUP] Cleaning up PyInstaller artifacts in {pyinstaller_dir}\n")
+    
+    # Delete builds directory completely
+    builds_dir = pyinstaller_dir / "builds"
+    if builds_dir.exists():
+        try:
+            shutil.rmtree(builds_dir, ignore_errors=True)
+            print(f"  ✓ Deleted {builds_dir.name}/ directory")
+        except Exception as e:
+            print(f"  ✗ Failed to delete {builds_dir.name}/: {e}")
+    else:
+        print(f"  ⊘ {builds_dir.name}/ directory does not exist")
+    
+    # Delete dist directory
+    dist_dir = pyinstaller_dir / "dist"
+    if dist_dir.exists():
+        try:
+            shutil.rmtree(dist_dir, ignore_errors=True)
+            print(f"  ✓ Deleted {dist_dir.name}/ directory")
+        except Exception as e:
+            print(f"  ✗ Failed to delete {dist_dir.name}/: {e}")
+    else:
+        print(f"  ⊘ {dist_dir.name}/ directory does not exist")
+    
+    # Delete work directory
+    work_dir = pyinstaller_dir / "work"
+    if work_dir.exists():
+        try:
+            shutil.rmtree(work_dir, ignore_errors=True)
+            print(f"  ✓ Deleted {work_dir.name}/ directory")
+        except Exception as e:
+            print(f"  ✗ Failed to delete {work_dir.name}/: {e}")
+    else:
+        print(f"  ⊘ {work_dir.name}/ directory does not exist")
+    
+    print()
 
 def run_step(name, cmd, log_file):
     print(f"\n========== {name} ==========")
@@ -100,6 +195,12 @@ if TEMP_LOG_FILE.exists():
 #    (Files are created directly in versioned directory structure)
 # ------------------------------------------------------------
 run_step("MSI + ZIP Packaging", [sys.executable, str(MSI_SCRIPT)], LOG_FILE)
+
+# ------------------------------------------------------------
+# 3) CLEANUP: Remove old builds and PyInstaller artifacts
+# ------------------------------------------------------------
+cleanup_old_version_directories(BUILD_BASE, keep=3)
+cleanup_pyinstaller_artifacts(BUILD_BASE)
 
 print("\n📦 Optional: Deploy via FTP (manual ONLY)")
 print("Run: python deploy_release_ftp.py")

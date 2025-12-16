@@ -13,7 +13,7 @@
     
       <script>
         // Current page data
-        var mkdocs_page_name = "Home";
+        var mkdocs_page_name = "Welcome to MVC Calculator";
         var mkdocs_page_input_path = "index.md";
         var mkdocs_page_url = null;
       </script>
@@ -59,6 +59,7 @@
         logoLink.removeAttribute('href');
         logoLink.style.cursor = 'default';
         logoLink.style.pointerEvents = 'none';
+      
         logoLink.addEventListener('click', function(e) {
           e.preventDefault();
           e.stopPropagation();
@@ -73,7 +74,7 @@
         // Read version HTML from template file
         
         
-        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.12-alpha.01.01</span> </div>";
+        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.12-alpha.01.14</span> </div>";
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
@@ -142,6 +143,37 @@
             }
           }
         });
+        
+        // Fix figure image links for file:// protocol
+        // Convert relative image paths to absolute paths based on current location
+        var images = document.querySelectorAll('figure img, .screenshot img, img.mvc-figure, .rst-content img');
+        images.forEach(function(img) {
+          var src = img.getAttribute('src');
+          if (src && !src.match(/^(https?:|data:|#)/)) {
+            // Relative path - convert to absolute path
+            var currentPath = window.location.pathname;
+            var currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
+            if (currentDir === '') currentDir = '/';
+            
+            // Handle different path formats
+            if (src.startsWith('../')) {
+              // Already relative, should work
+            } else if (src.startsWith('/')) {
+              // Absolute from root - keep as is
+            } else {
+              // Relative to current directory
+              var basePath = currentDir;
+              if (basePath.endsWith('/')) {
+                basePath = basePath.slice(0, -1);
+              }
+              // Remove any intermediate directories (like user-guide/)
+              var pathParts = basePath.split('/').filter(function(p) { return p && p !== 'index.html'; });
+              // Reconstruct path
+              var newPath = '/' + pathParts.join('/') + '/' + src;
+              img.setAttribute('src', newPath);
+            }
+          }
+        });
       }
     });
   </script>
@@ -164,24 +196,20 @@
       </div>
 
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <ul class="current">
-                <li class="toctree-l1 current"><a class="reference internal current" href="#">Home</a>
-    <ul class="current">
-    <li class="toctree-l2"><a class="reference internal" href="#redirecting-to-user-guide">Redirecting to User Guide...</a>
-    </li>
-    </ul>
-                </li>
-              </ul>
               <ul>
                 <li class="toctree-l1"><a class="reference internal" href="user-guide/">User Guide</a>
                 </li>
               </ul>
               <ul>
-                <li class="toctree-l1"><a class="reference internal" href="license/">License</a>
+                <li class="toctree-l1"><a class="reference internal" href="license/">License Information</a>
                 </li>
               </ul>
               <ul>
-                <li class="toctree-l1"><a class="reference internal" href="troubleshooting/">Troubleshooting</a>
+                <li class="toctree-l1"><a class="reference internal" href="troubleshooting/">Troubleshooting Guide</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="file-formats/">File Formats</a>
                 </li>
               </ul>
               <ul>
@@ -202,7 +230,7 @@
         <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
   <ul class="wy-breadcrumbs">
     <li><a href="." class="icon icon-home" aria-label="Docs"></a></li>
-      <li class="breadcrumb-item active">Home</li>
+      <li class="breadcrumb-item active">Welcome to MVC Calculator</li>
     <li class="wy-breadcrumbs-aside">
     </li>
   </ul>
@@ -213,7 +241,7 @@
               
                 <h1 id="welcome-to-mvc-calculator">Welcome to MVC Calculator<a class="headerlink" href="#welcome-to-mvc-calculator" title="Permanent link">&para;</a></h1>
 <p><img alt="Build" src="https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square" />
-<img alt="Version" src="https://img.shields.io/badge/version-25.12--alpha.01.01-orange?style=flat-square" /></p>
+<img alt="Version" src="https://img.shields.io/badge/version-25.12--alpha.01.14-orange?style=flat-square" /></p>
 <script>
   // Immediate redirect to user-guide - runs before page renders
   (function() {
@@ -252,8 +280,6 @@
     
     
     
-      <span><a href="user-guide/" style="color: #fcfcfc">Next &raquo;</a></span>
-    
   </span>
 </div>
     <script src="js/jquery-3.6.0.min.js"></script>
@@ -273,5 +299,5 @@
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2025-12-07 06:24:53.225195+00:00
+Build Date UTC : 2025-12-16 03:40:40.155913+00:00
 -->

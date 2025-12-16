@@ -7,12 +7,11 @@ theme:
 
 # Homepage redirects to user-guide
 nav:
-  - Home: index.md  # This redirects to user-guide
   - User Guide: user-guide.md
-  - License: license.md
-  - Troubleshooting: troubleshooting.md
+  - License Information: license.md
+  - Troubleshooting Guide: troubleshooting.md
+  - File Formats: file-formats.md
   - Keyboard Shortcuts: keyboard-shortcuts.md
-  # - File Formats: file-formats.md  # Temporarily removed
 
 extra_css:
   - css/extra.css

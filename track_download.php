@@ -151,28 +151,26 @@ try {
     $formatted_time = $timestamp;
 }
 
-// Prepare email content
+// Prepare email content - ULTRA COMPACT (mobile-friendly)
 $subject = $app_name . ' Download: ' . $filename;
 
-$message = "A file download has been detected:\n\n";
-$message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-$message .= "FILE INFORMATION\n";
-$message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-$message .= "File: " . $filename . "\n";
-$message .= "Timestamp: " . $formatted_time . "\n\n";
+$message = "📥 " . $filename . "\n";
+$message .= "🕐 " . $formatted_time . "\n\n";
 
-$message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-$message .= "CLIENT INFORMATION\n";
-$message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-$message .= "IP Address: " . $client_ip . "\n";
-$message .= "Location: " . $location . "\n\n";
+$message .= "📍 " . $location . "\n";
+$message .= "🔢 " . $client_ip . "\n\n";
 
-$message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-$message .= "BROWSER INFORMATION\n";
-$message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-$message .= "User Agent: " . $user_agent . "\n";
-$message .= "Referrer: " . $referrer . "\n";
-$message .= "Page URL: " . $url . "\n";
+// Wrap long lines for mobile (35 char width)
+$ua_wrapped = wordwrap($user_agent, 35, "\n   ", true);
+$message .= "👤 " . $ua_wrapped . "\n";
+
+$url_wrapped = wordwrap($url, 35, "\n   ", true);
+$message .= "🔗 " . $url_wrapped . "\n";
+
+if ($referrer !== 'direct' && $referrer !== 'Unknown') {
+    $ref_wrapped = wordwrap($referrer, 35, "\n   ", true);
+    $message .= "↩️  " . $ref_wrapped . "\n";
+}
 
 // Email headers
 $headers = "From: " . $from_email . "\r\n";
