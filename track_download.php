@@ -151,26 +151,23 @@ try {
     $formatted_time = $timestamp;
 }
 
-// Prepare email content - ULTRA COMPACT (mobile-friendly)
+// Prepare email content - HTML formatted as a list
 $subject = $app_name . ' Download: ' . $filename;
 
-$message = "📥 " . $filename . "\n";
-$message .= "🕐 " . $formatted_time . "\n\n";
-
-$message .= "📍 " . $location . "\n";
-$message .= "🔢 " . $client_ip . "\n\n";
-
-// Wrap long lines for mobile (35 char width)
-$ua_wrapped = wordwrap($user_agent, 35, "\n   ", true);
-$message .= "👤 " . $ua_wrapped . "\n";
-
-$url_wrapped = wordwrap($url, 35, "\n   ", true);
-$message .= "🔗 " . $url_wrapped . "\n";
-
+$message = "<html><body>";
+$message .= "<h3>📥 Download Notification</h3>";
+$message .= "<ul style='list-style-type: none; padding-left: 0;'>";
+$message .= "<li><strong>File:</strong> " . htmlspecialchars($filename) . "</li>";
+$message .= "<li><strong>Time:</strong> " . htmlspecialchars($formatted_time) . "</li>";
+$message .= "<li><strong>Location:</strong> " . htmlspecialchars($location) . "</li>";
+$message .= "<li><strong>IP Address:</strong> " . htmlspecialchars($client_ip) . "</li>";
+$message .= "<li><strong>User Agent:</strong> " . htmlspecialchars($user_agent) . "</li>";
+$message .= "<li><strong>URL:</strong> " . htmlspecialchars($url) . "</li>";
 if ($referrer !== 'direct' && $referrer !== 'Unknown') {
-    $ref_wrapped = wordwrap($referrer, 35, "\n   ", true);
-    $message .= "↩️  " . $ref_wrapped . "\n";
+    $message .= "<li><strong>Referrer:</strong> " . htmlspecialchars($referrer) . "</li>";
 }
+$message .= "</ul>";
+$message .= "</body></html>";
 
 // Email headers
 $headers = "From: " . $from_email . "\r\n";
@@ -346,7 +343,7 @@ function sendEmailSMTP($to, $subject, $message, $from, $smtp_host, $smtp_port, $
         $email_data = "From: {$from}\r\n";
         $email_data .= "To: {$to}\r\n";
         $email_data .= "Subject: {$subject}\r\n";
-        $email_data .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        $email_data .= "Content-Type: text/html; charset=UTF-8\r\n";
         $email_data .= "\r\n";
         $email_data .= $message;
         $email_data .= "\r\n.\r\n";

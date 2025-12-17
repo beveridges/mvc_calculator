@@ -326,19 +326,19 @@ hr.divider {
                     ip: ''
                 };
                 
-                // Use sendBeacon first (most reliable for downloads - works even if page unloads)
+                // Use sendBeacon (most reliable for downloads - works even if page unloads)
+                // Only use ONE method to avoid duplicate emails
                 if (navigator.sendBeacon) {
                     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
                     const sent = navigator.sendBeacon('track_download.php', blob);
                     console.log('[TRACKING] sendBeacon result:', sent); // DEBUG
-                }
-                
-                // Also try fetch as backup (with error handling)
-                fetch('track_download.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                })
+                } else {
+                    // Fallback to fetch only if sendBeacon is not available
+                    fetch('track_download.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    })
                 .then(response => {
                     console.log('[TRACKING] Response status:', response.status); // DEBUG
                     return response.json();
