@@ -1,7 +1,7 @@
 # User Guide
 
-![Build](https://img.shields.io/badge/build-alpha--25.11--01-blueviolet?style=flat-square)
-![Version](https://img.shields.io/badge/version-25.12--alpha.01.01-orange?style=flat-square)
+![Build](https://img.shields.io/badge/build-alpha--25.12--01-blueviolet?style=flat-square)
+![Version](https://img.shields.io/badge/version-25.12--alpha.01.19-orange?style=flat-square)
 
 ## Table of Contents
 
@@ -61,7 +61,7 @@ Figure 2: MVC values being used in Max.
 MVC Calculator is available in four versions—two for **Windows** and two for **Linux**.  
 Each version has its own advantages depending on your workflow and system requirements.
 
-The latest builds for all platforms can be downloaded from:  
+The latest builds for all platforms can be downloaded from the release archive:  
 <https://downloads.moviolabs.com/MVC_Calculator/releases/>
 
 !!! info "Download access"
@@ -227,8 +227,8 @@ chmod +x MVC_Calculator.AppImage
 
 | Version         | Platform | Best for                           |
 |-----------------|----------|------------------------------------|
-| Portable ZIP    | Windows  | No-install, portable use           |
 | MSI Installer   | Windows  | Fast startup + full integration    |
+| Portable ZIP    | Windows  | No-install, portable use           |
 | .deb Package    | Linux    | Ubuntu/Debian system installation  |
 | AppImage        | Linux    | Any distro; portable option        |
 
@@ -242,7 +242,7 @@ chmod +x MVC_Calculator.AppImage
 
 ### First Launch
 
-When you first launch MVC Calculator, you'll see:
+When you first launch MVC Calculator, you will see:
 
 1. **Menu Bar** - File and Help menus at the top
 2. **Plotting Area** - Large central area for visualizing sEMG signals
@@ -271,9 +271,9 @@ Figure 3: The MVC Calculator UI.
 ### Loading Your First File
 
 1. Click **Import MAT files** button or use <kbd>Ctrl</kbd> + <kbd>L</kbd> (or File → Import MAT files)
-2. Navigate to your `.mat` file location
-3. Select one or more files (for batch processing)
-4. Click **Open**
+2. Click the **Select files** button 
+3. Select a `.mat` file
+4. Use the **Import Files** button to import the files
 
 The application will load and display your sEMG data in the plotting area.
 
@@ -314,6 +314,7 @@ After processing your data:
 3. Click **Save**
 
 The exported XML contains:
+
 - Selected burst regions for each sensor
 - Calculated MVC values
 - Metadata (timestamps, file paths, etc.)
@@ -337,7 +338,7 @@ When you load a `.mat` file, MVC Calculator displays:
 
 If you’ve loaded multiple files (e.g., 4 or 6 sensors), the interface displays four key elements (see [Figure 4](#fig-working_with_semg_ui):
 
-1. **Tabs** – Each sensor appears as a tab at the top of the plotting area.  
+1. **Sensor Tabs** – Each sensor appears as a tab at the top of the plotting area.  
 2. **EMG channel selection buttons** – These highlighted buttons allow you to select the desired EMG channel.  
 3. **Clear all selections button** – Clears any burst selections made in the active EMG channel.  
 4. **Active EMG channel** – The currently selected sensor is highlighted with a bold rectangle around the corresponding plot.
@@ -358,7 +359,7 @@ Figure 4: MVC Calculator interface displaying sEMG signals extracted from the lo
 </figure>
 
 
-!!! extremelyimportant "EXTREMELY IMPORTANT"
+!!! extremelyimportant "IMPORTANT"
     In most studies, each participant will be fitted with **all** sensors required by the measurement protocol (typically 4 or 6). As a result, every `.mat` file contains **all** sEMG channels for that recording, not just the target muscle.
 
     Occasionally, recording errors or mislabelling can make it unclear whether the sensor with the highest amplitude truly corresponds to the target muscle indicated by the filename. MVC Calculator provides a quick visual method to verify that the `.mat` filename matches the correct sensor channel for the intended muscle.
@@ -374,7 +375,7 @@ Figure 4: MVC Calculator interface displaying sEMG signals extracted from the lo
 3. **Clear all selections button**:  Clears any burst selections made in the active cEMG channel.	
 4. **Active EMG channel**: The currently selected sensor is highlighted
 
-!!!extremelyimportant EXTREMELY IMPORTANT
+!!!extremelyimportant IMPORTANT
 	Usually, a participant will be fitted with **every** sensor required by the measure protocol (in our case either, 4 or 6 sensors).  This means that, as well as target muscle sensor, all others sensors will also be recorded.  Put simply, every .mat file will have 4 or 6 channels of sEMG data **for every recording**.  There are times that errors cause some confusion about whether the actual sensor that has the highest amplitude actually correspond the the target muscle, the MATLAB file name (.mat).   MVC Calculator provides a quick and dirty visual method that can be used to verify the name of the mat file matches the sensor name of the target muscle.  In conjunction with an agreed upon experimental design, MVC Calculator remove any doubt as to which sensor channel belongs to wihch muscle.
  -->
 ### Signal Processing
@@ -391,12 +392,12 @@ These processing steps are applied automatically when you load data.
 
 ## Burst Detection
 
-### Energy Detection Tool
+### Auto burst detection tool
 
-The **Energy Detection** tool automatically scans your signal and highlights regions that are likely to contain MVC bursts.  To use the Energy Detection Tool you must: 
+The **Auto burst detection** tool automatically scans your signal and highlights regions that are likely to contain MVC bursts.  To use the Auto burst detection tool you must: 
 
 1. Use the **EMG channel select** button ![selection button](img/selection_button.png) to make your channel selection
-2. Click the **Energy Detection** button 
+2. Click the **Auto burst detection** button 
 3. Three orange selections will be made automagically
 4. At this point, you can either **Calculate MVC** for the selected channel or refine the selections manually.
 
@@ -453,26 +454,20 @@ With a single .mat file loaded (one tab) and your bursts selected:
 
 ### Batch Processing
 
-Batch processing lets you run the MVC calculation across all sensors at once. Each sensor appears in a separate tab (one tab per .mat file), so you can easily navigate and verify the data before or after running the batch.
-
-1. Repeat the '[Processing a single file](#processing-a-single-file)' for each tab (.mat file) 
-2. **Red indicators** will show which sensors still need selections
-3. Once all sensors have selections, click **Process**
-4. Results are calculated for all sensors simultaneously
-
+Batch processing lets you run the MVC calculation across multiple sensors at once. Each sensor appears in a separate tab (one tab per .mat file), so you can easily navigate and verify the data before or after running the batch.
 
 1. Select bursts for each sensor
    Move through the tabs and repeat the steps described in [Processing a single file](#processing-a-single-file) for each .mat file.  This involves reviewing the signal in the plotting area and selecting the required burst regions.
 
 2. Use the red indicators as a guide
-   Tabs with red indicators show which sensors still require burst selections.
+   If you accidently press the **Batch calculate MVC** befaore all bursts are selectin in all tabs, tabs with red indicators show which sensors still require burst selections.
    Tabs lose the indicator once valid selections have been made (see[Figure 5](#fig-red-in-tabs)
 
 3. Ensure all sensors have valid selections
    Batch processing can only begin once every sensor (every tab) has at least one valid burst selection.
 
 4. Click the **Batch calculate MVC** button
-   Once all selections are complete, press Process to run the MVC calculation for all sensors simultaneously.
+   Once all selections are complete, press the **Batch calculate MVC** button to run the MVC calculation for all sensors simultaneously.
 
 5. View results
    The software will:
@@ -504,7 +499,7 @@ Figure 5: If you forget to make a burst selection during batch processing, any t
 
 ### XML Export Format
 
-The exported XML file contains:
+The XML export format is as follows:
 
 ```xml
 <?xml version='1.0' encoding='utf-8'?>

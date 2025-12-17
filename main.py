@@ -808,7 +808,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         info_note.setStyleSheet("margin-bottom: 10px; color: #666;")
         layout.addWidget(info_note)
         
-        # HWID section (display only, not copyable)
+        # HWID section (selectable and copyable)
         hwid_label = QLabel("Hardware ID (HWID)")
         hwid_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #2c3e50; margin-top: 12px; margin-bottom: 5px;")
         layout.addWidget(hwid_label)
@@ -820,10 +820,17 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         hwid_explanation.setStyleSheet("font-size: 9pt; color: #666; margin-bottom: 5px;")
         layout.addWidget(hwid_explanation)
         
-        hwid_display = QLabel(f"<code style='font-family: Courier New; font-size: 10pt;'>{hwid}</code>")
-        hwid_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
-        hwid_display.setWordWrap(True)
-        layout.addWidget(hwid_display)
+        hwid_layout = QHBoxLayout()
+        hwid_input = QLineEdit()
+        hwid_input.setText(hwid)
+        hwid_input.setReadOnly(True)
+        hwid_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
+        hwid_copy_btn = QPushButton("Copy HWID")
+        hwid_copy_btn.setStyleSheet("padding: 5px 15px;")
+        hwid_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(hwid))
+        hwid_layout.addWidget(hwid_input)
+        hwid_layout.addWidget(hwid_copy_btn)
+        layout.addLayout(hwid_layout)
         
         # Country section (display only, not copyable)
         country_label = QLabel("Country")
@@ -937,7 +944,7 @@ Thank you!"""
         portable_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #e67e22; margin-top: 12px; margin-bottom: 5px;")
         layout.addWidget(portable_label)
 
-        portable_path_display = QLabel(f"<code style='font-family: Courier New; font-size: 10pt;'>{portable_path}</code>")
+        portable_path_display = QLabel(f"<code style='font-family: Courier New; font-size: 10pt;'>&lt;portable unzip folder&gt;\\MVC_Calculator\\</code>")
         portable_path_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
         portable_path_display.setWordWrap(True)
         layout.addWidget(portable_path_display)
@@ -945,7 +952,7 @@ Thank you!"""
         location_note = QLabel(
             "<b>Note:</b> Save the license.key file in one of these directories. "
             "The recommended location (%APPDATA%\\MVC_Calculator\\) persists across application updates. "
-            "The legacy location (same directory as executable) and the portable unzip folder also work but may be lost during updates."
+            "The legacy location (same directory as executable) and <portable unzip folder>\\MVC_Calculator\\ also work but may be lost during updates."
         )
         location_note.setWordWrap(True)
         location_note.setStyleSheet("margin-top: 5px; margin-bottom: 10px; padding: 8px; background-color: #e8f4f8; border-left: 3px solid #2196F3;")
@@ -1103,26 +1110,27 @@ def main():
             app_icon = QtGui.QIcon(resource_path("resources/icons/icn_emg.png"))
             app.setWindowIcon(app_icon)
         else:
-            print("Running on Windows → using normal icon logic")
+            pass
+            # print("")
         # -----------------------------------------------------------------
 
         splash_pix = QPixmap(base_path("resources/icons", "splash_zx_arr.png"))
         splash = QSplashScreen(splash_pix)
         splash.setFont(QFont("Helvetica", 10))
         splash.show()
-        splash.showMessage("Initializing — please wait...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+        splash.showMessage("Inicializando — por favor espere...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
         app.processEvents()
 
         # progress ticks
-        update_splash(splash, "LOADING RESOURCES", 10); time.sleep(0.05)
-        update_splash(splash, "INITIALIZING COMPONENTS", 30); time.sleep(0.3)
+        update_splash(splash, "CARGANDO RECURSOS", 10); time.sleep(0.7)
+        update_splash(splash, "INICIALIZACIÓN DE COMPONENTES", 30); time.sleep(0.3)
         update_splash(splash, "TELEMETRÍA ACTIVADA", 40); time.sleep(0.7)
-        update_splash(splash, "CONNECTING TO DB", 60); time.sleep(0.3)
-        update_splash(splash, "STARTING INTERFACE", 90); time.sleep(0.05)
+        update_splash(splash, "CONECTANDO A LA BD", 60); time.sleep(0.3)
+        update_splash(splash, "INTERFAZ DE INICIO", 90); time.sleep(0.2)
 
         window = ApplicationWindow(splash=splash)
         window.show()
-        splash.showMessage("READY", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+        splash.showMessage("LISTO", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
         splash.finish(window)
 
         sys.exit(app.exec_())

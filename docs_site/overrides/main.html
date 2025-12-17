@@ -105,6 +105,71 @@
         });
       }
       
+      // Replace shields.io badges with CSS-styled badges for offline/MSI builds
+      function replaceBadgesWithCSS() {
+        var badges = document.querySelectorAll('img[alt="Build"], img[alt="Version"]');
+        badges.forEach(function(img) {
+          // Check if image failed to load or if we're offline
+          var shouldReplace = false;
+          if (window.location.protocol === 'file:') {
+            // Always replace in offline mode
+            shouldReplace = true;
+          } else if (img.complete && img.naturalWidth === 0) {
+            // Image failed to load
+            shouldReplace = true;
+          }
+          
+          if (shouldReplace) {
+            var badge = document.createElement('span');
+            badge.className = 'badge-inline ' + (img.alt === 'Build' ? 'build' : 'version');
+            
+            // Extract text from src URL
+            var src = img.getAttribute('src') || '';
+            var text = img.alt;
+            
+            if (src.includes('build-')) {
+              var match = src.match(/build-([^-\?]+)/);
+              if (match) {
+                text = match[1].replace(/--/g, '-');
+              }
+            } else if (src.includes('version-')) {
+              var match = src.match(/version-([^-\?]+)/);
+              if (match) {
+                text = match[1].replace(/--/g, '-');
+              }
+            }
+            
+            badge.textContent = text;
+            img.parentNode.replaceChild(badge, img);
+          } else {
+            // Add error handler for images that fail after load
+            img.onerror = function() {
+              var badge = document.createElement('span');
+              badge.className = 'badge-inline ' + (this.alt === 'Build' ? 'build' : 'version');
+              var src = this.getAttribute('src') || '';
+              var text = this.alt;
+              if (src.includes('build-')) {
+                var match = src.match(/build-([^-\?]+)/);
+                if (match) text = match[1].replace(/--/g, '-');
+              } else if (src.includes('version-')) {
+                var match = src.match(/version-([^-\?]+)/);
+                if (match) text = match[1].replace(/--/g, '-');
+              }
+              badge.textContent = text;
+              this.parentNode.replaceChild(badge, this);
+            };
+          }
+        });
+      }
+      
+      // Run badge replacement immediately for file://, or after delay for http://
+      if (window.location.protocol === 'file:') {
+        replaceBadgesWithCSS();
+      } else {
+        setTimeout(replaceBadgesWithCSS, 500);
+        setTimeout(replaceBadgesWithCSS, 2000);
+      }
+      
       // Fix navigation links for local file:// protocol
       // Convert directory links (ending with /) to index.html links
       if (window.location.protocol === 'file:') {

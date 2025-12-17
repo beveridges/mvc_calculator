@@ -324,7 +324,7 @@ To verify your `.mat` file structure:
 
 ## Known Issues
 
-### Alpha Phase Limitations
+### Alpha Phase Development Limitations
 
    - Terminal window appears in background (intentional for debugging)
    - Some features may be experimental
@@ -333,12 +333,14 @@ To verify your `.mat` file structure:
 ### Platform-Specific
 
 **Windows**:
-   - Long file paths may cause issues (Windows limitation)
-   - Some antivirus software may flag the application
+
+- Long file paths may cause issues (Windows limitation)
+- Some antivirus software may flag the application
 
 **Linux**:
-   - Ensure all dependencies are installed
-   - Check file permissions
+
+- Ensure all dependencies are installed
+- Check file permissions
 
 ---
 

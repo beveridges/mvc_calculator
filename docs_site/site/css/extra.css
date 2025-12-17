@@ -315,13 +315,13 @@ footer .footer-8bit {
     font-weight: 700; /* bold for emphasis */
 }
 
-/* Override the title text to always show "EXTREMELY IMPORTANT" */
+/* Override the title text to always show "IMPORTANT" */
 .admonition.extremelyimportant > .admonition-title {
     font-size: 0; /* Hide original text */
 }
 
 .admonition.extremelyimportant > .admonition-title::before {
-    content: "EXTREMELY IMPORTANT";
+    content: "IMPORTANT";
     font-size: 0.9rem; /* Restore font size */
     font-weight: 700;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* Match documentation font */

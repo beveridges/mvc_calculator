@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QListWidget,
 )
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QFont
 from PyQt5 import uic
 import scipy.io
 import os
@@ -109,10 +109,10 @@ class LoadMat(QDialog):
                 font.setPointSize(button_font_size)
                 button.setFont(font)
         
-        # Increase list widget font size to 11pt
+        # Increase list widget font size to 12pt for better readability
         if self.listFiles:
             font = self.listFiles.font()
-            font.setPointSize(11)
+            font.setPointSize(12)
             self.listFiles.setFont(font)
         
         # Increase progress dialog label font size (will be applied when dialog is created)
@@ -162,6 +162,10 @@ class LoadMat(QDialog):
         for path in new_files:
             item = QListWidgetItem(path)
             item.setToolTip(path)
+            # Set larger font for file names
+            font = item.font()
+            font.setPointSize(13)
+            item.setFont(font)
             self.listFiles.addItem(item)
 
     # ------------------- FILE SELECTION ------------------------
@@ -173,6 +177,10 @@ class LoadMat(QDialog):
             for path in files:
                 item = QListWidgetItem(path)
                 item.setToolTip(path)
+                # Set larger font for file names
+                font = item.font()
+                font.setPointSize(12)
+                item.setFont(font)
                 self.listFiles.addItem(item)
 
             self.listFiles.setWordWrap(False)

@@ -27,7 +27,8 @@ APP_DISPLAY_NAME = "MVC Calculator"
 APP_BASENAME = "MVC_Calculator"
 APP_KEY = "mvc_calculator"
 ICON_PATH = Path(base_path("resources/icons", "icn_emg.ico")).resolve()
-LOGO_BANNER_PATH = Path(base_path("resources/icons", "moviolabs_TINY.png")).resolve()
+BANNER_IMAGE_PATH = Path(base_path("resources/icons", "MSI_INSTALLER_BANNER.png")).resolve()
+DIALOG_IMAGE_PATH = Path(base_path("resources/icons", "MSI_INSTALLER_DIALOG_IMAGE_LARGE_B_W.png")).resolve()
 PYI_BUILD_DIR = Path.home() / "Documents" / ".builds" / APP_KEY / "pyinstaller"
 ARCHIVE_BUILDS_DIR = PYI_BUILD_DIR / "builds"
 BUILD_BASE = Path.home() / "Documents" / ".builds" / APP_KEY
@@ -268,17 +269,27 @@ if LICENSE_RTF.exists():
     license_file_xml = f'    <WixVariable Id="WixUILicenseRtf" Value="{str(LICENSE_RTF).replace(chr(92), "/")}" />\n'
     print(f"[OK] License file found: {LICENSE_RTF}")
 
-# Add Moviolabs logo as banner and dialog bitmap
+# Add banner and dialog bitmaps for installer UI
 logo_banner_xml = ""
 logo_dialog_xml = ""
-if LOGO_BANNER_PATH.exists():
-    # Banner bitmap (shown at top of installer dialogs - typically 493x58 pixels)
-    logo_banner_xml = f'    <WixVariable Id="WixUIBannerBmp" Value="{str(LOGO_BANNER_PATH).replace(chr(92), "/")}" />\n'
-    # Dialog bitmap (shown on left side of installer dialogs - typically 164x314 pixels)
-    logo_dialog_xml = f'    <WixVariable Id="WixUIDialogBmp" Value="{str(LOGO_BANNER_PATH).replace(chr(92), "/")}" />\n'
-    print(f"[OK] Moviolabs logo found: {LOGO_BANNER_PATH}")
+if BANNER_IMAGE_PATH.exists():
+    # Banner bitmap (shown at top of installer dialogs - must be exactly 493x58 pixels)
+    # Format: 24-bit BMP or PNG (BMP recommended for best compatibility)
+    logo_banner_xml = f'    <WixVariable Id="WixUIBannerBmp" Value="{str(BANNER_IMAGE_PATH).replace(chr(92), "/")}" />\n'
+    print(f"[OK] Banner image found: {BANNER_IMAGE_PATH}")
 else:
-    print(f"[WARN] Moviolabs logo not found at {LOGO_BANNER_PATH}")
+    print(f"[WARN] Banner image not found at {BANNER_IMAGE_PATH}")
+
+if DIALOG_IMAGE_PATH.exists():
+    # Dialog bitmap (shown on left side of installer dialogs)
+    # NOTE: WixUI_Mondo expects 493x312 pixels, but some sources say 164x314
+    # If image is stretching, try resizing to 493x312 pixels
+    # PNG format is supported by WiX (24-bit RGB recommended, no alpha channel)
+    logo_dialog_xml = f'    <WixVariable Id="WixUIDialogBmp" Value="{str(DIALOG_IMAGE_PATH).replace(chr(92), "/")}" />\n'
+    print(f"[OK] Dialog image found: {DIALOG_IMAGE_PATH}")
+    print(f"[INFO] If dialog image is stretching, ensure it's exactly 493x312 pixels (WixUI_Mondo standard)")
+else:
+    print(f"[WARN] Dialog image not found at {DIALOG_IMAGE_PATH}")
 
 wxs_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">

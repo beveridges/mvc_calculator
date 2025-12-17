@@ -1,0 +1,25 @@
+Subject: Your MVC Calculator License Key
+
+Dear Customer,
+
+Thank you for your license request. Your license key is provided below.
+
+LICENSE KEY:
+{LICENSE_KEY}
+
+INSTALLATION INSTRUCTIONS:
+
+1. Copy the license key above
+2. Create a file named "license.key" 
+3. Paste the license key into the file
+4. Save the file to one of these locations:
+   - Windows: %APPDATA%\MVC_Calculator\license.key
+   - Or in the same folder as the MVC Calculator executable
+
+The license key is valid for your @hfmdd.de email address and will work on any machine.
+
+If you need assistance, please contact support@moviolabs.com
+
+Best regards,
+MVC Calculator Support Team
+
