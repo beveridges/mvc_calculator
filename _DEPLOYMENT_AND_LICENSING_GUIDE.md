@@ -13,7 +13,7 @@ This guide consolidates the procedures for deploying releases to the server and 
 
 ### Step-by-Step Deployment Process
 --------------------------------------------------------------------------------------------------------------
-#### STEP 1: Modify application and help files if modified.
+#### Step 1: Modify application and help files if modified.
 
 Navigate to the `docs_site` directory and run:
 
@@ -36,7 +36,6 @@ cd docs_site
 mkdocs serve
 ```
 Then open your browser to: `http://127.0.0.1:8000`
---------------------------------------------------------------------------------------------------------------
 
 #### Step 2: Build Your Release
 

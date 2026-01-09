@@ -2,24 +2,61 @@
 
 ## Confirmed Build Process
 
-### 1. Make Changes to Spyder Version on Local Machine
+### 0. In Windows: Make Changes to Spyder Version on Local Machine
 - Edit source code in your local repository
 - Test changes locally
 
-### 2. Commit and Push to GitHub
+
+### 1 In Windows: Build help files
+Navigate to the `docs_site` directory and run:
+
+```bash
+cd docs_site
+mkdocs build
+```
+
+To preview the documentation locally (with live reload):
+
+```bash
+mkdocs serve -f docs_site/mkdocs.yml
+```
+
+Or from the `docs_site` directory:
+
+```bash
+cd docs_site
+mkdocs serve
+```
+Then open your browser to: `http://127.0.0.1:8000`
+
+### 2. In Windows:  Activate the Conda environment
+```bash
+conda activate mvccalculator
+```
+
+### 3. In Windows: Commit and Push to GitHub
 ```bash
 git add .
 git commit -m "Your commit message"
 git push
 ```
 
-### 3. In WSL: Git Pull
+### 4. In WSL: Git Pull
 ```bash
 git pull
 ```
 - Updates WSL repository with latest changes from GitHub
 
-### 4. BUILD_ALL_WINDOWS.py (Run on Windows)
+### 5. In WSL: activate conda environment 
+```bash
+conda activate mvccalculator
+```
+
+### 6. In Windows: BUILD_ALL_WINDOWS.py 
+```bash
+python BUILD_ALL_WINDOWS.py
+```
+**DETAILS**
 **Location:** Project root directory  
 **What it does:**
 - Runs `build_windows_portable.py` (PyInstaller onedir build - increments build number)
@@ -31,7 +68,9 @@ git pull
 
 **Note:** This must be run on Windows (not WSL) because it uses Windows-specific build tools.
 
-### 5. BUILD_ALL_LINUX.py (Run in WSL)
+### 5. In WSL: BUILD_ALL_LINUX.py 
+
+
 **Location:** Project root directory (in WSL)  
 **What it does:**
 - Runs `build_linux_portable.py` (Linux portable build)
@@ -46,7 +85,108 @@ git pull
 
 **Note:** This reads the build number that was incremented by the Windows build, ensuring version consistency.
 
+
+### 6: Review Before Upload (Optional)
+
+Generate the HTML page locally to review:
+
+```bash
+python deploy_release_ftp.py
+```
+
+This creates `index.html` in the build directory without uploading anything.
+
+#### Step 3: Deploy to Server
+
+Upload everything to the FTP server:
+
+```bash
+python deploy_release_ftp.py -u
+```
+
+**What gets uploaded:**
+
+- MSI installer (Windows)
+- Portable ZIP (Windows)
+- DEB package (Linux, if built)
+- AppImage (Linux, if built)
+- MaxMSP patch zip
+- Release notes (if present)
+- `index.html` (auto-generated)
+- Logo files
+- Tracking scripts (`track_download.php`)
+
+**Smart Upload Behavior:**
+
+- Files are only uploaded if they don't exist or have different sizes
+- Use `--force` flag to overwrite existing files: `python deploy_release_ftp.py -u --force`
+
+#### Common Deployment Options
+
+**Upload only MaxMSP patch:**
+
+```bash
+python deploy_release_ftp.py -u --upload-maxmsp-only
+```
+
+**Upload auxiliary files without builds:**
+
+```bash
+python deploy_release_ftp.py -u --upload-auxiliary
+```
+
+**Force upload everything:**
+
+```bash
+python deploy_release_ftp.py -u --force
+```
+
+### Server Location
+
+Files are uploaded to:
+
+```
+ftp.moviolabs.com:/public_html/downloads/MVC_Calculator/releases/
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### 6. deploy_release_ftp.py (Run from Windows or WSL)
+
+
+
+
+
 **Location:** Project root directory  
 **What it does:**
 - Scans for build files in versioned directories:
