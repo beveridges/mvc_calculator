@@ -74,7 +74,7 @@
         // Read version HTML from template file
         
         
-        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.12-alpha.01.14</span> </div>";
+        versionDiv.innerHTML = "<div class=\"inline-version\">   <span class=\"inline-version__name\">MVC Calculator</span>   <span class=\"inline-version__badge\">25.12-alpha.01.20</span> </div>";
         
         // Insert between logo and search (after the logo link, before search)
         logoLink.parentNode.insertBefore(versionDiv, searchDiv);
@@ -125,6 +125,71 @@
             });
           });
         });
+      }
+      
+      // Replace shields.io badges with CSS-styled badges for offline/MSI builds
+      function replaceBadgesWithCSS() {
+        var badges = document.querySelectorAll('img[alt="Build"], img[alt="Version"]');
+        badges.forEach(function(img) {
+          // Check if image failed to load or if we're offline
+          var shouldReplace = false;
+          if (window.location.protocol === 'file:') {
+            // Always replace in offline mode
+            shouldReplace = true;
+          } else if (img.complete && img.naturalWidth === 0) {
+            // Image failed to load
+            shouldReplace = true;
+          }
+          
+          if (shouldReplace) {
+            var badge = document.createElement('span');
+            badge.className = 'badge-inline ' + (img.alt === 'Build' ? 'build' : 'version');
+            
+            // Extract text from src URL
+            var src = img.getAttribute('src') || '';
+            var text = img.alt;
+            
+            if (src.includes('build-')) {
+              var match = src.match(/build-([^-\?]+)/);
+              if (match) {
+                text = match[1].replace(/--/g, '-');
+              }
+            } else if (src.includes('version-')) {
+              var match = src.match(/version-([^-\?]+)/);
+              if (match) {
+                text = match[1].replace(/--/g, '-');
+              }
+            }
+            
+            badge.textContent = text;
+            img.parentNode.replaceChild(badge, img);
+          } else {
+            // Add error handler for images that fail after load
+            img.onerror = function() {
+              var badge = document.createElement('span');
+              badge.className = 'badge-inline ' + (this.alt === 'Build' ? 'build' : 'version');
+              var src = this.getAttribute('src') || '';
+              var text = this.alt;
+              if (src.includes('build-')) {
+                var match = src.match(/build-([^-\?]+)/);
+                if (match) text = match[1].replace(/--/g, '-');
+              } else if (src.includes('version-')) {
+                var match = src.match(/version-([^-\?]+)/);
+                if (match) text = match[1].replace(/--/g, '-');
+              }
+              badge.textContent = text;
+              this.parentNode.replaceChild(badge, this);
+            };
+          }
+        });
+      }
+      
+      // Run badge replacement immediately for file://, or after delay for http://
+      if (window.location.protocol === 'file:') {
+        replaceBadgesWithCSS();
+      } else {
+        setTimeout(replaceBadgesWithCSS, 500);
+        setTimeout(replaceBadgesWithCSS, 2000);
       }
       
       // Fix navigation links for local file:// protocol
@@ -299,5 +364,5 @@
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2025-12-16 04:53:27.952779+00:00
+Build Date UTC : 2026-01-09 21:55:30.043229+00:00
 -->

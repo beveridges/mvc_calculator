@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 # ============================================================
 try:
     from utilities import version_info as v
-    print(f"{v.FRIENDLYVERSIONNAME} {v.BUILDNUMBER}. Portable version.\nBuilding font cache - please wait...")
+    print(f"{v.FRIENDLYVERSIONNAME} {v.BUILDNUMBER}. \nBuilding font cache - please wait...")
 except Exception:
     print("MVC Calculator (version unknown). Portable version.")
 print("-" * 60)
@@ -297,6 +297,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
     # ---------------- Data I/O ----------------
     def load_mat_files(self):
+        # Check license before loading files
+        if not self._is_license_valid(recheck=True):
+            self._show_license_required_message("Loading MAT files")
+            return
+        
         dialog = LoadMat(self)
         dialog.matsImported.connect(self.on_mats_imported)
         dialog.exec_()
@@ -319,6 +324,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
     # ---------------- Burst detection ----------------
     def on_burst_detection(self):
+        # Check license before burst detection
+        if not self._is_license_valid(recheck=True):
+            self._show_license_required_message("Burst detection")
+            return
+        
         idx = self.tw_plotting.currentIndex()
         if idx < 0:
             self.ledt_output.appendPlainText("[warn] No plotting tab is selected.")
@@ -437,6 +447,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
     # ---------------- Export / Import XML ----------------
     def export_mvc_xml(self):
+        # Check license before exporting
+        if not self._is_license_valid(recheck=True):
+            self._show_license_required_message("Exporting XML files")
+            return
+        
         savepath, _ = QFileDialog.getSaveFileName(self, "Export XML", "", "XML Files (*.xml)")
         if not savepath:
             logging.info("Export cancelled: no file path selected.")
@@ -483,6 +498,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         logging.info(f"XML export completed: {savepath}")
 
     def import_mvc_xml(self):
+        # Check license before importing
+        if not self._is_license_valid(recheck=True):
+            self._show_license_required_message("Importing XML files")
+            return
+        
         path, _ = QFileDialog.getOpenFileName(self, "Import XML", "", "XML Files (*.xml)")
         if not path:
             return
@@ -568,6 +588,24 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.ledt_output.appendPlainText("=== End of import ===")
 
     # ---------------- License check helper ----------------
+    def _show_license_required_message(self, feature_name="This feature"):
+        """Show a consistent license required message dialog."""
+        app = QtWidgets.QApplication.instance()
+        license_error = app.property("license_error") if app else None
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("License Required")
+        msg.setText(f"{feature_name} requires a valid license")
+        msg.setInformativeText(
+            f"You need a valid license to use {feature_name.lower()}.\n\n"
+            f"{license_error if license_error else 'Please request a license key.'}\n\n"
+            "Go to Help → Request License... to get your Hardware ID and request a license."
+        )
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Help)
+        msg.button(QMessageBox.Help).setText("Request License...")
+        msg.button(QMessageBox.Help).clicked.connect(self.show_license_info)
+        msg.exec_()
+    
     def _is_license_valid(self, recheck=False) -> bool:
         """
         Check if license is valid. 
@@ -609,13 +647,35 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     def _update_license_dependent_ui(self):
         """Update UI elements that depend on license validity."""
         license_valid = self._is_license_valid()
-        # Enable/disable MVC calculation buttons based on license status
+        
+        # Enable/disable all functionality buttons based on license status
+        self.btn_loadMat.setEnabled(license_valid)
+        self.btn_burstDetection.setEnabled(license_valid)
+        self.btn_export.setEnabled(license_valid)
         self.btn_process.setEnabled(license_valid)
         self.btn_processBatch.setEnabled(license_valid)
+        
+        # Disable/enable menu actions (except Request License which stays enabled)
+        if hasattr(self, 'load_MAT_action'):
+            self.load_MAT_action.setEnabled(license_valid)
+        if hasattr(self, 'importXMLmot_action'):
+            self.importXMLmot_action.setEnabled(license_valid)
+        if hasattr(self, 'exportXMLmot_action'):
+            self.exportXMLmot_action.setEnabled(license_valid)
+        # Note: licenseInfoAction (Request License) should always be enabled
+        
         if not license_valid:
+            # Set tooltips explaining license requirement
+            self.btn_loadMat.setToolTip("License required to load files. Go to Help → Request License...")
+            self.btn_burstDetection.setToolTip("License required for burst detection. Go to Help → Request License...")
+            self.btn_export.setToolTip("License required to export data. Go to Help → Request License...")
             self.btn_process.setToolTip("License required to calculate MVC values. Go to Help → Request License...")
             self.btn_processBatch.setToolTip("License required to calculate MVC values. Go to Help → Request License...")
         else:
+            # Restore normal tooltips
+            self.btn_loadMat.setToolTip("Load MAT files")
+            self.btn_burstDetection.setToolTip("Detect bursts in active row")
+            self.btn_export.setToolTip("Export MVC results to XML")
             self.btn_process.setToolTip("Calculate MVC for current tab")
             self.btn_processBatch.setToolTip("Calculate MVC for all open tabs")
     
@@ -624,21 +684,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         """Execute MATLAB-style MVC calculation for the current tab/row/selections."""
         # Check license before processing (recheck to detect newly added license files)
         if not self._is_license_valid(recheck=True):
-            app = QtWidgets.QApplication.instance()
-            license_error = app.property("license_error") if app else None
-            msg = QMessageBox(self)
-            msg.setIcon(QMessageBox.Warning)
-            msg.setWindowTitle("License Required")
-            msg.setText("MVC calculation requires a valid license")
-            msg.setInformativeText(
-                "You need a valid license to calculate MVC values.\n\n"
-                f"{license_error if license_error else 'Please request a license key.'}\n\n"
-                "Go to Help → Request License... to get your Hardware ID and request a license."
-            )
-            msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Help)
-            msg.button(QMessageBox.Help).setText("Request License...")
-            msg.button(QMessageBox.Help).clicked.connect(self.show_license_info)
-            msg.exec_()
+            self._show_license_required_message("MVC calculation")
             return
         
         idx = self.tw_plotting.currentIndex()
@@ -692,21 +738,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         """Run MVC batch across all tabs with ≥ BEST_OF selections."""
         # Check license before processing (recheck to detect newly added license files)
         if not self._is_license_valid(recheck=True):
-            app = QtWidgets.QApplication.instance()
-            license_error = app.property("license_error") if app else None
-            msg = QMessageBox(self)
-            msg.setIcon(QMessageBox.Warning)
-            msg.setWindowTitle("License Required")
-            msg.setText("Batch MVC calculation requires a valid license")
-            msg.setInformativeText(
-                "You need a valid license to calculate MVC values.\n\n"
-                f"{license_error if license_error else 'Please request a license key.'}\n\n"
-                "Go to Help → Request License... to get your Hardware ID and request a license."
-            )
-            msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Help)
-            msg.button(QMessageBox.Help).setText("Request License...")
-            msg.button(QMessageBox.Help).clicked.connect(self.show_license_info)
-            msg.exec_()
+            self._show_license_required_message("Batch MVC calculation")
             return
         
         total_tabs = self.tw_plotting.count()
@@ -1155,7 +1187,7 @@ def main():
         
         # License validation (only in frozen builds, must be after QApplication is created for dialogs)
         # NOTE: We allow the application to start even without a license so users can access
-        # the "Request License" dialog to get their HWID. License warnings are shown but don't block access.
+        # the "Request License" dialog to get their HWID. All functionality is blocked until a valid license is present.
         from utilities.license import ENFORCE_LICENSE
         license_valid = True
         license_error = None
@@ -1168,8 +1200,8 @@ def main():
                     f"License file not found.\n\n"
                     f"Please place a valid license.key file in:\n{license_path}\n\n"
                     f"This location persists across application updates.\n\n"
-                    f"You can continue using the application to request a license.\n"
-                    f"Go to Help → Request License... to get your Hardware ID."
+                    f"⚠️ IMPORTANT: All application functionality is disabled until a valid license is installed.\n\n"
+                    f"You can still access Help → Request License... to get your Hardware ID and request a license."
                 )
             else:
                 is_valid, error = load_and_validate_license()
@@ -1178,8 +1210,8 @@ def main():
                     license_error = (
                         f"{error}\n\n"
                         "This license key is not valid for this machine or has expired.\n\n"
-                        "You can continue using the application to request a new license.\n"
-                        "Go to Help → Request License... to get your Hardware ID."
+                        "⚠️ IMPORTANT: All application functionality is disabled until a valid license is installed.\n\n"
+                        "You can still access Help → Request License... to get your Hardware ID and request a new license."
                     )
         
         # Store license status for later use (e.g., showing warnings or limiting features)
@@ -1228,17 +1260,20 @@ def main():
         splash.showMessage("LISTO", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
         splash.finish(window)
         
-        # Show non-blocking license warning if license is invalid (allows user to continue)
+        # Show non-blocking license warning if license is invalid (allows user to access Request License dialog)
         if ENFORCE_LICENSE and not license_valid:
             msg = QMessageBox(window)
             msg.setIcon(QMessageBox.Warning)
-            msg.setWindowTitle("License Notice")
+            msg.setWindowTitle("License Required - Functionality Disabled")
             msg.setText("License Not Found or Invalid")
-            msg.setInformativeText(license_error)
+            msg.setInformativeText(
+                license_error + "\n\n"
+                "All features (file loading, burst detection, MVC calculation, export) are disabled until a valid license is installed."
+            )
             msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Help)
             msg.button(QMessageBox.Help).setText("Request License...")
             msg.button(QMessageBox.Help).clicked.connect(window.show_license_info)
-            # Show asynchronously (non-blocking) - user can dismiss and continue
+            # Show asynchronously (non-blocking) - user can dismiss and access Request License dialog
             msg.show()
 
         sys.exit(app.exec_())

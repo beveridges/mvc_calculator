@@ -72,7 +72,11 @@ class UIInitializer:
             if not pixmap.isNull():
                 # Set the pixmap directly
                 moviolabs_label.setPixmap(pixmap)
+                # Keep centered alignment but shift icon slightly to the left using contents margins
                 moviolabs_label.setAlignment(Qt.AlignCenter)
+                # Use contentsMargins to shift the icon slightly left (negative left margin)
+                # Set left margin to negative value to shift icon left, with small right margin to balance
+                moviolabs_label.setContentsMargins(-20, 0, 20, 0)
                 # Make it clickable - override mousePressEvent
                 original_mousePressEvent = moviolabs_label.mousePressEvent
                 def click_handler(event: QMouseEvent):
