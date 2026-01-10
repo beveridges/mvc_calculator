@@ -64,15 +64,21 @@ def main():
     # Generate license key
     license_key = generate_license_key(email, country, hwid, expiration_days)
     
+    # Save to license.key file in current directory
+    license_file = Path("license.key")
+    license_file.write_text(license_key, encoding="utf-8")
+    
     print("\n" + "="*70)
     print("LICENSE KEY GENERATED")
     print("="*70)
     print(license_key)
     print("="*70)
-    print("\nSave this key to a file named 'license.key' and place it in:")
+    print(f"\n✓ License saved to: {license_file.absolute()}")
+    print("\nLicense file location options:")
     print("  - The same directory as the executable (for PyInstaller builds)")
     print("  - Or the current working directory")
     print("  - Or the user's home directory")
+    print(f"\n  Current location: {license_file.absolute()}")
     print("\nLicense details:")
     print(f"  Email: {email}")
     print(f"  Country: {country}")

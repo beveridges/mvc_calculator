@@ -468,8 +468,20 @@ if LATEST_BUILD_DIR.exists():
         if ZIP_PATH.exists():
             ZIP_PATH.unlink()
         
-        # Create ZIP archive
-        shutil.make_archive(str(zip_base), "zip", root_dir=LATEST_BUILD_DIR.parent, base_dir=LATEST_BUILD_DIR.name)
+        # Create ZIP archive with maximum compression
+        import zipfile
+        print(f"[optimize] Creating ZIP with maximum compression...")
+        with zipfile.ZipFile(ZIP_PATH, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+            for root, dirs, files in os.walk(LATEST_BUILD_DIR):
+                # Skip __pycache__ directories
+                dirs[:] = [d for d in dirs if d != '__pycache__']
+                for file in files:
+                    # Skip .pyc files
+                    if file.endswith('.pyc'):
+                        continue
+                    file_path = Path(root) / file
+                    arcname = file_path.relative_to(LATEST_BUILD_DIR.parent)
+                    zf.write(file_path, arcname)
         
         # Verify ZIP was created and has content
         if ZIP_PATH.exists():
@@ -478,7 +490,6 @@ if LATEST_BUILD_DIR.exists():
             print(f"[DEBUG] ZIP file size: {zip_size:,} bytes ({zip_size / (1024*1024):.2f} MB)")
             
             # Verify ZIP contains files
-            import zipfile
             try:
                 with zipfile.ZipFile(ZIP_PATH, 'r') as zf:
                     file_count = len(zf.namelist())

@@ -133,14 +133,19 @@ def load_notes(version: str):
         if s.lower().startswith("date:"):
             notes["date"] = s.split(":", 1)[1].strip()
         elif s.lower().startswith("tags:"):
-            # Tags might be on the same line or the next line
+            # Tags might be on the same line or the next line(s)
             tags_str = s.split(":", 1)[1].strip()
-            if not tags_str and i + 1 < len(lines):
-                # Tags are on the next line
-                tags_str = lines[i + 1].strip()
-                skip_next_line = True  # Skip the tags line in next iteration
+            if not tags_str:
+                # Tags are on the next line(s) - skip blank lines
+                for j in range(i + 1, len(lines)):
+                    next_line = lines[j].strip()
+                    if next_line:  # Found first non-empty line
+                        tags_str = next_line
+                        skip_next_line = True  # Skip this line in next iteration
+                        break
             if tags_str:
-                notes["tags"] = [t.strip() for t in tags_str.split(",") if t.strip()]
+                # Strip quotes and whitespace from tags
+                notes["tags"] = [t.strip().strip('"\'').strip() for t in tags_str.split(",") if t.strip()]
         elif s.lower().startswith("description:"):
             # Get description text after the colon on this line
             desc_text = s.split(":", 1)[1].strip() if ":" in s else ""
@@ -278,6 +283,7 @@ def normalize_tag_name(tag: str) -> str:
         # New Release variations
         "new release": "new-release",
         "new-release": "new-release",
+        "new_release": "new-release",
         "newrelease": "new-release",
         "release": "new-release",
     }
@@ -292,7 +298,8 @@ def normalize_tag_name(tag: str) -> str:
             return normalized
     
     # Default: return lowercase version (will use default styling if CSS class doesn't exist)
-    return tag_lower.replace(" ", "-").replace("/", "-")
+    # Replace underscores, spaces, and slashes with hyphens
+    return tag_lower.replace("_", "-").replace(" ", "-").replace("/", "-")
 
 
 def scan_builds():
@@ -485,21 +492,6 @@ def check_maxmsp_dependencies() -> tuple[bool, list[str], dict[str, Path]]:
         # JavaScript files
         "xml_reader.js": MAXPATCHES_SOURCE / "xml_reader.js",
         "filternans": MAXPATCHES_SOURCE / "filternans",
-        "capture_event": MAXPATCHES_SOURCE / "capture_event",
-        
-        # MaxMSP abstractions
-        "slot_A.maxpat": MAXPATCHES_SOURCE / "slot_A.maxpat",
-        "slot_B.maxpat": MAXPATCHES_SOURCE / "slot_B.maxpat",
-        
-        # Audio files
-        "audio/snare1.wav": MAXPATCHES_SOURCE / "audio" / "snare1.wav",
-        "audio/snare2.wav": MAXPATCHES_SOURCE / "audio" / "snare2.wav",
-        "audio/snare3.wav": MAXPATCHES_SOURCE / "audio" / "snare3.wav",
-        "audio/snare4.wav": MAXPATCHES_SOURCE / "audio" / "snare4.wav",
-        "audio/AdditionalSounds/Mtrnm1.wav": MAXPATCHES_SOURCE / "audio" / "AdditionalSounds" / "Mtrnm1.wav",
-        
-        # Image files
-        "images/axes.png": MAXPATCHES_SOURCE / "images" / "axes.png",
     }
     
     missing = []
@@ -970,8 +962,49 @@ def main():
         else:
             print(f"✓ Found all 4 build files (MSI, ZIP, DEB, AppImage)")
 
+        # Check and create MaxMSP patch zip BEFORE generating HTML (so it's included in the table)
+        print(f"\n🔍 Checking MaxMSP patch dependencies...")
+        print(f"  Source directory: {MAXPATCHES_SOURCE}")
+        
+        if MAXPATCHES_SOURCE.exists():
+            all_found, missing, found_files = check_maxmsp_dependencies()
+            
+            if not all_found:
+                print(f"  ⚠️  Warning: Missing {len(missing)} required file(s):")
+                for m in missing:
+                    print(f"    - {m}")
+                print(f"  Attempting to create zip with available files...")
+            else:
+                print(f"  ✓ All required dependencies found!")
+            
+            if found_files:
+                # Create zip in the versioned directory with versioned filename
+                version_dir = BUILD_BASE / f"MVC_Calculator-{latest}"
+                version_dir.mkdir(parents=True, exist_ok=True)
+                maxmsp_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{latest}.zip"
+                if create_maxmsp_zip(maxmsp_zip, found_files):
+                    print(f"  ✓ MaxMSP patch zip created: {maxmsp_zip.name}")
+                    # Re-scan builds to include the newly created MaxMSP zip in the HTML
+                    versions = scan_builds()
+                    if latest in versions and maxmsp_zip not in versions[latest]:
+                        versions[latest].append(maxmsp_zip)
+                        print(f"  ✓ Added MaxMSP zip to versions for HTML generation")
+                else:
+                    print(f"  ❌ Failed to create MaxMSP patch zip")
+            else:
+                print(f"  ❌ No MaxMSP files found, skipping zip creation")
+        else:
+            print(f"  ⚠️  Warning: MaxPatches source directory not found: {MAXPATCHES_SOURCE}")
+            print(f"  Skipping MaxMSP patch zip creation.")
+
         notes = load_notes(latest)
         print(f"Loaded notes for {latest}: date={notes['date']}, tags={notes['tags']}")
+        if notes['tags']:
+            print(f"  Tag details:")
+            for t in notes['tags']:
+                normalized = normalize_tag_name(t)
+                display = format_tag_display(t)
+                print(f"    '{t}' -> normalized: '{normalized}' -> display: '{display}'")
 
         if not TEMPLATE.exists():
             print(f"ERROR: Template not found at {TEMPLATE}")
@@ -995,6 +1028,10 @@ def main():
         )
         if latest_tags_html:
             latest_tags_html = f"<div style='margin-top: 10px;'>{latest_tags_html}</div>"
+            print(f"  Generated tags HTML: {latest_tags_html[:150]}...")
+        else:
+            latest_tags_html = ""  # Ensure empty string if no tags
+            print(f"  ⚠️  Warning: No tags HTML generated (notes['tags'] = {notes['tags']})")
 
         # Perform replacements
         logo_path = find_logo_path()
@@ -1077,36 +1114,6 @@ def main():
         OUTPUT.write_text(html, encoding="utf-8")
         print(f"✓ index.html generated at: {OUTPUT}")
         print(f"  File size: {OUTPUT.stat().st_size} bytes")
-        
-        # Check and create MaxMSP patch zip in versioned directory
-        print(f"\n🔍 Checking MaxMSP patch dependencies...")
-        print(f"  Source directory: {MAXPATCHES_SOURCE}")
-        
-        if not MAXPATCHES_SOURCE.exists():
-            print(f"  ⚠️  Warning: MaxPatches source directory not found: {MAXPATCHES_SOURCE}")
-            print(f"  Skipping MaxMSP patch zip creation.")
-        else:
-            all_found, missing, found_files = check_maxmsp_dependencies()
-            
-            if not all_found:
-                print(f"  ⚠️  Warning: Missing {len(missing)} required file(s):")
-                for m in missing:
-                    print(f"    - {m}")
-                print(f"  Attempting to create zip with available files...")
-            else:
-                print(f"  ✓ All required dependencies found!")
-            
-            if found_files:
-                # Create zip in the versioned directory with versioned filename
-                version_dir = BUILD_BASE / f"MVC_Calculator-{latest}"
-                version_dir.mkdir(parents=True, exist_ok=True)
-                maxmsp_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{latest}.zip"
-                if create_maxmsp_zip(maxmsp_zip, found_files):
-                    print(f"  ✓ MaxMSP patch zip created: {maxmsp_zip.name}")
-                else:
-                    print(f"  ❌ Failed to create MaxMSP patch zip")
-            else:
-                print(f"  ❌ No MaxMSP files found, skipping zip creation")
         
         # Summary of files ready for FTP upload
         print(f"\n📦 Files ready for FTP upload:")

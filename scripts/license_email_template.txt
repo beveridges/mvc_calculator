@@ -13,7 +13,7 @@ INSTALLATION INSTRUCTIONS:
 2. Create a file named "license.key" 
 3. Paste the license key into the file
 4. Save the file to one of these locations:
-   - Windows: %APPDATA%\MVC_Calculator\license.key
+   - Windows: %APPDATA%\Roaming\MVC_Calculator\license.key
    - Or in the same folder as the MVC Calculator executable
 
 The license key is valid for your @hfmdd.de email address and will work on any machine.

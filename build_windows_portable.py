@@ -208,6 +208,25 @@ def copy_tree_to_dest(src: Path, dest_root: Path, dest_rel: str):
         shutil.rmtree(dest, ignore_errors=True)
     shutil.copytree(src, dest)
 
+def strip_pycache(build_dir: Path):
+    """Remove __pycache__ directories and .pyc files to reduce build size"""
+    removed_dirs = 0
+    removed_files = 0
+    for pycache in build_dir.rglob("__pycache__"):
+        try:
+            shutil.rmtree(pycache, ignore_errors=True)
+            removed_dirs += 1
+        except Exception:
+            pass
+    for pyc in build_dir.rglob("*.pyc"):
+        try:
+            pyc.unlink(missing_ok=True)
+            removed_files += 1
+        except Exception:
+            pass
+    if removed_dirs > 0 or removed_files > 0:
+        print(f"[optimize] Removed {removed_dirs} __pycache__ directories and {removed_files} .pyc files")
+
 # ============================================================
 # 5) Main
 # ============================================================
@@ -419,11 +438,21 @@ def main():
         "--hidden-import=scipy._lib._testutils",
     ]
 
-    # Exclude unused PyQt5 webengine modules to prevent build errors
+    # Exclude unused PyQt5 modules to reduce size
     args_pi += [
         "--exclude-module=PyQt5.QtWebEngine",
         "--exclude-module=PyQt5.QtWebEngineCore",
         "--exclude-module=PyQt5.QtWebEngineWidgets",
+        "--exclude-module=PyQt5.QtMultimedia",
+        "--exclude-module=PyQt5.QtMultimediaWidgets",
+        "--exclude-module=PyQt5.QtNetwork",
+        "--exclude-module=PyQt5.QtOpenGL",
+        "--exclude-module=PyQt5.QtPrintSupport",
+        "--exclude-module=PyQt5.QtSql",
+        "--exclude-module=PyQt5.QtTest",
+        "--exclude-module=PyQt5.QtXml",
+        "--exclude-module=PyQt5.QtDesigner",
+        "--exclude-module=PyQt5.QtHelp",
         "--collect-all", "PyQt5",
         "--collect-submodules", "PyQt5",
         "--collect-binaries", "PyQt5",
@@ -431,6 +460,8 @@ def main():
     ]
 
     # Data/resource folders typical for your app
+    # NOTE: Removed unused directories (ffmpeg, video, pacientes, software_requerido) to reduce size
+    # If you need these, uncomment them below
     data_map = [
         (project_root / "data", "data"),
         (project_root / "config", "config"),
@@ -445,10 +476,11 @@ def main():
         (project_root / "sqlite", "sqlite"),
         (project_root / "reports", "reports"),
         (project_root / "_DATA_", "datos"),
-        (project_root / "video", "video"),
-        (project_root / "pacientes", "pacientes"),
-        (project_root / "ffmpeg", "ffmpeg"),
-        (project_root / "software_requerido", "software_requerido"),
+        # Removed to reduce size (uncomment if needed):
+        # (project_root / "video", "video"),
+        # (project_root / "pacientes", "pacientes"),
+        # (project_root / "ffmpeg", "ffmpeg"),
+        # (project_root / "software_requerido", "software_requerido"),
     ]
     
     args_pi += [
@@ -519,6 +551,10 @@ def main():
     if not archived_at:
         print("[error] archive step failed.")
         sys.exit(4)
+    
+    # ---------- Optimize: Strip pycache after archiving ----------
+    print("\n[optimize] Stripping Python cache files...")
+    strip_pycache(archived_at)
     
     # ---------- Verify scipy in archived build ----------
     print("\n[verify] Verifying scipy in archived build...")

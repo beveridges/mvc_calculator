@@ -51,15 +51,17 @@ You will receive a `license.key` file attached to your email.
 
 **Recommended Location (Windows)** - persists across updates:
 ```
-%APPDATA%\MVC_Calculator\license.key
+%APPDATA%\Roaming\MVC_Calculator\license.key
 ```
+
+*(For example: C:\Users\YourName\AppData\Roaming\MVC_Calculator\license.key)*
 
 To find this folder:
 
    1. Press <kbd>Win</kbd> + <kbd>R</kbd>
    2. Type: `%APPDATA%`
    3. Press <kbd>Enter</kbd>
-   4. Navigate to (or create) the `MVC_Calculator` folder
+   4. Navigate to (or create) the `\Roaming\MVC_Calculator` folder
    5. Place `license.key` in this folder
 
 **Alternative Locations** (the application will check these automatically):

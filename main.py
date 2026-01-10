@@ -1035,7 +1035,7 @@ Thank you!"""
         layout.addWidget(location_instructions)
         
         # Recommended location (generic path - directory only)
-        recommended_path = "%APPDATA%\\MVC_Calculator\\"
+        recommended_path = "%APPDATA%\\Roaming\\MVC_Calculator"
         recommended_label = QLabel("1. Recommended Location (persists across updates)")
         recommended_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #27ae60; margin-top: 12px; margin-bottom: 5px;")
         layout.addWidget(recommended_label)
@@ -1053,31 +1053,45 @@ Thank you!"""
         layout.addLayout(recommended_path_layout)
         
         # Legacy location (example path - directory only)
-        legacy_path = "C:\\Program Files\\MVC_Calculator\\"
+        legacy_path = "C:\\Program Files\\MVC_Calculator"
         legacy_label = QLabel("2. Alternative Legacy Location (example)")
         legacy_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #e67e22; margin-top: 12px; margin-bottom: 5px;")
         layout.addWidget(legacy_label)
         
-        legacy_path_display = QLabel(f"<code style='font-family: Courier New; font-size: 10pt;'>{legacy_path}</code>")
-        legacy_path_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
-        legacy_path_display.setWordWrap(True)
-        layout.addWidget(legacy_path_display)
+        legacy_path_layout = QHBoxLayout()
+        legacy_path_input = QLineEdit()
+        legacy_path_input.setText(legacy_path)
+        legacy_path_input.setReadOnly(True)
+        legacy_path_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
+        legacy_path_copy_btn = QPushButton("Copy Path")
+        legacy_path_copy_btn.setStyleSheet("padding: 5px 15px;")
+        legacy_path_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(legacy_path))
+        legacy_path_layout.addWidget(legacy_path_input)
+        legacy_path_layout.addWidget(legacy_path_copy_btn)
+        layout.addLayout(legacy_path_layout)
 
         # Portable version location (placeholder - directory only)
-        portable_path = "<portable unzip folder>\\MVC_Calculator\\"
+        portable_path = "<portable unzip folder>\\MVC_Calculator"
         portable_label = QLabel("3. Portable Version (example)")
         portable_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #e67e22; margin-top: 12px; margin-bottom: 5px;")
         layout.addWidget(portable_label)
 
-        portable_path_display = QLabel(f"<code style='font-family: Courier New; font-size: 10pt;'>&lt;portable unzip folder&gt;\\MVC_Calculator\\</code>")
-        portable_path_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
-        portable_path_display.setWordWrap(True)
-        layout.addWidget(portable_path_display)
+        portable_path_layout = QHBoxLayout()
+        portable_path_input = QLineEdit()
+        portable_path_input.setText(portable_path)
+        portable_path_input.setReadOnly(True)
+        portable_path_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
+        portable_path_copy_btn = QPushButton("Copy Path")
+        portable_path_copy_btn.setStyleSheet("padding: 5px 15px;")
+        portable_path_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(portable_path))
+        portable_path_layout.addWidget(portable_path_input)
+        portable_path_layout.addWidget(portable_path_copy_btn)
+        layout.addLayout(portable_path_layout)
         
         location_note = QLabel(
             "<b>Note:</b> Save the license.key file in one of these directories. "
-            "The recommended location (%APPDATA%\\MVC_Calculator\\) persists across application updates. "
-            "The legacy location (same directory as executable) and <portable unzip folder>\\MVC_Calculator\\ also work but may be lost during updates."
+            "The recommended location (%APPDATA%\\Roaming\\MVC_Calculator) persists across application updates. "
+            "The legacy location (same directory as executable) and <portable unzip folder>\\MVC_Calculator also work but may be lost during updates."
         )
         location_note.setWordWrap(True)
         location_note.setStyleSheet("margin-top: 5px; margin-bottom: 10px; padding: 8px; background-color: #e8f4f8; border-left: 3px solid #2196F3;")

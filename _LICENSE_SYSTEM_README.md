@@ -65,7 +65,7 @@ python generate_license.py user@example.com GB 180 abc123def456...
 ## Installing License Keys
 
 **Recommended Location (Persistent across updates):**
-- **Windows**: `%APPDATA%\MVC_Calculator\license.key`
+- **Windows**: `%APPDATA%\MVC_Calculator\license.key` (expands to `C:\Users\YourName\AppData\Roaming\MVC_Calculator\license.key`)
 - **Linux/Mac**: `~/.local/share/MVC_Calculator/license.key`
 
 The application automatically migrates licenses from old locations to this persistent directory.
