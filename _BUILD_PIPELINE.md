@@ -41,20 +41,14 @@ git commit -m "Your commit message"
 git push
 ```
 
-### 4. In WSL: Git Pull
-```bash
-git pull
-```
-- Updates WSL repository with latest changes from GitHub
-
-### 5. In WSL: activate conda environment 
+### 4. In WSL: activate conda environment 
 ```bash
 conda activate mvccalculator
 ```
 
-### 6. In Windows: BUILD_ALL_WINDOWS.py 
+### 5. In Windows: BUILD_ALL_WINDOWS.py 
 ```bash
-python BUILD_ALL_WINDOWS.py
+  python BUILD_ALL_WINDOWS.py
 ```
 **DETAILS**
 **Location:** Project root directory  
@@ -66,9 +60,18 @@ python BUILD_ALL_WINDOWS.py
   - ZIP file: `MVC_Calculator-{version}-portable.zip`
   - Build artifacts/logs: `MVC_Calculator-{BUILDNUMBER}\buildfiles\`
 
-**Note:** This must be run on Windows (not WSL) because it uses Windows-specific build tools.
+**Note:** This must be run on Windows (not WSL) because it uses Windows-specific build 
+tools.
 
-### 5. In WSL: BUILD_ALL_LINUX.py 
+### 6. In WSL: Git Pull
+```bash
+git pull
+```
+- Updates WSL repository with latest changes from GitHub.  Especially THE VERSION INFORMATION
+
+
+
+### 7. In WSL: BUILD_ALL_LINUX.py 
 
 
 **Location:** Project root directory (in WSL)  
@@ -86,7 +89,7 @@ python BUILD_ALL_WINDOWS.py
 **Note:** This reads the build number that was incremented by the Windows build, ensuring version consistency.
 
 
-### 6: Review Before Upload (Optional)
+### 8: Review Before Upload (Optional)
 
 Generate the HTML page locally to review:
 
