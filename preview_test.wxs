@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="MVC Calculator Preview" Language="1033" Version="1.0.0"
+           Manufacturer="Moviolabs" UpgradeCode="9a1f9b7a-d0b3-4b8a-aad9-2d2b06c9a111">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MediaTemplate EmbedCab="yes" />
+    
+    <WixVariable Id="WixUIBannerBmp" Value="C:/Users/Scott/Dropbox/__PROJECTS__/MVC_CALCULATOR/resources/icons/MSI_INSTALLER_BANNER.png" />
+    <WixVariable Id="WixUIDialogBmp" Value="C:/Users/Scott/Dropbox/__PROJECTS__/MVC_CALCULATOR/resources/icons/MSI_INSTALLER_DIALOG_IMAGE_LARGE_B_W.png" />
+    
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="MVC Calculator" />
+      </Directory>
+    </Directory>
+    
+    <Feature Id="DefaultFeature" Level="1">
+      <Component Id="TestComponent" Directory="INSTALLFOLDER" Guid="*">
+        <File Id="TestFile" Source="C:\\Windows\\System32\\notepad.exe" KeyPath="yes" />
+      </Component>
+    </Feature>
+    
+    <UIRef Id="WixUI_Mondo" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+  </Product>
+</Wix>

@@ -1,0 +1,2656 @@
+#!/usr/bin/env python3
+# --------------------------------------------------------------------
+# Moviolabs — MVC Calculator Deploy Script
+#
+# FULL PRODUCTION VERSION
+#
+# • Uploads Windows + Linux builds via FTP
+# • Embeds your full HTML + CSS template EXACTLY
+# • Reads RELEASE_NOTES-<version>.txt
+# • Supports 0, 1, or many existing server releases
+# • Keeps only "latest" and "previous" releases
+# • NEVER crashes when only 1 version exists
+# --------------------------------------------------------------------
+
+from __future__ import annotations
+import argparse
+import re
+import ftplib
+from pathlib import Path
+from datetime import datetime
+from tqdm import tqdm
+
+# ====================================================================
+# CONFIG — MATCHES YOUR MACHINE
+# ====================================================================
+
+WIN_DIR = Path.home() / "Documents/.builds/mvc_calculator/msi/builds"
+LIN_DIR = Path.home() / "Documents/.builds/mvc_calculator"
+
+TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+DEFAULT_HOST = "ftp.moviolabs.com"
+DEFAULT_USER = "moviolab"
+DEFAULT_PASS = "xTQSz1g,n2we"
+
+# ====================================================================
+# FULL CSS BLOCK — CLEANED + DIRECTLY FROM YOUR PAGE
+# ====================================================================
+
+CSS_TEMPLATE = r"""
+:root {
+    --bg: #0d1117;
+    --panel: #11161f;
+    --border: #222738;
+    --text-main: #e6edf3;
+    --text-muted: #8b949e;
+    --header: #848d97;
+    --accent: #1f6feb;
+
+    --tag-api-bg: rgba(56, 139, 253, 0.15);
+    --tag-api-text: #448aff;
+
+    --tag-sec-bg: rgba(46, 160, 67, 0.15);
+    --tag-sec-text: #3fb950;
+
+    --tag-perf-bg: rgba(210, 153, 34, 0.15);
+    --tag-perf-text: #e3b341;
+}
+
+body {
+    margin: 0;
+    padding: 40px 20px;
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.page {
+    max-width: 980px;
+    margin: auto;
+    position: relative;
+}
+
+.top-header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 25px;
+}
+
+.logo {
+    height: 60px;
+}
+
+h1 {
+    font-size: 28px;
+    margin: 0;
+}
+
+.release-left {
+    position: absolute;
+    left: -200px;
+    top: 96px;
+    width: 180px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.release-left .tag {
+    margin: 6px 6px 0 0;
+}
+
+.section-title {
+    font-size: 20px;
+    margin: 0 0 8px;
+}
+
+/* Tags */
+.tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.tag-api         { background: var(--tag-api-bg);  color: var(--tag-api-text); }
+.tag-security    { background: var(--tag-sec-bg);  color: var(--tag-sec-text); }
+.tag-performance { background: var(--tag-perf-bg); color: var(--tag-perf-text); }
+
+/* Description */
+.release-description {
+    margin-top: 4px;
+    margin-bottom: 10px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.release-notes-text h3 {
+    margin-top: 20px;
+    margin-bottom: 6px;
+    font-size: 16px;
+    color: var(--accent);
+}
+
+.release-notes-text ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.release-notes-text li {
+    margin-bottom: 6px;
+}
+
+/* TABLES */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 18px;
+    margin-bottom: 32px;
+    font-size: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+thead {
+    background: #0f141b;
+}
+
+th {
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--header);
+    border-bottom: 1px solid var(--border);
+}
+
+td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+a.file-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-family: Consolas, "SF Mono", Menlo, monospace;
+}
+
+a.file-link:hover {
+    text-decoration: underline;
+}
+
+.size-col, .date-col {
+    color: var(--text-muted);
+}
+
+.desc-col {
+    color: var(--text-main);
+}
+
+hr.divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 34px 0 20px;
+}
+"""
+
+# ====================================================================
+# FULL HTML PAGE TEMPLATE
+# ====================================================================
+
+HTML_TEMPLATE = r"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MVC Calculator Releases</title>
+<style>
+{css}
+</style>
+</head>
+
+<body>
+<div class="page">
+
+<div class="top-header">
+    <img class="logo" src="coming.soon.light.on.darkL.svg" alt="Moviolabs Logo">
+    <h1>MVC Calculator Releases</h1>
+</div>
+
+<div class="release-left">
+    <div>{latest_date}</div>
+    {latest_tags}
+</div>
+
+<div>
+    <div class="section-title">Latest Release — {latest_version}</div>
+
+    <div class="release-description">
+        {latest_description}
+    </div>
+
+    <div class="release-notes-text">
+
+        <h3>What's New</h3>
+        <ul>
+            {latest_whats_new}
+        </ul>
+
+        <h3>Bug Fixes</h3>
+        <ul>
+            {latest_bug_fixes}
+        </ul>
+
+    </div>
+
+    <table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Last Modified</th>
+            <th>Size</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        {latest_table_rows}
+    </tbody>
+    </table>
+
+</div>
+
+<hr class="divider">
+
+{previous_release_block}
+
+</div>
+</body>
+</html>
+"""
+
+# ====================================================================
+# RELEASE NOTES PARSER
+# ====================================================================
+def parse_notes(path: Path):
+    txt = path.read_text(encoding="utf-8").splitlines()
+
+    data = {
+        "date": "",
+        "version": "",
+        "tags": [],
+        "description": "",
+        "whats_new": [],
+        "bug_fixes": []
+    }
+
+    section = None
+    desc_lines = []
+
+    for line in txt:
+        l = line.strip()
+
+        if l.startswith("DATE:"):
+            data["date"] = l.replace("DATE:", "").strip()
+        elif l.startswith("VERSION:"):
+            data["version"] = l.replace("VERSION:", "").strip()
+        elif l.startswith("TAGS:"):
+            raw = l.replace("TAGS:", "")
+            data["tags"] = [x.strip() for x in raw.split(",") if x.strip()]
+        elif l.startswith("DESCRIPTION:"):
+            section = "desc"
+        elif l.startswith("WHAT'S NEW:"):
+            section = "new"
+        elif l.startswith("BUG FIXES:"):
+            section = "bugs"
+
+        else:
+            if section == "desc" and l:
+                desc_lines.append(l)
+            elif section == "new" and l.startswith("-"):
+                data["whats_new"].append(l[1:].strip())
+            elif section == "bugs" and l.startswith("-"):
+                data["bug_fixes"].append(l[1:].strip())
+
+    data["description"] = "\n".join(desc_lines)
+    return data
+
+# ====================================================================
+# BUILD HELPERS
+# ====================================================================
+def newest_builds():
+    msi = max(WIN_DIR.glob("MVC_Calculator-*.msi"), key=lambda p: p.stat().st_mtime)
+    zipf = max(WIN_DIR.glob("MVC_Calculator-*-portable.zip"), key=lambda p: p.stat().st_mtime)
+    deb = max(LIN_DIR.glob("mvc-calculator_*.deb"), key=lambda p: p.stat().st_mtime)
+    appimg = max(LIN_DIR.glob("MVC_Calculator-*.AppImage"), key=lambda p: p.stat().st_mtime)
+    notes = max(LIN_DIR.glob("RELEASE_NOTES-*.txt"), key=lambda p: p.stat().st_mtime)
+    return msi, zipf, deb, appimg, notes
+
+def upload(ftp, path: Path):
+    total = path.stat().st_size
+    bar = tqdm(total=total, unit="B", unit_scale=True, desc=f"Uploading {path.name}")
+
+    def cb(chunk):
+        bar.update(len(chunk))
+
+    with path.open("rb") as f:
+        ftp.storbinary(f"STOR " + path.name, f, 8192, cb)
+
+    bar.close()
+
+# ====================================================================
+# TABLE ROW BUILDER FOR LATEST RELEASE
+# ====================================================================
+def format_file_row(file: Path, desc: str):
+    size = file.stat().st_size
+    size_str = f"{size//1024//1024}M" if size > 5_000_000 else f"{size//1024}K"
+    timestamp = datetime.fromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+    return f"""
+<tr>
+    <td><a class="file-link" href="{file.name}">{file.name}</a></td>
+    <td class="date-col">{timestamp}</td>
+    <td class="size-col">{size_str}</td>
+    <td class="desc-col">{desc}</td>
+</tr>
+"""
+
+# ====================================================================
+# HTML RENDERING
+# ====================================================================
+def render_html(latest, prev, latest_rows, prev_rows):
+
+    # Build tag HTML
+    tag_html = ""
+    for t in latest["tags"]:
+        tl = t.lower()
+        if tl == "api":
+            tag_html += '<span class="tag tag-api">API</span> '
+        elif tl == "security":
+            tag_html += '<span class="tag tag-security">Security</span> '
+        elif tl == "performance":
+            tag_html += '<span class="tag tag-performance">Performance</span> '
+
+    # Build previous-release block or hide it
+    if prev["version"]:
+        prev_block = f"""
+<div class="section-title">Previous Release — {prev['version']}</div>
+
+<table>
+<thead>
+<tr>
+    <th>Name</th>
+    <th>Last Modified</th>
+    <th>Size</th>
+    <th>Description</th>
+</tr>
+</thead>
+<tbody>
+{''.join(prev_rows)}
+</tbody>
+</table>
+"""
+    else:
+        prev_block = ""  # Hide block completely
+
+    return HTML_TEMPLATE.format(
+        css=CSS_TEMPLATE,
+        latest_date=latest["date"],
+        latest_tags=tag_html,
+        latest_version=latest["version"],
+        latest_description=latest["description"],
+        latest_whats_new="\n".join(f"<li>{x}</li>" for x in latest["whats_new"]),
+        latest_bug_fixes="\n".join(f"<li>{x}</li>" for x in latest["bug_fixes"]),
+        latest_table_rows="".join(latest_rows),
+        previous_release_block=prev_block
+    )
+
+# ====================================================================
+# MAIN
+# ====================================================================
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", default=DEFAULT_HOST)
+    parser.add_argument("--user")
+    parser.add_argument("--password")
+    args = parser.parse_args()
+
+    # Load newest local builds
+    msi, zipf, deb, appimg, notes = newest_builds()
+    latest = parse_notes(notes)
+
+    print("Latest release version:", latest["version"])
+    print("Tags:", latest["tags"])
+
+    # Connect FTP
+    ftp = ftplib.FTP(args.host)
+    ftp.login(args.user or DEFAULT_USER, args.password or DEFAULT_PASS)
+    ftp.cwd(TARGET_DIR)
+
+    # Detect release notes on FTP
+    files = ftp.nlst()
+    versions = []
+
+    for f in files:
+        m = re.search(r"RELEASE_NOTES-(.*)\.txt", f)
+        if m:
+            versions.append(m.group(1))
+
+    versions = sorted(versions, reverse=True)
+    print("Versions on server:", versions)
+
+    # ------------------------------------------------------------
+    # CASE 0 — No previous releases
+    # ------------------------------------------------------------
+    if len(versions) == 0:
+        print("⚠ First deployment — no previous release exists.")
+        prev = {
+            "version": "",
+            "description": "",
+            "date": "",
+            "tags": [],
+            "whats_new": [],
+            "bug_fixes": []
+        }
+        prev_rows = []
+
+    # ------------------------------------------------------------
+    # CASE 1 — One existing release
+    # ------------------------------------------------------------
+    elif len(versions) == 1:
+
+        existing = versions[0]
+
+        if existing == latest["version"]:
+            print("⚠ Only latest version exists — no previous release.")
+            prev = {
+                "version": "",
+                "description": "",
+                "date": "",
+                "tags": [],
+                "whats_new": [],
+                "bug_fixes": []
+            }
+            prev_rows = []
+
+        else:
+            prev_version = existing
+            print("Previous release:", prev_version)
+
+            prev_notes = Path("PREV_NOTES.txt")
+            with prev_notes.open("wb") as f:
+                ftp.retrbinary(f"RETR RELEASE_NOTES-" + prev_version + ".txt", f.write)
+
+            prev = parse_notes(prev_notes)
+
+            # Build table rows for previous release
+            prev_rows = []
+            for fname in files:
+                if prev_version in fname:
+                    desc = (
+                        "Windows installer" if fname.endswith(".msi") else
+                        "Portable ZIP build" if fname.endswith(".zip") else
+                        "Linux .deb package" if fname.endswith(".deb") else
+                        "Linux AppImage" if fname.endswith(".AppImage") else ""
+                    )
+                    if desc:
+                        size = ftp.size(fname)
+                        size_str = f"{size//1024//1024}M" if size > 5_000_000 else f"{size//1024}K"
+
+                        prev_rows.append(f"""
+<tr>
+    <td><a class="file-link" href="{fname}">{fname}</a></td>
+    <td class="date-col">--</td>
+    <td class="size-col">{size_str}</td>
+    <td class="desc-col">{desc}</td>
+</tr>
+""")
+
+    # ------------------------------------------------------------
+    # CASE 2 — 2+ existing releases (normal cleanup case)
+    # ------------------------------------------------------------
+    else:
+        # newest = versions[0], previous = versions[1]
+        if versions[0] == latest["version"]:
+            prev_version = versions[1]
+        else:
+            prev_version = versions[0]
+
+        print("Previous release:", prev_version)
+
+        prev_notes = Path("PREV_NOTES.txt")
+        with prev_notes.open("wb") as f:
+            ftp.retrbinary(f"RETR RELEASE_NOTES-" + prev_version + ".txt", f.write)
+
+        prev = parse_notes(prev_notes)
+
+        # table rows
+        prev_rows = []
+        for fname in files:
+            if prev_version in fname:
+                desc = (
+                    "Windows installer" if fname.endswith(".msi") else
+                    "Portable ZIP build" if fname.endswith(".zip") else
+                    "Linux .deb package" if fname.endswith(".deb") else
+                    "Linux AppImage" if fname.endswith(".AppImage") else ""
+                )
+                if desc:
+                    size = ftp.size(fname)
+                    size_str = f"{size//1024//1024}M" if size > 5_000_000 else f"{size//1024}K"
+
+                    prev_rows.append(f"""
+<tr>
+    <td><a class="file-link" href="{fname}">{fname}</a></td>
+    <td class="date-col">--</td>
+    <td class="size-col">{size_str}</td>
+    <td class="desc-col">{desc}</td>
+</tr>
+""")
+
+    # ====================================================================
+    # BUILD LATEST TABLE ROWS
+    # ====================================================================
+    latest_rows = [
+        format_file_row(msi, "Windows installer"),
+        format_file_row(zipf, "Portable ZIP build"),
+        format_file_row(deb, "Linux .deb package"),
+        format_file_row(appimg, "Linux AppImage"),
+    ]
+
+    # ====================================================================
+    # RENDER HTML
+    # ====================================================================
+    html = render_html(latest, prev, latest_rows, prev_rows)
+    Path("index.html").write_text(html, encoding="utf-8")
+    print("\nGenerated index.html")
+
+    # ====================================================================
+    # UPLOAD THE LATEST RELEASE FILES
+    # ====================================================================
+    print("\nUploading latest release:")
+    upload(ftp, msi)
+    upload(ftp, zipf)
+    upload(ftp, deb)
+    upload(ftp, appimg)
+    upload(ftp, notes)
+
+    # ALSO UPLOAD THE HTML
+    upload(ftp, Path("index.html"))
+
+    print("\nDeploy complete.")
+    ftp.quit()
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# #!/usr/bin/env python3
+# # Upload Windows + Linux builds + HTML + Release Notes to Moviolabs FTP
+# # ---------------------------------------------------------------------
+
+# from __future__ import annotations
+# import argparse
+# import ftplib
+# from pathlib import Path
+# from tqdm import tqdm
+
+# APP_BASENAME = "MVC_Calculator"
+
+# # -------------------------------------------------------------------
+# # REAL SOURCE PATHS (EXACTLY AS YOU CONFIRMED)
+# # -------------------------------------------------------------------
+# WIN_MSI_DIR = Path.home() / "Documents/.builds/mvc_calculator/msi/builds"
+# WIN_PORTABLE_DIR = WIN_MSI_DIR   # ZIP lives here too
+
+# LINUX_DIR = Path.home() / "Documents/.builds/mvc_calculator"
+
+# TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# DEFAULT_HOST = "ftp.moviolabs.com"
+# PRESET_USERNAME = "moviolab"
+# PRESET_PASSWORD = "xTQSz1g,n2we"
+
+
+# # -------------------------------------------------------------------
+# # FIND WINDOWS FILES
+# # -------------------------------------------------------------------
+# def newest_windows():
+    # msi_files = list(WIN_MSI_DIR.glob("MVC_Calculator-*.msi"))
+    # zip_files = list(WIN_MSI_DIR.glob("MVC_Calculator-*-portable.zip"))
+
+    # if not msi_files:
+        # raise FileNotFoundError("❌ No Windows MSI found.")
+    # if not zip_files:
+        # raise FileNotFoundError("❌ No Windows portable ZIP found.")
+
+    # return (
+        # max(msi_files, key=lambda p: p.stat().st_mtime),
+        # max(zip_files, key=lambda p: p.stat().st_mtime)
+    # )
+
+
+# # -------------------------------------------------------------------
+# # FIND LINUX FILES
+# # -------------------------------------------------------------------
+# def newest_linux():
+    # deb = list(LINUX_DIR.glob("mvc-calculator_*.deb"))
+    # appimg = list(LINUX_DIR.glob("MVC_Calculator-*.AppImage"))
+
+    # if not deb:
+        # raise FileNotFoundError("❌ No Linux .deb found.")
+    # if not appimg:
+        # raise FileNotFoundError("❌ No Linux AppImage found.")
+
+    # return (
+        # max(deb, key=lambda p: p.stat().st_mtime),
+        # max(appimg, key=lambda p: p.stat().st_mtime)
+    # )
+
+
+# # -------------------------------------------------------------------
+# # FIND RELEASE NOTES FILE
+# # -------------------------------------------------------------------
+# def newest_release_notes():
+    # notes = list(LINUX_DIR.glob("RELEASE_NOTES-*.txt"))
+    # if not notes:
+        # print("⚠ No release notes file found — skipping.")
+        # return None
+
+    # return max(notes, key=lambda p: p.stat().st_mtime)
+
+
+# # -------------------------------------------------------------------
+# # FTP UPLOAD WITH PROGRESS BAR
+# # -------------------------------------------------------------------
+# def upload_with_progress(ftp, local: Path):
+    # """Upload file with a real-time progress bar."""
+    # total = local.stat().st_size
+
+    # bar = tqdm(
+        # total=total,
+        # unit="B",
+        # unit_scale=True,
+        # desc=f"Uploading {local.name}",
+        # ascii=True
+    # )
+
+    # def callback(data):
+        # bar.update(len(data))
+
+    # with local.open("rb") as f:
+        # ftp.storbinary(
+            # f"STOR {local.name}",
+            # f,
+            # blocksize=8192,
+            # callback=callback
+        # )
+
+    # bar.close()
+
+
+# # -------------------------------------------------------------------
+# # CREATE HTML PAGE ON THE FLY (WITH RELEASE NOTES)
+# # -------------------------------------------------------------------
+# def generate_release_html(msi, zipf, deb, appimg, notes_text):
+    # notes_html = ""
+
+    # if notes_text:
+        # escaped = (
+            # notes_text.replace("&", "&amp;")
+                      # .replace("<", "&lt;")
+                      # .replace(">", "&gt;")
+        # )
+
+        # notes_html = f"""
+        # <div class="card">
+            # <h3>Release Notes</h3>
+            # <pre style="white-space: pre-wrap; font-size: 0.9rem;">{escaped}</pre>
+        # </div>
+        # """
+
+    # return f"""<!DOCTYPE html>
+# <html lang="en">
+# <head>
+# <meta charset="UTF-8" />
+# <title>MVC Calculator — Latest Release</title>
+# <style>
+ # body {{
+    # font-family: system-ui, sans-serif;
+    # padding: 40px;
+    # max-width: 800px;
+    # margin: auto;
+    # background: #fafafa;
+ # }}
+ # h1, h2 {{
+    # text-align: center;
+ # }}
+ # .card {{
+    # background: #fff;
+    # padding: 20px 24px;
+    # border-radius: 12px;
+    # box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    # margin-bottom: 25px;
+ # }}
+ # .button {{
+    # background: #006CFF;
+    # color: white;
+    # padding: 10px 18px;
+    # border-radius: 6px;
+    # text-decoration: none;
+    # font-weight: 600;
+ # }}
+ # .filename {{
+    # color: #666;
+    # font-size: 0.9rem;
+    # margin-top: 6px;
+ # }}
+# </style>
+# </head>
+# <body>
+
+# <h1>MVC Calculator</h1>
+# <h2>Latest Release</h2>
+
+# <div class="card">
+  # <h3>Windows Installer (.msi)</h3>
+  # <div class="filename">{msi.name}</div>
+  # <a class="button" href="{msi.name}">Download</a>
+# </div>
+
+# <div class="card">
+  # <h3>Windows Portable (.zip)</h3>
+  # <div class="filename">{zipf.name}</div>
+  # <a class="button" href="{zipf.name}">Download</a>
+# </div>
+
+# <div class="card">
+  # <h3>Linux .deb Package</h3>
+  # <div class="filename">{deb.name}</div>
+  # <a class="button" href="{deb.name}">Download</a>
+# </div>
+
+# <div class="card">
+  # <h3>Linux AppImage</h3>
+  # <div class="filename">{appimg.name}</div>
+  # <a class="button" href="{appimg.name}">Download</a>
+# </div>
+
+# {notes_html}
+
+# </body>
+# </html>
+# """
+
+
+# # -------------------------------------------------------------------
+# # FTP DIRECTORY HELPERS
+# # -------------------------------------------------------------------
+# def ensure_dir(ftp, remote):
+    # parts = remote.strip("/").split("/")
+    # for i in range(1, len(parts) + 1):
+        # sub = "/" + "/".join(parts[:i])
+        # try:
+            # ftp.cwd(sub)
+        # except ftplib.error_perm:
+            # ftp.mkd(sub)
+            # ftp.cwd(sub)
+
+
+# # -------------------------------------------------------------------
+# # MAIN
+# # -------------------------------------------------------------------
+# def main():
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--host", default=DEFAULT_HOST)
+    # parser.add_argument("--user")
+    # parser.add_argument("--password")
+    # args = parser.parse_args()
+
+    # print("\n📦 Locating artifacts…")
+
+    # win_msi, win_zip = newest_windows()
+    # lin_deb, lin_appimg = newest_linux()
+    # notes_file = newest_release_notes()
+
+    # notes_text = notes_file.read_text(encoding="utf-8") if notes_file else None
+
+    # print("\nFound:")
+    # print(" • Windows MSI:", win_msi)
+    # print(" • Windows ZIP:", win_zip)
+    # print(" • Linux DEB:", lin_deb)
+    # print(" • Linux AppImage:", lin_appimg)
+    # print(" • Release Notes:", notes_file if notes_file else "(none)")
+
+    # # ---- Generate new HTML page ----
+    # html_text = generate_release_html(win_msi, win_zip, lin_deb, lin_appimg, notes_text)
+    # html_file = Path("index.html")
+    # html_file.write_text(html_text, encoding="utf-8")
+
+    # print("\n📝 Generated index.html\n")
+
+    # # ---- FTP ----
+    # print("🔌 Connecting to FTP…")
+
+    # with ftplib.FTP(args.host) as ftp:
+        # ftp.login(
+            # user=args.user or PRESET_USERNAME,
+            # passwd=args.password or PRESET_PASSWORD
+        # )
+        # ensure_dir(ftp, TARGET_DIR)
+        # ftp.cwd(TARGET_DIR)
+
+        # upload_with_progress(ftp, win_msi)
+        # upload_with_progress(ftp, win_zip)
+        # upload_with_progress(ftp, lin_deb)
+        # upload_with_progress(ftp, lin_appimg)
+        # upload_with_progress(ftp, html_file)
+
+        # if notes_file:
+            # upload_with_progress(ftp, notes_file)
+
+    # print("\n🌍 Deployment complete.\n")
+
+
+# if __name__ == "__main__":
+    # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # #!/usr/bin/env python3
+# # # Upload Windows + Linux builds + HTML + Release Notes to Moviolabs FTP
+# # # ---------------------------------------------------------------------
+
+# # from __future__ import annotations
+# # import argparse
+# # import ftplib
+# # from pathlib import Path
+
+# # APP_BASENAME = "MVC_Calculator"
+
+# # # -------------------------------------------------------------------
+# # # REAL SOURCE PATHS (EXACTLY AS YOU CONFIRMED)
+# # # -------------------------------------------------------------------
+# # WIN_MSI_DIR = Path.home() / "Documents/.builds/mvc_calculator/msi/builds"
+# # WIN_PORTABLE_DIR = WIN_MSI_DIR   # zip lives here too
+
+# # LINUX_DIR = Path.home() / "Documents/.builds/mvc_calculator"
+
+# # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# # DEFAULT_HOST = "ftp.moviolabs.com"
+# # PRESET_USERNAME = "moviolab"
+# # PRESET_PASSWORD = "xTQSz1g,n2we"
+
+
+# # # -------------------------------------------------------------------
+# # # FIND WINDOWS FILES
+# # # -------------------------------------------------------------------
+# # def newest_windows():
+    # # msi_files = list(WIN_MSI_DIR.glob("MVC_Calculator-*.msi"))
+    # # zip_files = list(WIN_MSI_DIR.glob("MVC_Calculator-*-portable.zip"))
+
+    # # if not msi_files:
+        # # raise FileNotFoundError("❌ No Windows MSI found.")
+    # # if not zip_files:
+        # # raise FileNotFoundError("❌ No Windows portable ZIP found.")
+
+    # # return (
+        # # max(msi_files, key=lambda p: p.stat().st_mtime),
+        # # max(zip_files, key=lambda p: p.stat().st_mtime)
+    # # )
+
+
+# # # -------------------------------------------------------------------
+# # # FIND LINUX FILES
+# # # -------------------------------------------------------------------
+# # def newest_linux():
+    # # deb = list(LINUX_DIR.glob("mvc-calculator_*.deb"))
+    # # appimg = list(LINUX_DIR.glob("MVC_Calculator-*.AppImage"))
+
+    # # if not deb:
+        # # raise FileNotFoundError("❌ No Linux .deb found.")
+    # # if not appimg:
+        # # raise FileNotFoundError("❌ No Linux AppImage found.")
+
+    # # return (
+        # # max(deb, key=lambda p: p.stat().st_mtime),
+        # # max(appimg, key=lambda p: p.stat().st_mtime)
+    # # )
+
+
+# # # -------------------------------------------------------------------
+# # # FIND RELEASE NOTES FILE
+# # # -------------------------------------------------------------------
+# # def newest_release_notes():
+    # # notes = list(LINUX_DIR.glob("RELEASE_NOTES-*.txt"))
+    # # if not notes:
+        # # print("⚠ No release notes file found — skipping.")
+        # # return None
+
+    # # return max(notes, key=lambda p: p.stat().st_mtime)
+
+
+# # # -------------------------------------------------------------------
+# # # CREATE HTML PAGE ON THE FLY (WITH RELEASE NOTES)
+# # # -------------------------------------------------------------------
+# # def generate_release_html(msi, zipf, deb, appimg, notes_text):
+    # # notes_html = ""
+
+    # # if notes_text:
+        # # # Convert text file into <pre> for clean formatting
+        # # escaped = notes_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        # # notes_html = f"""
+        # # <div class="card">
+            # # <h3>Release Notes</h3>
+            # # <pre style="white-space: pre-wrap; font-size: 0.9rem;">{escaped}</pre>
+        # # </div>
+        # # """
+
+    # # return f"""<!DOCTYPE html>
+# # <html lang="en">
+# # <head>
+# # <meta charset="UTF-8" />
+# # <title>MVC Calculator — Latest Release</title>
+# # <style>
+ # # body {{
+    # # font-family: system-ui, sans-serif;
+    # # padding: 40px;
+    # # max-width: 800px;
+    # # margin: auto;
+    # # background: #fafafa;
+ # # }}
+ # # h1, h2 {{
+    # # text-align: center;
+ # # }}
+ # # .card {{
+    # # background: #fff;
+    # # padding: 20px 24px;
+    # # border-radius: 12px;
+    # # box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    # # margin-bottom: 25px;
+ # # }}
+ # # .button {{
+    # # background: #006CFF;
+    # # color: white;
+    # # padding: 10px 18px;
+    # # border-radius: 6px;
+    # # text-decoration: none;
+    # # font-weight: 600;
+ # # }}
+ # # .filename {{
+    # # color: #666;
+    # # font-size: 0.9rem;
+    # # margin-top: 6px;
+ # # }}
+# # </style>
+# # </head>
+# # <body>
+
+# # <h1>MVC Calculator</h1>
+# # <h2>Latest Release</h2>
+
+# # <div class="card">
+  # # <h3>Windows Installer (.msi)</h3>
+  # # <div class="filename">{msi.name}</div>
+  # # <a class="button" href="{msi.name}">Download</a>
+# # </div>
+
+# # <div class="card">
+  # # <h3>Windows Portable (.zip)</h3>
+  # # <div class="filename">{zipf.name}</div>
+  # # <a class="button" href="{zipf.name}">Download</a>
+# # </div>
+
+# # <div class="card">
+  # # <h3>Linux .deb Package</h3>
+  # # <div class="filename">{deb.name}</div>
+  # # <a class="button" href="{deb.name}">Download</a>
+# # </div>
+
+# # <div class="card">
+  # # <h3>Linux AppImage</h3>
+  # # <div class="filename">{appimg.name}</div>
+  # # <a class="button" href="{appimg.name}">Download</a>
+# # </div>
+
+# # {notes_html}
+
+# # </body>
+# # </html>
+# # """
+
+
+# # # -------------------------------------------------------------------
+# # # FTP HELPERS
+# # # -------------------------------------------------------------------
+# # def ensure_dir(ftp, remote):
+    # # parts = remote.strip("/").split("/")
+    # # for i in range(1, len(parts) + 1):
+        # # sub = "/" + "/".join(parts[:i])
+        # # try:
+            # # ftp.cwd(sub)
+        # # except ftplib.error_perm:
+            # # ftp.mkd(sub)
+            # # ftp.cwd(sub)
+
+
+# # def upload(ftp, local: Path):
+    # # print(f"⬆ Uploading {local.name}")
+    # # with local.open("rb") as f:
+        # # ftp.storbinary(f"STOR {local.name}", f)
+
+
+# # # -------------------------------------------------------------------
+# # # MAIN
+# # # -------------------------------------------------------------------
+# # def main():
+    # # parser = argparse.ArgumentParser()
+    # # parser.add_argument("--host", default=DEFAULT_HOST)
+    # # parser.add_argument("--user")
+    # # parser.add_argument("--password")
+    # # args = parser.parse_args()
+
+    # # print("\n📦 Locating artifacts…")
+
+    # # win_msi, win_zip = newest_windows()
+    # # lin_deb, lin_appimg = newest_linux()
+    # # notes_file = newest_release_notes()
+
+    # # notes_text = notes_file.read_text(encoding="utf-8") if notes_file else None
+
+    # # print("\nFound:")
+    # # print(" • Windows MSI:", win_msi)
+    # # print(" • Windows ZIP:", win_zip)
+    # # print(" • Linux DEB:", lin_deb)
+    # # print(" • Linux AppImage:", lin_appimg)
+    # # print(" • Release Notes:", notes_file if notes_file else "(none)")
+
+    # # # ---- Generate HTML ----
+    # # html = generate_release_html(win_msi, win_zip, lin_deb, lin_appimg, notes_text)
+    # # html_file = Path("index.html")
+    # # html_file.write_text(html, encoding="utf-8")
+
+    # # print("\n📝 Generated index.html\n")
+
+    # # # ---- FTP ----
+    # # print("🔌 Connecting to FTP…")
+
+    # # with ftplib.FTP(args.host) as ftp:
+        # # ftp.login(user=args.user or PRESET_USERNAME, passwd=args.password or PRESET_PASSWORD)
+        # # ensure_dir(ftp, TARGET_DIR)
+        # # ftp.cwd(TARGET_DIR)
+
+        # # upload(ftp, win_msi)
+        # # upload(ftp, win_zip)
+        # # upload(ftp, lin_deb)
+        # # upload(ftp, lin_appimg)
+        # # upload(ftp, html_file)
+
+        # # if notes_file:
+            # # upload(ftp, notes_file)
+
+    # # print("\n🌍 Deployment complete.\n")
+
+
+# # if __name__ == "__main__":
+    # # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # #!/usr/bin/env python3
+# # # # Upload Windows + Linux builds to Moviolabs FTP
+# # # #
+# # # # - Keeps ORIGINAL logic for finding the latest build files
+# # # # - Windows builds:  C:\Users\Scott\Documents\.builds\mvc_calculator\msi\builds
+# # # # - Linux builds:    C:\Users\Scott\Documents\.builds\mvc_calculator
+# # # # - Files uploaded:
+# # # #       MVC_Calculator-*.msi
+# # # #       MVC_Calculator-*-portable.zip
+# # # #       mvc-calculator_*.deb
+# # # #       MVC_Calculator-*.AppImage
+# # # # - Adds DOS-style progress bar during upload
+
+# # # from __future__ import annotations
+# # # import argparse
+# # # import ftplib
+# # # from pathlib import Path
+
+# # # # ===========================
+# # # # DIRECTORY MAP (ORIGINAL)
+# # # # ===========================
+
+# # # # LINUX FILES ARE IN:
+# # # #   C:\Users\Scott\Documents\.builds\mvc_calculator
+# # # SOURCE_LINUX = Path.home() / "Documents/.builds/mvc_calculator"
+
+# # # # WINDOWS FILES ARE IN:
+# # # #   C:\Users\Scott\Documents\.builds\mvc_calculator\msi\builds
+# # # SOURCE_WINDOWS = SOURCE_LINUX / "msi" / "builds"
+
+# # # # FTP TARGET
+# # # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# # # DEFAULT_HOST = "ftp.moviolabs.com"
+# # # DEFAULT_USER = "moviolab"
+# # # DEFAULT_PASS = "xTQSz1g,n2we"   # <-- put your cPanel/FTP password here
+
+
+# # # # ===========================
+# # # # FIND NEWEST WINDOWS FILES
+# # # # ===========================
+# # # def newest_windows(src: Path):
+    # # # """
+    # # # Return (newest_msi, newest_portable_zip)
+    # # # using the ORIGINAL glob patterns and directory.
+    # # # """
+
+    # # # # MSI
+    # # # msi_files = list(src.glob("MVC_Calculator-*.msi"))
+    # # # if not msi_files:
+        # # # raise FileNotFoundError(f"No Windows MSI found in: {src}")
+    # # # newest_msi = max(msi_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # PORTABLE ZIP
+    # # # zip_files = list(src.glob("MVC_Calculator-*-portable.zip"))
+    # # # if not zip_files:
+        # # # raise FileNotFoundError(f"No Windows portable ZIP found in: {src}")
+    # # # newest_zip = max(zip_files, key=lambda p: p.stat().st_mtime)
+
+    # # # return newest_msi, newest_zip
+
+
+# # # # ===========================
+# # # # FIND NEWEST LINUX FILES
+# # # # ===========================
+# # # def newest_linux(src: Path):
+    # # # """
+    # # # Return (newest_deb, newest_appimage)
+    # # # using the ORIGINAL glob patterns and directory.
+    # # # """
+
+    # # # # LINUX DEB (lives directly in the root folder)
+    # # # deb_files = list(src.glob("mvc-calculator_*.deb"))
+    # # # if not deb_files:
+        # # # raise FileNotFoundError(f"Linux .deb missing in: {src}")
+    # # # newest_deb = max(deb_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # LINUX APPIMAGE (also in the root folder)
+    # # # appimg_files = list(src.glob("MVC_Calculator-*.AppImage"))
+    # # # if not appimg_files:
+        # # # raise FileNotFoundError(f"Linux AppImage missing in: {src}")
+    # # # newest_appimg = max(appimg_files, key=lambda p: p.stat().st_mtime)
+
+    # # # return newest_deb, newest_appimg
+
+
+# # # # ===========================
+# # # # FTP HELPERS
+# # # # ===========================
+# # # def ensure_dir(ftp, remote: str):
+    # # # """
+    # # # Ensure that TARGET_DIR exists on the server.
+    # # # Creates intermediate directories if needed.
+    # # # """
+    # # # parts = remote.strip("/").split("/")
+    # # # for i in range(1, len(parts) + 1):
+        # # # sub = "/" + "/".join(parts[:i])
+        # # # try:
+            # # # ftp.cwd(sub)
+        # # # except ftplib.error_perm:
+            # # # ftp.mkd(sub)
+            # # # ftp.cwd(sub)
+
+
+# # # # ===========================
+# # # # PROGRESS BAR UPLOADER
+# # # # ===========================
+# # # def upload(ftp, path: Path, block_size: int = 65536):
+    # # # """
+    # # # Upload a file to FTP with a DOS-style progress bar.
+    # # # Keeps the original STOR behaviour but adds feedback.
+    # # # """
+
+    # # # file_size = path.stat().st_size
+    # # # uploaded = 0
+
+    # # # print(f"\n[upload] {path.name}")
+
+    # # # def handle_block(block: bytes):
+        # # # nonlocal uploaded
+        # # # uploaded += len(block)
+
+        # # # pct = uploaded / file_size
+        # # # bar_len = 20
+        # # # filled = int(bar_len * pct)
+        # # # bar = "█" * filled + "░" * (bar_len - filled)
+
+        # # # print(
+            # # # f"\rUploading: {bar} {pct*100:5.1f}%  "
+            # # # f"({uploaded/1_000_000:.1f} MB / {file_size/1_000_000:.1f} MB)",
+            # # # end="",
+            # # # flush=True,
+        # # # )
+
+    # # # with path.open("rb") as f:
+        # # # ftp.storbinary(f"STOR " + path.name, f, blocksize=block_size, callback=handle_block)
+
+    # # # print("\n[done]")
+
+
+# # # # ===========================
+# # # # MAIN
+# # # # ===========================
+# # # def main():
+    # # # parser = argparse.ArgumentParser(description="Upload latest MVC Calculator builds to Moviolabs FTP.")
+    # # # parser.add_argument("--host", default=DEFAULT_HOST, help="FTP host (default: ftp.moviolabs.com)")
+    # # # parser.add_argument("--user", help="FTP username (default: moviolab)")
+    # # # parser.add_argument("--password", help="FTP password (default: value in script)")
+    # # # args = parser.parse_args()
+
+    # # # user = args.user or DEFAULT_USER
+    # # # pw = args.password or DEFAULT_PASS
+
+    # # # print("\n📦 Locating build artifacts using ORIGINAL logic...")
+
+    # # # # Detect Windows builds (original logic)
+    # # # win_msi, win_zip = newest_windows(SOURCE_WINDOWS)
+
+    # # # # Detect Linux builds (original logic)
+    # # # lin_deb, lin_appimg = newest_linux(SOURCE_LINUX)
+
+    # # # print("\nFound:")
+    # # # print(f" - Windows MSI:       {win_msi}")
+    # # # print(f" - Windows portable:  {win_zip}")
+    # # # print(f" - Linux .deb:        {lin_deb}")
+    # # # print(f" - Linux AppImage:    {lin_appimg}")
+
+    # # # print("\n🔌 Connecting to FTP…")
+    # # # with ftplib.FTP(args.host) as ftp:
+        # # # ftp.login(user=user, passwd=pw)
+
+        # # # ensure_dir(ftp, TARGET_DIR)
+        # # # ftp.cwd(TARGET_DIR)
+
+        # # # # Upload four files (exactly as before, just with progress bars)
+        # # # for f in (win_msi, win_zip, lin_deb, lin_appimg):
+            # # # upload(ftp, f)
+
+    # # # print("\n🎉 FTP deploy complete.\n")
+
+
+# # # if __name__ == "__main__":
+    # # # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # # #!/usr/bin/env python3
+# # # # # Full Multi-Version Moviolabs Release Deployer
+# # # # # -------------------------------------------------
+# # # # # Features:
+# # # # #  ✓ Per-version release notes (RELEASE_NOTES-<version>.txt)
+# # # # #  ✓ Detects all local builds and notes
+# # # # #  ✓ Builds GitHub-style release index.html
+# # # # #  ✓ Uploads index.html, releases, and notes
+# # # # #  ✓ DOS-style progress bar uploader
+
+# # # # from __future__ import annotations
+# # # # import argparse
+# # # # import ftplib
+# # # # import re
+# # # # from pathlib import Path
+# # # # from datetime import datetime
+
+# # # # # ===================================================
+# # # # # CONFIG
+# # # # # ===================================================
+
+# # # # SOURCE = Path.home() / "Documents/.builds/mvc_calculator"
+# # # # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# # # # DEFAULT_HOST = "ftp.moviolabs.com"
+# # # # DEFAULT_USER = "moviolab"
+# # # # DEFAULT_PASS = "xTQSz1g,n2we"  # UPDATE after changing cPanel password
+
+
+# # # # # ===================================================
+# # # # # PROGRESS-BAR FTP UPLOADER
+# # # # # ===================================================
+# # # # def upload(ftp, path: Path, block_size: int = 65536):
+    # # # # file_size = path.stat().st_size
+    # # # # uploaded = 0
+
+    # # # # print(f"\n[upload] {path.name}")
+
+    # # # # def handle(block):
+        # # # # nonlocal uploaded
+        # # # # uploaded += len(block)
+
+        # # # # pct = uploaded / file_size
+        # # # # bar_len = 20
+        # # # # filled = int(bar_len * pct)
+        # # # # bar = "█" * filled + "░" * (bar_len - filled)
+
+        # # # # print(
+            # # # # f"\rUploading: {bar} {pct*100:5.1f}% "
+            # # # # f"({uploaded/1_000_000:.1f} MB / {file_size/1_000_000:.1f} MB)",
+            # # # # end="",
+            # # # # flush=True,
+        # # # # )
+
+    # # # # with path.open("rb") as f:
+        # # # # ftp.storbinary(f"STOR " + path.name, f, blocksize=block_size, callback=handle)
+
+    # # # # print("\n[done]")
+
+
+# # # # # ===================================================
+# # # # # UTILS
+# # # # # ===================================================
+# # # # def ensure_dir(ftp, remote):
+    # # # # parts = remote.strip("/").split("/")
+    # # # # for i in range(1, len(parts) + 1):
+        # # # # sub = "/" + "/".join(parts[:i])
+        # # # # try:
+            # # # # ftp.cwd(sub)
+        # # # # except ftplib.error_perm:
+            # # # # ftp.mkd(sub)
+            # # # # ftp.cwd(sub)
+
+
+# # # # # ===================================================
+# # # # # VERSION + RELEASE NOTES SCANNER
+# # # # # ===================================================
+# # # # VERSION_REGEX = re.compile(r"(\d+\.\d+-alpha\.\d+\.\d+)")
+
+
+# # # # def extract_version_from_filename(name: str):
+    # # # # """
+    # # # # Extracts version from:
+        # # # # MVC_Calculator-25.11-alpha.01.73.msi
+        # # # # RELEASE_NOTES-25.11-alpha.01.73.txt
+    # # # # """
+    # # # # m = VERSION_REGEX.search(name)
+    # # # # return m.group(1) if m else None
+
+
+# # # # def scan_local_releases():
+    # # # # """
+    # # # # Returns a dict:
+    # # # # {
+       # # # # "25.11-alpha.01.73": {
+           # # # # "notes": Path(...),
+           # # # # "files": [Path(...), Path(...)]
+       # # # # },
+       # # # # "25.11-alpha.01.69": {...},
+       # # # # ...
+    # # # # }
+    # # # # """
+
+    # # # # releases = {}
+
+    # # # # for path in SOURCE.iterdir():
+        # # # # if not path.is_file():
+            # # # # continue
+
+        # # # # version = extract_version_from_filename(path.name)
+        # # # # if not version:
+            # # # # continue
+
+        # # # # if version not in releases:
+            # # # # releases[version] = {"notes": None, "files": []}
+
+        # # # # if path.name.startswith("RELEASE_NOTES-"):
+            # # # # releases[version]["notes"] = path
+        # # # # else:
+            # # # # releases[version]["files"].append(path)
+
+    # # # # return releases
+
+
+# # # # # ===================================================
+# # # # # HTML GENERATION
+# # # # # ===================================================
+# # # # def generate_html_release_page(release_data: dict):
+    # # # # """
+    # # # # release_data = {
+        # # # # version: { "notes": Path | None, "files": [Path, ...] }
+    # # # # }
+    # # # # """
+
+    # # # # versions = sorted(release_data.keys(), reverse=True)
+    # # # # latest = versions[0]
+
+    # # # # def fmt_files(version):
+        # # # # rows = []
+        # # # # for f in sorted(release_data[version]["files"]):
+            # # # # time = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            # # # # size = f.stat().st_size / 1_000_000
+            # # # # desc = (
+                # # # # "Windows Installer" if f.suffix == ".msi"
+                # # # # else "Portable ZIP Build" if "portable" in f.name
+                # # # # else "Linux DEB Package" if f.name.endswith(".deb")
+                # # # # else "Linux AppImage" if "AppImage" in f.name
+                # # # # else "File"
+            # # # # )
+            # # # # rows.append(
+                # # # # f"""
+# # # # <tr>
+    # # # # <td><a href="{f.name}">{f.name}</a></td>
+    # # # # <td>{time}</td>
+    # # # # <td>{size:.1f} MB</td>
+    # # # # <td>{desc}</td>
+# # # # </tr>
+# # # # """
+            # # # # )
+        # # # # return "\n".join(rows)
+
+    # # # # def fmt_notes(version):
+        # # # # notes_file = release_data[version]["notes"]
+        # # # # if notes_file and notes_file.exists():
+            # # # # lines = notes_file.read_text(encoding="utf-8").splitlines()
+            # # # # if lines:
+                # # # # return "<ul>" + "\n".join(f"<li>{line}</li>" for line in lines) + "</ul>"
+        # # # # return "<p>No release notes available.</p>"
+
+    # # # # # -------------------------
+    # # # # # START BUILDING HTML
+    # # # # # -------------------------
+
+    # # # # html = f"""
+# # # # <!DOCTYPE html>
+# # # # <html lang="en">
+# # # # <head>
+# # # # <meta charset="UTF-8">
+# # # # <title>MVC Calculator Releases</title>
+# # # # <link rel="stylesheet" href="/theme/style.css">
+# # # # </head>
+
+# # # # <body>
+
+# # # # <h1 style="color:#66ccff; font-weight:700;">⚡ Latest Release — {latest}</h1>
+
+# # # # <h2>Release Notes</h2>
+# # # # {fmt_notes(latest)}
+
+# # # # <h2>Downloads</h2>
+# # # # <table class="release-table">
+# # # # <thead>
+# # # # <tr>
+  # # # # <th>Name</th>
+  # # # # <th>Last Modified</th>
+  # # # # <th>Size</th>
+  # # # # <th>Description</th>
+# # # # </tr>
+# # # # </thead>
+# # # # <tbody>
+# # # # {fmt_files(latest)}
+# # # # </tbody>
+# # # # </table>
+
+# # # # <h2>Previous Releases</h2>
+# # # # """
+
+    # # # # # -------------------------
+    # # # # # PREVIOUS RELEASE SECTIONS
+    # # # # # -------------------------
+    # # # # for version in versions[1:]:
+        # # # # html += f"""
+# # # # <h3 style="color:#ccccff;">Version {version}</h3>
+
+# # # # <h4>Release Notes</h4>
+# # # # {fmt_notes(version)}
+
+# # # # <table class="release-table">
+# # # # <thead>
+# # # # <tr>
+  # # # # <th>Name</th>
+  # # # # <th>Last Modified</th>
+  # # # # <th>Size</th>
+  # # # # <th>Description</th>
+# # # # </tr>
+# # # # </thead>
+# # # # <tbody>
+# # # # {fmt_files(version)}
+# # # # </tbody>
+# # # # </table>
+# # # # """
+
+    # # # # html += """
+# # # # </body>
+# # # # </html>
+# # # # """
+    # # # # return html
+
+
+# # # # # ===================================================
+# # # # # MAIN DEPLOY LOGIC
+# # # # # ===================================================
+# # # # def main():
+    # # # # parser = argparse.ArgumentParser()
+    # # # # parser.add_argument("--host", default=DEFAULT_HOST)
+    # # # # parser.add_argument("--user")
+    # # # # parser.add_argument("--password")
+    # # # # args = parser.parse_args()
+
+    # # # # user = args.user or DEFAULT_USER
+    # # # # pw = args.password or DEFAULT_PASS
+
+    # # # # print("\n📦 Scanning local releases...")
+    # # # # releases = scan_local_releases()
+
+    # # # # if not releases:
+        # # # # raise SystemExit("No releases or notes detected. Aborting.")
+
+    # # # # # Build the release page HTML
+    # # # # print("📝 Generating release index page...")
+    # # # # html = generate_html_release_page(releases)
+
+    # # # # temp_html = Path("index.html")
+    # # # # temp_html.write_text(html, encoding="utf-8")
+
+    # # # # print("\n🔌 Connecting to FTP...")
+    # # # # with ftplib.FTP(args.host) as ftp:
+        # # # # ftp.login(user=user, passwd=pw)
+        # # # # ensure_dir(ftp, TARGET_DIR)
+        # # # # ftp.cwd(TARGET_DIR)
+
+        # # # # # Upload all release notes
+        # # # # print("\n📄 Uploading release notes...")
+        # # # # for version, data in releases.items():
+            # # # # notes = data["notes"]
+            # # # # if notes and notes.exists():
+                # # # # upload(ftp, notes)
+
+        # # # # # Upload all release build files
+        # # # # print("\n📦 Uploading release files...")
+        # # # # for version, data in releases.items():
+            # # # # for f in data["files"]:
+                # # # # upload(ftp, f)
+
+        # # # # # Upload index.html
+        # # # # print("\n🌍 Uploading index.html...")
+        # # # # upload(ftp, temp_html)
+
+    # # # # print("\n🎉 Release deployment complete!\n")
+
+
+# # # # if __name__ == "__main__":
+    # # # # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # # #!/usr/bin/env python3
+# # # # # Upload Windows + Linux builds to Moviolabs FTP
+
+# # # # from __future__ import annotations
+# # # # import argparse
+# # # # import ftplib
+# # # # from pathlib import Path
+
+# # # # # ===========================
+# # # # # DIRECTORY MAP (FINAL)
+# # # # # ===========================
+
+# # # # # LINUX FILES ARE IN:
+# # # # #   C:\Users\Scott\Documents\.builds\mvc_calculator
+# # # # SOURCE_LINUX = Path.home() / "Documents/.builds/mvc_calculator"
+
+# # # # # WINDOWS FILES ARE IN:
+# # # # #   C:\Users\Scott\Documents\.builds\mvc_calculator\msi\builds
+# # # # SOURCE_WINDOWS = SOURCE_LINUX / "msi" / "builds"
+
+# # # # # FTP TARGET
+# # # # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# # # # DEFAULT_HOST = "ftp.moviolabs.com"
+# # # # DEFAULT_USER = "moviolab"
+# # # # DEFAULT_PASS = "xTQSz1g,n2we"   # <-- update after changing cPanel password!
+
+
+# # # # # ===========================
+# # # # # FIND NEWEST WINDOWS FILES
+# # # # # ===========================
+# # # # def newest_windows(src: Path):
+
+    # # # # # MSI
+    # # # # msi_files = list(src.glob("MVC_Calculator-*.msi"))
+    # # # # if not msi_files:
+        # # # # raise FileNotFoundError(f"No Windows MSI found in: {src}")
+    # # # # newest_msi = max(msi_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # PORTABLE ZIP
+    # # # # zip_files = list(src.glob("MVC_Calculator-*-portable.zip"))
+    # # # # if not zip_files:
+        # # # # raise FileNotFoundError(f"No Windows portable ZIP found in: {src}")
+    # # # # newest_zip = max(zip_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # return newest_msi, newest_zip
+
+
+# # # # # ===========================
+# # # # # FIND NEWEST LINUX FILES
+# # # # # ===========================
+# # # # def newest_linux(src: Path):
+
+    # # # # deb_files = list(src.glob("mvc-calculator_*.deb"))
+    # # # # if not deb_files:
+        # # # # raise FileNotFoundError(f"Linux .deb missing in: {src}")
+    # # # # newest_deb = max(deb_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # appimg_files = list(src.glob("MVC_Calculator-*.AppImage"))
+    # # # # if not appimg_files:
+        # # # # raise FileNotFoundError(f"Linux AppImage missing in: {src}")
+    # # # # newest_appimg = max(appimg_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # return newest_deb, newest_appimg
+
+
+# # # # # ===========================
+# # # # # FTP HELPERS
+# # # # # ===========================
+# # # # def ensure_dir(ftp, remote):
+    # # # # parts = remote.strip("/").split("/")
+    # # # # for i in range(1, len(parts) + 1):
+        # # # # sub = "/" + "/".join(parts[:i])
+        # # # # try:
+            # # # # ftp.cwd(sub)
+        # # # # except ftplib.error_perm:
+            # # # # ftp.mkd(sub)
+            # # # # ftp.cwd(sub)
+
+
+# # # # # ===========================
+# # # # # PROGRESS BAR UPLOADER
+# # # # # ===========================
+# # # # def upload(ftp, path: Path, block_size: int = 65536):
+    # # # # """
+    # # # # Upload file to FTP with a DOS-style progress bar.
+    # # # # block_size = 64 KB
+    # # # # """
+
+    # # # # file_size = path.stat().st_size
+    # # # # uploaded = 0
+
+    # # # # print(f"\n[upload] {path.name}")
+
+    # # # # def handle_block(block):
+        # # # # nonlocal uploaded
+        # # # # uploaded += len(block)
+
+        # # # # pct = uploaded / file_size
+        # # # # bar_len = 20
+        # # # # filled = int(bar_len * pct)
+        # # # # bar = "█" * filled + "░" * (bar_len - filled)
+
+        # # # # print(
+            # # # # f"\rUploading:  {bar}  {pct*100:5.1f}%  "
+            # # # # f"({uploaded/1_000_000:.1f} MB / {file_size/1_000_000:.1f} MB)",
+            # # # # end="",
+            # # # # flush=True
+        # # # # )
+
+    # # # # with path.open("rb") as f:
+        # # # # ftp.storbinary(f"STOR " + path.name, f, blocksize=block_size, callback=handle_block)
+
+    # # # # print("\n[done] Upload complete.")
+
+
+# # # # # ===========================
+# # # # # MAIN
+# # # # # ===========================
+# # # # def main():
+    # # # # parser = argparse.ArgumentParser()
+    # # # # parser.add_argument("--host", default=DEFAULT_HOST)
+    # # # # parser.add_argument("--user")
+    # # # # parser.add_argument("--password")
+    # # # # args = parser.parse_args()
+
+    # # # # user = args.user or DEFAULT_USER
+    # # # # pw = args.password or DEFAULT_PASS
+
+    # # # # print("\n📦 Locating build artifacts…")
+
+    # # # # # detect Windows builds
+    # # # # win_msi, win_zip = newest_windows(SOURCE_WINDOWS)
+
+    # # # # # detect Linux builds
+    # # # # lin_deb, lin_appimg = newest_linux(SOURCE_LINUX)
+
+    # # # # print("\nFound:")
+    # # # # print(" - Windows MSI:", win_msi)
+    # # # # print(" - Windows ZIP:", win_zip)
+    # # # # print(" - Linux DEB:", lin_deb)
+    # # # # print(" - Linux AppImage:", lin_appimg)
+
+    # # # # print("\n🔌 Connecting to FTP…")
+    # # # # with ftplib.FTP(args.host) as ftp:
+        # # # # ftp.login(user=user, passwd=pw)
+
+        # # # # ensure_dir(ftp, TARGET_DIR)
+        # # # # ftp.cwd(TARGET_DIR)
+
+        # # # # for f in [win_msi, win_zip, lin_deb, lin_appimg]:
+            # # # # upload(ftp, f)
+
+    # # # # print("\n🌍 FTP deploy complete.\n")
+
+
+# # # # if __name__ == "__main__":
+    # # # # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # # # #!/usr/bin/env python3
+# # # # # # Upload Windows + Linux builds to Moviolabs FTP
+
+# # # # # from __future__ import annotations
+# # # # # import argparse
+# # # # # import ftplib
+# # # # # from pathlib import Path
+
+# # # # # # ===========================
+# # # # # # DIRECTORY MAP (FINAL)
+# # # # # # ===========================
+
+# # # # # # LINUX FILES ARE IN:
+# # # # # #   C:\Users\Scott\Documents\.builds\mvc_calculator
+# # # # # SOURCE_LINUX = Path.home() / "Documents/.builds/mvc_calculator"
+
+# # # # # # WINDOWS FILES ARE IN:
+# # # # # #   C:\Users\Scott\Documents\.builds\mvc_calculator\msi\builds
+# # # # # SOURCE_WINDOWS = SOURCE_LINUX / "msi" / "builds"
+
+# # # # # # FTP TARGET
+# # # # # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# # # # # DEFAULT_HOST = "ftp.moviolabs.com"
+# # # # # DEFAULT_USER = "moviolab"
+# # # # # DEFAULT_PASS = "xTQSz1g,n2we"
+
+
+# # # # # # ===========================
+# # # # # # FIND NEWEST WINDOWS FILES
+# # # # # # ===========================
+# # # # # def newest_windows(src: Path):
+
+    # # # # # # MSI
+    # # # # # msi_files = list(src.glob("MVC_Calculator-*.msi"))
+    # # # # # if not msi_files:
+        # # # # # raise FileNotFoundError(f"No Windows MSI found in: {src}")
+    # # # # # newest_msi = max(msi_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # PORTABLE ZIP
+    # # # # # zip_files = list(src.glob("MVC_Calculator-*-portable.zip"))
+    # # # # # if not zip_files:
+        # # # # # raise FileNotFoundError(f"No Windows portable ZIP found in: {src}")
+    # # # # # newest_zip = max(zip_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # return newest_msi, newest_zip
+
+
+# # # # # # ===========================
+# # # # # # FIND NEWEST LINUX FILES
+# # # # # # ===========================
+# # # # # def newest_linux(src: Path):
+
+    # # # # # # LINUX DEB (lives directly in the root folder)
+    # # # # # deb_files = list(src.glob("mvc-calculator_*.deb"))
+    # # # # # if not deb_files:
+        # # # # # raise FileNotFoundError(f"Linux .deb missing in: {src}")
+    # # # # # newest_deb = max(deb_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # LINUX APPIMAGE (also in the root folder)
+    # # # # # appimg_files = list(src.glob("MVC_Calculator-*.AppImage"))
+    # # # # # if not appimg_files:
+        # # # # # raise FileNotFoundError(f"Linux AppImage missing in: {src}")
+    # # # # # newest_appimg = max(appimg_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # return newest_deb, newest_appimg
+
+
+# # # # # # ===========================
+# # # # # # FTP HELPERS
+# # # # # # ===========================
+# # # # # def ensure_dir(ftp, remote):
+    # # # # # parts = remote.strip("/").split("/")
+    # # # # # for i in range(1, len(parts)+1):
+        # # # # # sub = "/" + "/".join(parts[:i])
+        # # # # # try:
+            # # # # # ftp.cwd(sub)
+        # # # # # except ftplib.error_perm:
+            # # # # # ftp.mkd(sub)
+            # # # # # ftp.cwd(sub)
+
+
+# # # # # def upload(ftp, path: Path):
+    # # # # # print(f"[upload] {path.name}")
+    # # # # # with path.open("rb") as f:
+        # # # # # ftp.storbinary(f"STOR {path.name}", f)
+
+
+# # # # # # ===========================
+# # # # # # MAIN
+# # # # # # ===========================
+# # # # # def main():
+    # # # # # parser = argparse.ArgumentParser()
+    # # # # # parser.add_argument("--host", default=DEFAULT_HOST)
+    # # # # # parser.add_argument("--user")
+    # # # # # parser.add_argument("--password")
+    # # # # # args = parser.parse_args()
+
+    # # # # # user = args.user or DEFAULT_USER
+    # # # # # pw = args.password or DEFAULT_PASS
+
+    # # # # # print("\n📦 Locating build artifacts…")
+
+    # # # # # # detect Windows builds
+    # # # # # win_msi, win_zip = newest_windows(SOURCE_WINDOWS)
+
+    # # # # # # detect Linux builds
+    # # # # # lin_deb, lin_appimg = newest_linux(SOURCE_LINUX)
+
+    # # # # # print("\nFound:")
+    # # # # # print(" - Windows MSI:", win_msi)
+    # # # # # print(" - Windows ZIP:", win_zip)
+    # # # # # print(" - Linux DEB:", lin_deb)
+    # # # # # print(" - Linux AppImage:", lin_appimg)
+
+    # # # # # print("\n🔌 Connecting to FTP…")
+    # # # # # with ftplib.FTP(args.host) as ftp:
+        # # # # # ftp.login(user=user, passwd=pw)
+
+        # # # # # ensure_dir(ftp, TARGET_DIR)
+        # # # # # ftp.cwd(TARGET_DIR)
+
+        # # # # # for f in [win_msi, win_zip, lin_deb, lin_appimg]:
+            # # # # # upload(ftp, f)
+
+    # # # # # print("\n🌍 FTP deploy complete.\n")
+
+
+# # # # # if __name__ == "__main__":
+    # # # # # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # # # # #!/usr/bin/env python3
+# # # # # # # Upload Windows + Linux builds to Moviolabs FTP
+# # # # # # # ----------------------------------------------
+
+# # # # # # from __future__ import annotations
+# # # # # # import argparse
+# # # # # # import ftplib
+# # # # # # import shutil
+# # # # # # import tempfile
+# # # # # # from pathlib import Path
+
+# # # # # # APP_BASENAME = "MVC_Calculator"
+
+# # # # # # # Windows + Linux build sources
+# # # # # # # SOURCE_WINDOWS = Path.home() / "Documents/.builds/MVC_CALCULATOR"
+# # # # # # # SOURCE_WINDOWS = Path.home() / "Documents/.builds/mvc_calculator"
+# # # # # # # SOURCE_LINUX   = Path.home() / "Documents/.linux_builds/MVC_CALCULATOR/linux_builds"
+
+# # # # # # SOURCE_WINDOWS = Path.home() / "Documents/.builds/mvc_calculator"
+# # # # # # SOURCE_LINUX   = Path.home() / "Documents/.builds/mvc_calculator"
+# # # # # # # SOURCE_LINUX   = Path.home() / "Documents/.builds/mvc_calculat1or/linux_builds"
+
+
+
+
+# # # # # # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# # # # # # DEFAULT_HOST = "ftp.moviolabs.com"
+# # # # # # PRESET_USERNAME = "moviolab"
+# # # # # # PRESET_PASSWORD = "f2Pf3aNF-N8:9h"
+
+
+# # # # # # # ----------------------------------------------------------------------
+# # # # # # # HELPERS FOR LOCATING NEWEST FILES
+# # # # # # # ----------------------------------------------------------------------
+# # # # # # # def newest_windows(src: Path):
+    # # # # # # # # MSI location (same as before)
+    # # # # # # # msi_builds = src / "msi" / "builds"
+    # # # # # # # msi_files = list(msi_builds.glob("MVC_Calculator-*.msi"))
+    # # # # # # # if not msi_files:
+        # # # # # # # raise FileNotFoundError("No Windows MSI found")
+
+    # # # # # # # newest_msi = max(msi_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # # # Windows portable ZIP instead of folder
+    # # # # # # # zip_files = list(src.glob("MVC_Calculator-*-portable.zip"))
+    # # # # # # # if not zip_files:
+        # # # # # # # raise FileNotFoundError("No Windows portable ZIP found")
+
+    # # # # # # # newest_zip = max(zip_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # # return newest_msi, newest_zip
+
+# # # # # # def newest_windows(src: Path):
+    # # # # # # # 1) MSI lives inside /msi/builds
+    # # # # # # msi_builds = src / "msi" / "builds"
+    # # # # # # msi_files = list(msi_builds.glob("MVC_Calculator-*.msi"))
+    # # # # # # if not msi_files:
+        # # # # # # raise FileNotFoundError("No Windows MSI found")
+    # # # # # # newest_msi = max(msi_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # # 2) PORTABLE ZIP also lives in /msi/builds (confirmed by screenshot)
+    # # # # # # zip_files = list(msi_builds.glob("MVC_Calculator-*-portable.zip"))
+    # # # # # # if not zip_files:
+        # # # # # # raise FileNotFoundError(
+            # # # # # # f"No Windows portable ZIP found in: {msi_builds}\n"
+            # # # # # # f"Expected: MVC_Calculator-*-portable.zip"
+        # # # # # # )
+    # # # # # # newest_zip = max(zip_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # return newest_msi, newest_zip
+
+
+
+# # # # # # # def newest_linux(src: Path):
+    # # # # # # # deb_files = list((src / "deb").glob("mvc-calculator_*.deb"))
+    # # # # # # # appimg_files = list((src / "appimage").glob("MVC_Calculator-*.AppImage"))
+
+    # # # # # # # if not deb_files:
+        # # # # # # # raise FileNotFoundError("Linux .deb missing")
+    # # # # # # # if not appimg_files:
+        # # # # # # # raise FileNotFoundError("Linux AppImage missing")
+
+    # # # # # # # newest_deb = max(deb_files, key=lambda p: p.stat().st_mtime)
+    # # # # # # # newest_appimg = max(appimg_files, key=lambda p: p.stat().st_mtime)
+    # # # # # # # return newest_deb, newest_appimg
+
+
+# # # # # # def newest_linux(src: Path):
+    # # # # # # deb_dir = src / "deb"
+    # # # # # # appimg_dir = src / "appimage"
+
+    # # # # # # deb_files = list(deb_dir.glob("mvc-calculator_*.deb"))
+    # # # # # # appimg_files = list(appimg_dir.glob("MVC_Calculator-*.AppImage"))
+
+    # # # # # # if not deb_files:
+        # # # # # # raise FileNotFoundError(f"Linux .deb missing in {deb_dir}")
+
+    # # # # # # if not appimg_files:
+        # # # # # # raise FileNotFoundError(f"Linux AppImage missing in {appimg_dir}")
+
+    # # # # # # newest_deb = max(deb_files, key=lambda p: p.stat().st_mtime)
+    # # # # # # newest_appimg = max(appimg_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # return newest_deb, newest_appimg
+
+
+
+# # # # # # # ----------------------------------------------------------------------
+# # # # # # # FTP UTILS
+# # # # # # # ----------------------------------------------------------------------
+# # # # # # def ensure_dir(ftp, remote):
+    # # # # # # parts = remote.strip("/").split("/")
+    # # # # # # for i in range(1, len(parts) + 1):
+        # # # # # # sub = "/" + "/".join(parts[:i])
+        # # # # # # try:
+            # # # # # # ftp.cwd(sub)
+        # # # # # # except ftplib.error_perm:
+            # # # # # # ftp.mkd(sub)
+            # # # # # # ftp.cwd(sub)
+
+
+# # # # # # def upload(ftp, local: Path):
+    # # # # # # print(f"[upload] {local.name}")
+    # # # # # # with local.open("rb") as f:
+        # # # # # # ftp.storbinary(f"STOR {local.name}", f)
+
+
+# # # # # # # ----------------------------------------------------------------------
+# # # # # # # MAIN DEPLOY LOGIC
+# # # # # # # ----------------------------------------------------------------------
+# # # # # # def main():
+    # # # # # # parser = argparse.ArgumentParser()
+    # # # # # # parser.add_argument("--host", default=DEFAULT_HOST)
+    # # # # # # parser.add_argument("--user")
+    # # # # # # parser.add_argument("--password")
+    # # # # # # args = parser.parse_args()
+
+    # # # # # # user = args.user or PRESET_USERNAME
+    # # # # # # pw   = args.password or PRESET_PASSWORD
+
+    # # # # # # print("\n📦 Locating build artifacts…")
+
+    # # # # # # # WINDOWS
+    # # # # # # win_msi, win_zip = newest_windows(SOURCE_WINDOWS)
+
+    # # # # # # # LINUX
+    # # # # # # lin_deb, lin_appimg = newest_linux(SOURCE_LINUX)
+
+    # # # # # # print("\nFound:")
+    # # # # # # print(" - Windows MSI:", win_msi)
+    # # # # # # print(" - Windows Portable ZIP:", win_zip)
+    # # # # # # print(" - Linux DEB:", lin_deb)
+    # # # # # # print(" - Linux AppImage:", lin_appimg)
+
+    # # # # # # print("\n🔌 Connecting to FTP…")
+    # # # # # # with ftplib.FTP(args.host) as ftp:
+        # # # # # # ftp.login(user=user, passwd=pw)
+        # # # # # # ensure_dir(ftp, TARGET_DIR)
+        # # # # # # ftp.cwd(TARGET_DIR)
+
+        # # # # # # # Upload 4 files
+        # # # # # # for f in [win_msi, win_zip, lin_deb, lin_appimg]:
+            # # # # # # upload(ftp, f)
+
+    # # # # # # print("\n🌍 FTP deploy complete.\n")
+
+
+# # # # # # if __name__ == "__main__":
+    # # # # # # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # # # # # #!/usr/bin/env python3
+# # # # # # # # Upload Windows + Linux builds to Moviolabs FTP
+# # # # # # # # ----------------------------------------------
+
+# # # # # # # from __future__ import annotations
+# # # # # # # import argparse
+# # # # # # # import os
+# # # # # # # import ftplib
+# # # # # # # import shutil
+# # # # # # # import tempfile
+# # # # # # # from pathlib import Path
+
+# # # # # # # APP_BASENAME = "MVC_Calculator"
+
+# # # # # # # # Windows + Linux build sources
+# # # # # # # SOURCE_WINDOWS = Path.home() / "Documents/.builds/MVC_CALCULATOR"
+# # # # # # # SOURCE_LINUX   = Path.home() / "Documents/.linux_builds/MVC_CALCULATOR/linux_builds"
+
+# # # # # # # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# # # # # # # DEFAULT_HOST = "ftp.moviolabs.com"
+# # # # # # # PRESET_USERNAME = "moviolab"
+# # # # # # # PRESET_PASSWORD = "f2Pf3aNF-N8:9h"
+
+
+# # # # # # # # ----------------------------------------------------------------------
+# # # # # # # # HELPERS FOR LOCATING NEWEST FILES
+# # # # # # # # ----------------------------------------------------------------------
+# # # # # # # def newest_windows(src: Path):
+    # # # # # # # """
+    # # # # # # # Find newest:
+        # # # # # # # - MSI
+        # # # # # # # - portable folder (will be zipped)
+    # # # # # # # """
+    # # # # # # # msi_builds = src / "msi" / "builds"
+    # # # # # # # msi_files = list(msi_builds.glob("MVC_Calculator-*.msi"))
+    # # # # # # # if not msi_files:
+        # # # # # # # raise FileNotFoundError("No Windows MSI found")
+
+    # # # # # # # newest_msi = max(msi_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # # # portable folder lives in: Documents/.builds/MVC_CALCULATOR/windows_portable (example)
+    # # # # # # # portable_candidates = list(src.glob("MVC_Calculator_*_portable"))
+    # # # # # # # if not portable_candidates:
+        # # # # # # # raise FileNotFoundError("No Windows portable folder found")
+
+    # # # # # # # newest_portable_folder = max(portable_candidates, key=lambda p: p.stat().st_mtime)
+    # # # # # # # return newest_msi, newest_portable_folder
+
+
+# # # # # # # def newest_linux(src: Path):
+    # # # # # # # deb_files = list((src / "deb").glob("mvc-calculator_*.deb"))
+    # # # # # # # appimg_files = list((src / "appimage").glob("MVC_Calculator-*.AppImage"))
+
+    # # # # # # # if not deb_files:
+        # # # # # # # raise FileNotFoundError("Linux .deb missing")
+    # # # # # # # if not appimg_files:
+        # # # # # # # raise FileNotFoundError("Linux AppImage missing")
+
+    # # # # # # # newest_deb = max(deb_files, key=lambda p: p.stat().st_mtime)
+    # # # # # # # newest_appimg = max(appimg_files, key=lambda p: p.stat().st_mtime)
+    # # # # # # # return newest_deb, newest_appimg
+
+
+# # # # # # # # ----------------------------------------------------------------------
+# # # # # # # # FTP UTILS
+# # # # # # # # ----------------------------------------------------------------------
+# # # # # # # def ensure_dir(ftp, remote):
+    # # # # # # # parts = remote.strip("/").split("/")
+    # # # # # # # for i in range(1, len(parts) + 1):
+        # # # # # # # sub = "/" + "/".join(parts[:i])
+        # # # # # # # try:
+            # # # # # # # ftp.cwd(sub)
+        # # # # # # # except ftplib.error_perm:
+            # # # # # # # ftp.mkd(sub)
+            # # # # # # # ftp.cwd(sub)
+
+
+# # # # # # # def upload(ftp, local: Path):
+    # # # # # # # print(f"[upload] {local.name}")
+    # # # # # # # with local.open("rb") as f:
+        # # # # # # # ftp.storbinary(f"STOR {local.name}", f)
+
+
+# # # # # # # # ----------------------------------------------------------------------
+# # # # # # # # MAIN DEPLOY LOGIC
+# # # # # # # # ----------------------------------------------------------------------
+# # # # # # # def main():
+    # # # # # # # parser = argparse.ArgumentParser()
+    # # # # # # # parser.add_argument("--host", default=DEFAULT_HOST)
+    # # # # # # # parser.add_argument("--user")
+    # # # # # # # parser.add_argument("--password")
+    # # # # # # # args = parser.parse_args()
+
+    # # # # # # # user = args.user or PRESET_USERNAME
+    # # # # # # # pw   = args.password or PRESET_PASSWORD
+
+    # # # # # # # print("\n📦 Locating build artifacts…")
+
+    # # # # # # # # WINDOWS: MSI + folder
+    # # # # # # # win_msi, win_portable_folder = newest_windows(SOURCE_WINDOWS)
+
+    # # # # # # # # LINUX: .deb + AppImage
+    # # # # # # # lin_deb, lin_appimg = newest_linux(SOURCE_LINUX)
+
+    # # # # # # # print("\nFound:")
+    # # # # # # # print(" - Windows MSI:", win_msi)
+    # # # # # # # print(" - Windows Portable Folder:", win_portable_folder)
+    # # # # # # # print(" - Linux DEB:", lin_deb)
+    # # # # # # # print(" - Linux AppImage:", lin_appimg)
+
+    # # # # # # # # ------------------------------------------------------------
+    # # # # # # # # ZIP THE WINDOWS PORTABLE FOLDER (temp zip for FTP upload)
+    # # # # # # # # ------------------------------------------------------------
+    # # # # # # # print("\n📦 Creating temporary ZIP for Windows portable…")
+
+    # # # # # # # with tempfile.TemporaryDirectory() as tmp:
+        # # # # # # # temp_zip_path = Path(tmp) / f"{win_portable_folder.name}.zip"
+
+        # # # # # # # shutil.make_archive(
+            # # # # # # # str(temp_zip_path.with_suffix("")),
+            # # # # # # # "zip",
+            # # # # # # # root_dir=win_portable_folder
+        # # # # # # # )
+
+        # # # # # # # print("Created:", temp_zip_path)
+
+        # # # # # # # # ------------------------------------------------------------
+        # # # # # # # # FTP UPLOAD
+        # # # # # # # # ------------------------------------------------------------
+        # # # # # # # print("\n🔌 Connecting to FTP…")
+        # # # # # # # with ftplib.FTP(args.host) as ftp:
+            # # # # # # # ftp.login(user=user, passwd=pw)
+            # # # # # # # ensure_dir(ftp, TARGET_DIR)
+            # # # # # # # ftp.cwd(TARGET_DIR)
+
+            # # # # # # # # Upload files
+            # # # # # # # for f in [win_msi, temp_zip_path, lin_deb, lin_appimg]:
+                # # # # # # # upload(ftp, f)
+
+    # # # # # # # print("\n🌍 FTP deploy complete.\n")
+
+
+# # # # # # # if __name__ == "__main__":
+    # # # # # # # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # # # # # # #!/usr/bin/env python3
+# # # # # # # # # Upload Windows + Linux builds to Moviolabs FTP
+# # # # # # # # # ----------------------------------------------
+
+# # # # # # # # from __future__ import annotations
+# # # # # # # # import argparse
+# # # # # # # # import os
+# # # # # # # # import ftplib
+# # # # # # # # from pathlib import Path
+
+# # # # # # # # APP_BASENAME = "MVC_Calculator"
+
+# # # # # # # # SOURCE_WINDOWS = Path.home() / "Documents/.builds/MVC_CALCULATOR/msi/builds"
+# # # # # # # # SOURCE_LINUX   = Path.home() / "Documents/.linux_builds/MVC_CALCULATOR/linux_builds"
+
+# # # # # # # # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+
+# # # # # # # # DEFAULT_HOST = "ftp.moviolabs.com"
+# # # # # # # # PRESET_USERNAME = "moviolab"
+# # # # # # # # PRESET_PASSWORD = "f2Pf3aNF-N8:9h"
+
+
+# # # # # # # # def newest_windows(src: Path):
+    # # # # # # # # msi = list(src.glob("MVC_Calculator-*.msi"))
+    # # # # # # # # zipf = list(src.glob("MVC_Calculator-*-portable.zip"))
+    # # # # # # # # if not msi or not zipf:
+        # # # # # # # # raise FileNotFoundError("Windows MSI or ZIP missing")
+    # # # # # # # # return (
+        # # # # # # # # max(msi,  key=lambda p: p.stat().st_mtime),
+        # # # # # # # # max(zipf, key=lambda p: p.stat().st_mtime)
+    # # # # # # # # )
+
+
+# # # # # # # # def newest_linux(src: Path):
+    # # # # # # # # deb = list((src / "deb").glob("mvc-calculator_*.deb"))
+    # # # # # # # # app = list((src / "appimage").glob("MVC_Calculator-*.AppImage"))
+    # # # # # # # # if not deb or not app:
+        # # # # # # # # raise FileNotFoundError("Linux .deb or AppImage missing")
+    # # # # # # # # return (
+        # # # # # # # # max(deb, key=lambda p: p.stat().st_mtime),
+        # # # # # # # # max(app, key=lambda p: p.stat().st_mtime)
+    # # # # # # # # )
+
+
+# # # # # # # # def ensure_dir(ftp, remote):
+    # # # # # # # # parts = remote.strip("/").split("/")
+    # # # # # # # # for i in range(1, len(parts) + 1):
+        # # # # # # # # sub = "/" + "/".join(parts[:i])
+        # # # # # # # # try:
+            # # # # # # # # ftp.cwd(sub)
+        # # # # # # # # except ftplib.error_perm:
+            # # # # # # # # ftp.mkd(sub)
+            # # # # # # # # ftp.cwd(sub)
+
+
+# # # # # # # # def upload(ftp, local: Path):
+    # # # # # # # # print(f"[upload] {local.name}")
+    # # # # # # # # with local.open("rb") as f:
+        # # # # # # # # ftp.storbinary(f"STOR {local.name}", f)
+
+
+# # # # # # # # def main():
+    # # # # # # # # parser = argparse.ArgumentParser()
+    # # # # # # # # parser.add_argument("--host", default=DEFAULT_HOST)
+    # # # # # # # # parser.add_argument("--user")
+    # # # # # # # # parser.add_argument("--password")
+    # # # # # # # # args = parser.parse_args()
+
+    # # # # # # # # user = args.user or PRESET_USERNAME
+    # # # # # # # # pw   = args.password or PRESET_PASSWORD
+
+    # # # # # # # # print("\n📦 Locating build artifacts…")
+
+    # # # # # # # # win_msi, win_zip = newest_windows(SOURCE_WINDOWS)
+    # # # # # # # # lin_deb, lin_app = newest_linux(SOURCE_LINUX)
+
+    # # # # # # # # print("\nFound:")
+    # # # # # # # # print(" -", win_msi)
+    # # # # # # # # print(" -", win_zip)
+    # # # # # # # # print(" -", lin_deb)
+    # # # # # # # # print(" -", lin_app)
+
+    # # # # # # # # print("\n🔌 Connecting to FTP…")
+    # # # # # # # # with ftplib.FTP(args.host) as ftp:
+        # # # # # # # # ftp.login(user=user, passwd=pw)
+        # # # # # # # # ensure_dir(ftp, TARGET_DIR)
+        # # # # # # # # ftp.cwd(TARGET_DIR)
+
+        # # # # # # # # for f in [win_msi, win_zip, lin_deb, lin_app]:
+            # # # # # # # # upload(ftp, f)
+
+    # # # # # # # # print("\n🌍 FTP deploy complete.\n")
+
+
+# # # # # # # # if __name__ == "__main__":
+    # # # # # # # # main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # # # # # # # #!/usr/bin/env python3
+# # # # # # # # # # Upload EXE + ZIP + DEB + AppImage to Moviolabs FTP
+
+# # # # # # # # # from __future__ import annotations
+# # # # # # # # # import argparse
+# # # # # # # # # import ftplib
+# # # # # # # # # import os
+# # # # # # # # # from pathlib import Path
+
+# # # # # # # # # # ==========================================
+# # # # # # # # # # App name + file patterns
+# # # # # # # # # # ==========================================
+# # # # # # # # # APP_BASENAME = "MVC_Calculator"
+
+# # # # # # # # # # ==========================================
+# # # # # # # # # # Windows & Linux build directories
+# # # # # # # # # # ==========================================
+# # # # # # # # # SOURCE_WINDOWS = Path.home() / "Documents/.builds/MVC_CALCULATOR/msi/builds"
+# # # # # # # # # SOURCE_LINUX = Path.home() / "Documents/.linux_builds/MVC_CALCULATOR/linux_builds"
+
+# # # # # # # # # TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+# # # # # # # # # DEFAULT_HOST = "ftp.moviolabs.com"
+
+# # # # # # # # # PRESET_USERNAME = "moviolab"
+# # # # # # # # # PRESET_PASSWORD = "f2Pf3aNF-N8:9h"
+
+# # # # # # # # # # ==========================================
+# # # # # # # # # # Find newest Windows build artifacts
+# # # # # # # # # # ==========================================
+# # # # # # # # # def newest_windows_files(src: Path):
+    # # # # # # # # # msi_files = list(src.glob("MVC_Calculator-*.msi"))
+    # # # # # # # # # zip_files = list(src.glob("MVC_Calculator-*-portable.zip"))
+
+    # # # # # # # # # if not msi_files:
+        # # # # # # # # # raise FileNotFoundError("No MSI found in Windows build directory.")
+    # # # # # # # # # if not zip_files:
+        # # # # # # # # # raise FileNotFoundError("No portable ZIP found in Windows build directory.")
+
+    # # # # # # # # # newest_msi = max(msi_files, key=lambda p: p.stat().st_mtime)
+    # # # # # # # # # newest_zip = max(zip_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # # # # return newest_msi, newest_zip
+
+# # # # # # # # # # ==========================================
+# # # # # # # # # # Find newest Linux build artifacts
+# # # # # # # # # # ==========================================
+# # # # # # # # # def newest_linux_files(src: Path):
+    # # # # # # # # # deb_files = list((src / "deb").glob("mvc-calculator_*.deb"))
+    # # # # # # # # # img_files = list((src / "appimage").glob("MVC_Calculator-*.AppImage"))
+
+    # # # # # # # # # if not deb_files:
+        # # # # # # # # # raise FileNotFoundError("No .deb file found in Linux deb/ folder.")
+    # # # # # # # # # if not img_files:
+        # # # # # # # # # raise FileNotFoundError("No AppImage file found in Linux appimage/ folder.")
+
+    # # # # # # # # # newest_deb = max(deb_files, key=lambda p: p.stat().st_mtime)
+    # # # # # # # # # newest_img = max(img_files, key=lambda p: p.stat().st_mtime)
+
+    # # # # # # # # # return newest_deb, newest_img
+
+# # # # # # # # # # ==========================================
+# # # # # # # # # # FTP helpers
+# # # # # # # # # # ==========================================
+# # # # # # # # # def ensure_remote_dir(ftp, remote):
+    # # # # # # # # # parts = [p for p in remote.strip("/").split("/") if p]
+    # # # # # # # # # for i in range(len(parts)):
+        # # # # # # # # # sub = "/" + "/".join(parts[: i + 1])
+        # # # # # # # # # try:
+            # # # # # # # # # ftp.cwd(sub)
+        # # # # # # # # # except ftplib.error_perm:
+            # # # # # # # # # ftp.mkd(sub)
+            # # # # # # # # # ftp.cwd(sub)
+
+# # # # # # # # # def upload_file(ftp, local: Path, remote_name: str):
+    # # # # # # # # # print(f"[uploading] {remote_name}")
+    # # # # # # # # # with local.open("rb") as f:
+        # # # # # # # # # ftp.storbinary(f"STOR {remote_name}", f)
+    # # # # # # # # # print(f"[ok] {remote_name}")
+
+# # # # # # # # # # ==========================================
+# # # # # # # # # # Main deploy logic
+# # # # # # # # # # ==========================================
+# # # # # # # # # def deploy(host, user, password):
+    # # # # # # # # # print("[info] Locating build artifacts...")
+
+    # # # # # # # # # win_msi, win_zip = newest_windows_files(SOURCE_WINDOWS)
+    # # # # # # # # # lin_deb, lin_img = newest_linux_files(SOURCE_LINUX)
+
+    # # # # # # # # # print("\n[info] Found:")
+    # # # # # # # # # print(" -", win_msi)
+    # # # # # # # # # print(" -", win_zip)
+    # # # # # # # # # print(" -", lin_deb)
+    # # # # # # # # # print(" -", lin_img)
+
+    # # # # # # # # # print("\n[info] Connecting to FTP...")
+
+    # # # # # # # # # with ftplib.FTP(host) as ftp:
+        # # # # # # # # # ftp.login(user=user, passwd=password)
+        # # # # # # # # # ensure_remote_dir(ftp, TARGET_DIR)
+        # # # # # # # # # ftp.cwd(TARGET_DIR)
+
+        # # # # # # # # # print("[info] Uploading files...")
+
+        # # # # # # # # # for f in [win_msi, win_zip, lin_deb, lin_img]:
+            # # # # # # # # # upload_file(ftp, f, f.name)
+
+    # # # # # # # # # print("\n[done] Release upload complete.")
+
+# # # # # # # # # # ==========================================
+# # # # # # # # # # CLI
+# # # # # # # # # # ==========================================
+# # # # # # # # # def main():
+    # # # # # # # # # parser = argparse.ArgumentParser(description="Upload release builds to Moviolabs FTP.")
+    # # # # # # # # # parser.add_argument("--host", default=DEFAULT_HOST)
+    # # # # # # # # # parser.add_argument("--user")
+    # # # # # # # # # parser.add_argument("--password")
+    # # # # # # # # # args = parser.parse_args()
+
+    # # # # # # # # # user = args.user or PRESET_USERNAME
+    # # # # # # # # # password = args.password or PRESET_PASSWORD
+
+    # # # # # # # # # deploy(args.host, user, password)
+
+# # # # # # # # # if __name__ == "__main__":
+    # # # # # # # # # main()

@@ -1,0 +1,967 @@
+#!/usr/bin/env python3
+# Full Multi-Version Moviolabs Release Deployer
+# -------------------------------------------------
+# Features:
+#  ✓ Latest + previous release only
+#  ✓ Uses your ORIGINAL stable FTP upload logic
+#  ✓ DOS-style progress bar (non-hanging)
+#  ✓ Generates full HTML+CSS release page
+#  ✓ Uploads HTML, builds, and release notes
+#  ✓ 100% cPanel-safe
+
+from __future__ import annotations
+import ftplib
+from pathlib import Path
+import argparse
+import re
+import sys
+
+# ===================================================
+# CONFIG
+# ===================================================
+
+SOURCE = Path.home() / "Documents/.builds/mvc_calculator"
+TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+LOGO_FILENAME = "coming.soon.light.on.darkL.svg"
+
+DEFAULT_HOST = "ftp.moviolabs.com"
+DEFAULT_USER = "moviolab"
+DEFAULT_PASS = "xTQSz1g,n2we"   
+
+
+# ===================================================
+# UTILITIES
+# ===================================================
+
+VERSION_RE = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
+
+def parse_version(s: str):
+    m = VERSION_RE.search(s)
+    return m.group(1) if m else None
+
+def dos_bar(progress, total, width=40):
+    """Stable DOS-style progress bar."""
+    filled = int(width * (progress / total))
+    bar = "█" * filled + "░" * (width - filled)
+    percent = f"{(progress/total)*100:5.1f}%"
+    return f"[{bar}] {percent}"
+
+
+def upload_file(ftp: ftplib.FTP, path: Path):
+    """Stable FTP uploader with DOS-style bar (your original behaviour)."""
+    size = path.stat().st_size
+    sent = 0
+    chunk = 8192
+
+    print(f"\nUploading: {path.name}")
+
+    with path.open("rb") as f:
+        def callback(data):
+            nonlocal sent
+            sent += len(data)
+            print("\r" + dos_bar(sent, size), end="")
+        ftp.storbinary(f"STOR {path.name}", f, chunk, callback)
+
+    print("\r" + dos_bar(size, size))
+    print("Done.")
+
+
+# ===================================================
+# LOAD RELEASE NOTES
+# ===================================================
+
+def load_notes(version: str):
+    notes_file = SOURCE / f"RELEASE_NOTES-{version}.txt"
+    if not notes_file.exists():
+        return {
+            "date": "",
+            "description": "",
+            "whats_new": [],
+            "bug_fixes": [],
+            "tags": []
+        }
+
+    date = ""
+    description = ""
+    whats_new = []
+    bug_fixes = []
+    tags = []
+
+    section = None
+
+    for line in notes_file.read_text().splitlines():
+        line = line.strip()
+
+        if line.lower().startswith("date:"):
+            date = line.split(":", 1)[1].strip()
+        elif line.lower().startswith("description:"):
+            section = "desc"
+        elif line.lower().startswith("tags:"):
+            tags = [t.strip() for t in line.split(":", 1)[1].split(",") if t.strip()]
+        elif line.lower() == "[what's new]":
+            section = "new"
+        elif line.lower() == "[bug fixes]":
+            section = "bug"
+        elif section == "desc" and line:
+            description += line + " "
+        elif section == "new" and line.startswith("-"):
+            whats_new.append(line[1:].strip())
+        elif section == "bug" and line.startswith("-"):
+            bug_fixes.append(line[1:].strip())
+
+    return {
+        "date": date,
+        "description": description.strip(),
+        "whats_new": whats_new,
+        "bug_fixes": bug_fixes,
+        "tags": tags,
+    }
+
+
+# ===================================================
+# BUILD HTML PAGE
+# ===================================================
+
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MVC Calculator Releases</title>
+
+<style>
+:root {{
+    --bg: #0d1117;
+    --panel: #11161f;
+    --border: #222738;
+    --text-main: #e6edf3;
+    --text-muted: #8b949e;
+    --header: #848d97;
+    --accent: #1f6feb;
+
+    --tag-api-bg: rgba(56, 139, 253, 0.15);
+    --tag-api-text: #448aff;
+
+    --tag-sec-bg: rgba(46, 160, 67, 0.15);
+    --tag-sec-text: #3fb950;
+
+    --tag-perf-bg: rgba(210, 153, 34, 0.15);
+    --tag-perf-text: #e3b341;
+}}
+
+body {{
+    margin: 0;
+    padding: 40px 20px;
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}}
+
+.page {{
+    max-width: 980px;
+    margin: auto;
+    position: relative;
+}}
+
+.top-header {{
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 25px;
+}}
+
+.logo {{
+    height: 60px;
+}}
+
+h1 {{
+    font-size: 28px;
+    margin: 0;
+}}
+
+.release-left {{
+    position: absolute;
+    left: -200px;
+    top:96px;
+    width: 180px;
+    color: var(--text-muted);
+    font-size: 14px;
+}}
+
+.release-left .tag {{
+    margin: 6px 6px 0 0;
+}}
+
+.section-title {{
+    font-size: 20px;
+    margin: 0 0 8px;
+}}
+
+.tag {{
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}}
+
+.tag-api       {{ background: var(--tag-api-bg);  color: var(--tag-api-text); }}
+.tag-security  {{ background: var(--tag-sec-bg);  color: var(--tag-sec-text); }}
+.tag-performance {{ background: var(--tag-perf-bg); color: var(--tag-perf-text); }}
+
+.release-description {{
+    margin-top: 4px;
+    margin-bottom: 10px;
+    color: var(--text-muted);
+    font-size: 14px;
+}}
+
+.release-notes-text h3 {{
+    margin-top: 20px;
+    margin-bottom: 6px;
+    font-size: 16px;
+    color: var(--accent);
+}}
+
+.release-notes-text ul {{
+    margin: 0;
+    padding-left: 20px;
+}}
+
+.release-notes-text li {{
+    margin-bottom: 6px;
+}}
+
+table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 18px;
+    margin-bottom: 32px;
+    font-size: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}}
+
+thead {{
+    background: #0f141b;
+}}
+
+th {{
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--header);
+    border-bottom: 1px solid var(--border);
+}}
+
+td {{
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+}}
+
+tbody tr:last-child td {{
+    border-bottom: none;
+}}
+
+a.file-link {{
+    color: var(--accent);
+    text-decoration: none;
+    font-family: Consolas, "SF Mono", Menlo, monospace;
+}}
+
+a.file-link:hover {{
+    text-decoration: underline;
+}}
+
+.size-col, .date-col {{
+    color: var(--text-muted);
+}}
+
+.desc-col {{
+    color: var(--text-main);
+}}
+
+hr.divider {{
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 34px 0 20px;
+}}
+</style>
+</head>
+
+<body>
+<div class="page">
+
+<div class="top-header">
+    <img class="logo" src="{logo}" alt="Moviolabs Logo">
+    <h1>MVC Calculator Releases</h1>
+</div>
+
+<div class="release-left">
+    <div>{latest_date}</div>
+    {latest_tags}
+</div>
+
+<div>
+    <div class="section-title">Latest Release — {latest_version}</div>
+    <div class="release-description">{latest_description}</div>
+
+    <div class="release-notes-text">
+        <h3>What's New</h3>
+        <ul>{latest_whats_new}</ul>
+
+        <h3>Bug Fixes</h3>
+        <ul>{latest_bug_fixes}</ul>
+    </div>
+
+    {latest_table}
+</div>
+
+<hr class="divider">
+
+<div class="section-title">Previous Release — {prev_version}</div>
+{prev_table}
+
+</div>
+</body>
+</html>
+"""
+
+
+# ===================================================
+# FTP & DEPLOY LOGIC
+# ===================================================
+
+def ftp_connect(host, user, password):
+    ftp = ftplib.FTP(host)
+    ftp.login(user=user, passwd=password)
+    ftp.cwd(TARGET_DIR)
+    return ftp
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--host", default=DEFAULT_HOST)
+    p.add_argument("--user", default=DEFAULT_USER)
+    args = p.parse_args()
+
+    # No prompt, use config password
+    password = DEFAULT_PASS
+
+    # ---------------------------------------------------------
+    # Find versions
+    # ---------------------------------------------------------
+    all_files = list(SOURCE.glob("*"))
+    versions = {}
+
+    for f in all_files:
+        v = parse_version(f.name)
+        if v:
+            versions.setdefault(v, []).append(f)
+
+    if not versions:
+        print("No release files found.")
+        sys.exit(1)
+
+    # Sort versions newest → oldest
+    version_list = sorted(versions.keys(), reverse=True)
+
+    latest_version = version_list[0]
+    prev_version = version_list[1] if len(version_list) > 1 else None
+
+    print(f"Latest release version: {latest_version}")
+    if prev_version:
+        print(f"Previous release: {prev_version}")
+    else:
+        print("Only latest version exists.")
+
+    # ---------------------------------------------------------
+    # Load notes
+    # ---------------------------------------------------------
+    latest_notes = load_notes(latest_version)
+    prev_notes = load_notes(prev_version) if prev_version else None
+
+    def tag_html(t):
+        if t.lower() == "api":
+            return '<span class="tag tag-api">API</span>'
+        if t.lower() == "security":
+            return '<span class="tag tag-security">Security</span>'
+        if t.lower() == "performance":
+            return '<span class="tag tag-performance">Performance</span>'
+        return f'<span class="tag">{t}'
+
+    latest_tags = " ".join(tag_html(t) for t in latest_notes["tags"])
+
+    def ul_list(items):
+        return "\n".join(f"<li>{i}</li>" for i in items)
+
+    # ---------------------------------------------------------
+    # Table builder
+    # ---------------------------------------------------------
+    def build_table(files):
+        rows = []
+        for f in files:
+            name = f.name
+            size = f.stat().st_size
+            mb = f"{size/1024/1024:.1f}M"
+            rows.append(
+                f"<tr>"
+                f"<td><a class='file-link' href='{name}'>{name}</a></td>"
+                f"<td class='date-col'>–</td>"
+                f"<td class='size-col'>{mb}</td>"
+                f"<td class='desc-col'>Build File</td>"
+                f"</tr>"
+            )
+        return (
+            "<table><thead><tr>"
+            "<th>Name</th><th>Last Modified</th><th>Size</th><th>Description</th>"
+            "</tr></thead><tbody>"
+            + "\n".join(rows)
+            + "</tbody></table>"
+        )
+
+    # ---------------------------------------------------------
+    # Build HTML Page
+    # ---------------------------------------------------------
+    html = HTML_TEMPLATE.format(
+        logo=LOGO_FILENAME,
+        latest_date=latest_notes["date"],
+        latest_tags=latest_tags,
+        latest_version=latest_version,
+        latest_description=latest_notes["description"],
+        latest_whats_new=ul_list(latest_notes["whats_new"]),
+        latest_bug_fixes=ul_list(latest_notes["bug_fixes"]),
+        latest_table=build_table(versions[latest_version]),
+        prev_version=prev_version or "",
+        prev_table=build_table(versions[prev_version]) if prev_version else "",
+    )
+
+    index_path = SOURCE / "index.html"
+    index_path.write_text(html, encoding="utf8")
+
+    print("\nGenerated index.html")
+
+    # ---------------------------------------------------------
+    # FTP UPLOAD
+    # ---------------------------------------------------------
+    ftp = ftp_connect(args.host, args.user, password)
+
+    # Upload logo
+    logo_file = SOURCE / LOGO_FILENAME
+    if logo_file.exists():
+        upload_file(ftp, logo_file)
+
+    # Upload latest release
+    print("\nUploading latest release:")
+    for f in versions[latest_version]:
+        upload_file(ftp, f)
+
+    # Upload previous release
+    if prev_version:
+        print("\nUploading previous release:")
+        for f in versions[prev_version]:
+            upload_file(ftp, f)
+
+    # Upload release notes
+    rn = SOURCE / f"RELEASE_NOTES-{latest_version}.txt"
+    if rn.exists():
+        upload_file(ftp, rn)
+
+    # Upload HTML page
+    upload_file(ftp, index_path)
+
+    print("\nDeployment complete.")
+    ftp.quit()
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+
+
+
+
+# #!/usr/bin/env python3
+# # Full Multi-Version Moviolabs Release Deployer
+# # -------------------------------------------------
+# # Features:
+# #  ✓ Latest + previous release only
+# #  ✓ Uses your ORIGINAL stable FTP upload logic
+# #  ✓ DOS-style progress bar (non-hanging)
+# #  ✓ Generates full HTML+CSS release page
+# #  ✓ Uploads HTML, builds, and release notes
+# #  ✓ 100% cPanel-safe
+
+# from __future__ import annotations
+# import ftplib
+# from pathlib import Path
+# import argparse
+# import re
+# import sys
+# import time
+
+# # ===================================================
+# # CONFIG
+# # ===================================================
+
+# SOURCE = Path.home() / "Documents/.builds/mvc_calculator"
+# TARGET_DIR = "/public_html/downloads/MVC_Calculator/releases"
+# LOGO_FILENAME = "coming.soon.light.on.darkL.svg"
+
+# DEFAULT_HOST = "ftp.moviolabs.com"
+# DEFAULT_USER = "moviolabs"
+# DEFAULT_PASS = None  # ask
+
+
+# # ===================================================
+# # UTILITIES
+# # ===================================================
+
+# VERSION_RE = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
+
+# def parse_version(s: str):
+    # m = VERSION_RE.search(s)
+    # return m.group(1) if m else None
+
+# def dos_bar(progress, total, width=40):
+    # """Stable DOS-style progress bar."""
+    # filled = int(width * (progress / total))
+    # bar = "█" * filled + "░" * (width - filled)
+    # percent = f"{(progress/total)*100:5.1f}%"
+    # return f"[{bar}] {percent}"
+
+
+# def upload_file(ftp: ftplib.FTP, path: Path):
+    # """Stable FTP uploader with DOS-style bar (your original behaviour)."""
+    # size = path.stat().st_size
+    # sent = 0
+    # chunk = 8192
+
+    # print(f"\nUploading: {path.name}")
+
+    # with path.open("rb") as f:
+        # def callback(data):
+            # nonlocal sent
+            # sent += len(data)
+            # print("\r" + dos_bar(sent, size), end="")
+        # ftp.storbinary(f"STOR {path.name}", f, chunk, callback)
+
+    # print("\r" + dos_bar(size, size))
+    # print("Done.")
+
+
+# # ===================================================
+# # LOAD RELEASE NOTES
+# # ===================================================
+
+# def load_notes(version: str):
+    # notes_file = SOURCE / f"RELEASE_NOTES-{version}.txt"
+    # if not notes_file.exists():
+        # return {
+            # "date": "",
+            # "description": "",
+            # "whats_new": [],
+            # "bug_fixes": [],
+            # "tags": []
+        # }
+
+    # date = ""
+    # description = ""
+    # whats_new = []
+    # bug_fixes = []
+    # tags = []
+
+    # section = None
+
+    # for line in notes_file.read_text().splitlines():
+        # line = line.strip()
+
+        # if line.lower().startswith("date:"):
+            # date = line.split(":", 1)[1].strip()
+        # elif line.lower().startswith("description:"):
+            # section = "desc"
+        # elif line.lower().startswith("tags:"):
+            # tags = [t.strip() for t in line.split(":", 1)[1].split(",") if t.strip()]
+        # elif line.lower() == "[what's new]":
+            # section = "new"
+        # elif line.lower() == "[bug fixes]":
+            # section = "bug"
+        # elif section == "desc" and line:
+            # description += line + " "
+        # elif section == "new" and line.startswith("-"):
+            # whats_new.append(line[1:].strip())
+        # elif section == "bug" and line.startswith("-"):
+            # bug_fixes.append(line[1:].strip())
+
+    # return {
+        # "date": date,
+        # "description": description.strip(),
+        # "whats_new": whats_new,
+        # "bug_fixes": bug_fixes,
+        # "tags": tags,
+    # }
+
+
+# # ===================================================
+# # BUILD HTML PAGE
+# # ===================================================
+
+# HTML_TEMPLATE = """<!DOCTYPE html>
+# <html lang="en">
+# <head>
+# <meta charset="UTF-8">
+# <title>MVC Calculator Releases</title>
+
+# <style>
+# :root {{
+    # --bg: #0d1117;
+    # --panel: #11161f;
+    # --border: #222738;
+    # --text-main: #e6edf3;
+    # --text-muted: #8b949e;
+    # --header: #848d97;
+    # --accent: #1f6feb;
+
+    # --tag-api-bg: rgba(56, 139, 253, 0.15);
+    # --tag-api-text: #448aff;
+
+    # --tag-sec-bg: rgba(46, 160, 67, 0.15);
+    # --tag-sec-text: #3fb950;
+
+    # --tag-perf-bg: rgba(210, 153, 34, 0.15);
+    # --tag-perf-text: #e3b341;
+# }}
+
+# body {{
+    # margin: 0;
+    # padding: 40px 20px;
+    # background: var(--bg);
+    # color: var(--text-main);
+    # font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+# }}
+
+# .page {{
+    # max-width: 980px;
+    # margin: auto;
+    # position: relative;
+# }}
+
+# .top-header {{
+    # display: flex;
+    # align-items: center;
+    # gap: 18px;
+    # margin-bottom: 25px;
+# }}
+
+# .logo {{
+    # height: 60px;
+# }}
+
+# h1 {{
+    # font-size: 28px;
+    # margin: 0;
+# }}
+
+# .release-left {{
+    # position: absolute;
+    # left: -200px;
+    # top:96px;
+    # width: 180px;
+    # color: var(--text-muted);
+    # font-size: 14px;
+# }}
+
+# .release-left .tag {{
+    # margin: 6px 6px 0 0;
+# }}
+
+# .section-title {{
+    # font-size: 20px;
+    # margin: 0 0 8px;
+# }}
+
+# .tag {{
+    # display: inline-block;
+    # padding: 3px 8px;
+    # border-radius: 6px;
+    # font-size: 12px;
+    # font-weight: 500;
+# }}
+
+# .tag-api       {{ background: var(--tag-api-bg);  color: var(--tag-api-text); }}
+# .tag-security  {{ background: var(--tag-sec-bg);  color: var(--tag-sec-text); }}
+# .tag-performance {{ background: var(--tag-perf-bg); color: var(--tag-perf-text); }}
+
+# .release-description {{
+    # margin-top: 4px;
+    # margin-bottom: 10px;
+    # color: var(--text-muted);
+    # font-size: 14px;
+# }}
+
+# .release-notes-text h3 {{
+    # margin-top: 20px;
+    # margin-bottom: 6px;
+    # font-size: 16px;
+    # color: var(--accent);
+# }}
+
+# .release-notes-text ul {{
+    # margin: 0;
+    # padding-left: 20px;
+# }}
+
+# .release-notes-text li {{
+    # margin-bottom: 6px;
+# }}
+
+# table {{
+    # width: 100%;
+    # border-collapse: collapse;
+    # margin-top: 18px;
+    # margin-bottom: 32px;
+    # font-size: 14px;
+    # background: var(--panel);
+    # border: 1px solid var(--border);
+    # border-radius: 10px;
+    # overflow: hidden;
+# }}
+
+# thead {{
+    # background: #0f141b;
+# }}
+
+# th {{
+    # text-align: left;
+    # padding: 12px 14px;
+    # font-size: 12px;
+    # text-transform: uppercase;
+    # letter-spacing: 0.06em;
+    # color: var(--header);
+    # border-bottom: 1px solid var(--border);
+# }}
+
+# td {{
+    # padding: 10px 14px;
+    # border-bottom: 1px solid var(--border);
+# }}
+
+# tbody tr:last-child td {{
+    # border-bottom: none;
+# }}
+
+# a.file-link {{
+    # color: var(--accent);
+    # text-decoration: none;
+    # font-family: Consolas, "SF Mono", Menlo, monospace;
+# }}
+
+# a.file-link:hover {{
+    # text-decoration: underline;
+# }}
+
+# .size-col, .date-col {{
+    # color: var(--text-muted);
+# }}
+
+# .desc-col {{
+    # color: var(--text-main);
+# }}
+
+# hr.divider {{
+    # border: none;
+    # border-top: 1px solid var(--border);
+    # margin: 34px 0 20px;
+# }}
+# </style>
+# </head>
+
+# <body>
+# <div class="page">
+
+# <div class="top-header">
+    # <img class="logo" src="{logo}" alt="Moviolabs Logo">
+    # <h1>MVC Calculator Releases</h1>
+# </div>
+
+# <div class="release-left">
+    # <div>{latest_date}</div>
+    # {latest_tags}
+# </div>
+
+# <div>
+    # <div class="section-title">Latest Release — {latest_version}</div>
+    # <div class="release-description">{latest_description}</div>
+
+    # <div class="release-notes-text">
+        # <h3>What's New</h3>
+        # <ul>{latest_whats_new}</ul>
+
+        # <h3>Bug Fixes</h3>
+        # <ul>{latest_bug_fixes}</ul>
+    # </div>
+
+    # {latest_table}
+# </div>
+
+# <hr class="divider">
+
+# <div class="section-title">Previous Release — {prev_version}</div>
+# {prev_table}
+
+# </div>
+# </body>
+# </html>
+# """
+
+
+# # ===================================================
+# # FTP & DEPLOY LOGIC
+# # ===================================================
+
+# def ftp_connect(host, user, password):
+    # ftp = ftplib.FTP(host)
+    # ftp.login(user=user, passwd=password)
+    # ftp.cwd(TARGET_DIR)
+    # return ftp
+
+
+# def main():
+    # p = argparse.ArgumentParser()
+    # p.add_argument("--host", default=DEFAULT_HOST)
+    # p.add_argument("--user", default=DEFAULT_USER)
+    # p.add_argument("--password")
+    # args = p.parse_args()
+
+    # password = args.password or input("FTP Password: ")
+
+    # # ---------------------------------------------------------
+    # # Find versions in SOURCE directory
+    # # ---------------------------------------------------------
+    # all_files = list(SOURCE.glob("*"))
+    # versions = {}
+
+    # for f in all_files:
+        # v = parse_version(f.name)
+        # if v:
+            # versions.setdefault(v, []).append(f)
+
+    # if not versions:
+        # print("No release files found.")
+        # sys.exit(1)
+
+    # # Sort versions newest → oldest
+    # version_list = sorted(versions.keys(), reverse=True)
+
+    # latest_version = version_list[0]
+    # prev_version = version_list[1] if len(version_list) > 1 else None
+
+    # print(f"Latest release version: {latest_version}")
+    # if prev_version:
+        # print(f"Previous release: {prev_version}")
+    # else:
+        # print("Only latest version exists.")
+
+    # # Load release notes
+    # latest_notes = load_notes(latest_version)
+    # prev_notes = load_notes(prev_version) if prev_version else None
+
+    # # Prepare HTML
+    # def tag_html(t):
+        # if t.lower() == "api":
+            # return '<span class="tag tag-api">API</span>'
+        # if t.lower() == "security":
+            # return '<span class="tag tag-security">Security</span>'
+        # if t.lower() == "performance":
+            # return '<span class="tag tag-performance">Performance</span>'
+        # return f'<span class="tag">{t}</span>'
+
+    # latest_tags = " ".join(tag_html(t) for t in latest_notes["tags"])
+
+    # def ul_list(items):
+        # return "\n".join(f"<li>{i}</li>" for i in items)
+
+    # def build_table(files):
+        # rows = []
+        # for f in files:
+            # name = f.name
+            # size = f.stat().st_size
+            # mb = f"{size/1024/1024:.1f}M"
+            # rows.append(
+                # f"<tr>"
+                # f"<td><a class='file-link' href='{name}'>{name}</a></td>"
+                # f"<td class='date-col'>–</td>"
+                # f"<td class='size-col'>{mb}</td>"
+                # f"<td class='desc-col'>Build File</td>"
+                # f"</tr>"
+            # )
+        # return (
+            # "<table><thead><tr>"
+            # "<th>Name</th><th>Last Modified</th><th>Size</th><th>Description</th>"
+            # "</tr></thead><tbody>"
+            # + "\n".join(rows)
+            # + "</tbody></table>"
+        # )
+
+    # html = HTML_TEMPLATE.format(
+        # logo=LOGO_FILENAME,
+        # latest_date=latest_notes["date"],
+        # latest_tags=latest_tags,
+        # latest_version=latest_version,
+        # latest_description=latest_notes["description"],
+        # latest_whats_new=ul_list(latest_notes["whats_new"]),
+        # latest_bug_fixes=ul_list(latest_notes["bug_fixes"]),
+        # latest_table=build_table(versions[latest_version]),
+        # prev_version=prev_version or "",
+        # prev_table=build_table(versions[prev_version]) if prev_version else "",
+    # )
+
+    # # Write index.html locally
+    # index_path = SOURCE / "index.html"
+    # index_path.write_text(html, encoding="utf8")
+    # print("\nGenerated index.html")
+
+    # # ---------------------------------------------------------
+    # # FTP Upload
+    # # ---------------------------------------------------------
+    # ftp = ftp_connect(args.host, args.user, password)
+
+    # # Upload logo if missing
+    # if not (SOURCE / LOGO_FILENAME).exists():
+        # print(f"ERROR: Logo file '{LOGO_FILENAME}' not found in SOURCE.")
+    # else:
+        # upload_file(ftp, SOURCE / LOGO_FILENAME)
+
+    # # Upload each build file
+    # print("\nUploading latest release:")
+    # for f in versions[latest_version]:
+        # upload_file(ftp, f)
+
+    # if prev_version:
+        # print("\nUploading previous release:")
+        # for f in versions[prev_version]:
+            # upload_file(ftp, f)
+
+    # # Upload notes
+    # rn = SOURCE / f"RELEASE_NOTES-{latest_version}.txt"
+    # if rn.exists():
+        # upload_file(ftp, rn)
+
+    # # Upload index.html
+    # upload_file(ftp, index_path)
+
+    # print("\nDeployment complete.")
+    # ftp.quit()
+
+
+# if __name__ == "__main__":
+    # main()
