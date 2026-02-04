@@ -129,3 +129,65 @@ def send_session_summary_email(app_version: str, perf_summary: Optional[Dict[str
     clear_log_buffer()
     _LAUNCH_INFO = None
 
+
+def send_license_failure_report(error_message: str):
+    """
+    Send email to telemetry@moviolabs.com when license validation fails.
+    Subject format: MVC Calculator authorisation report (MVC Calculator {BUILDNUMBER})
+    """
+    try:
+        from utilities.version_info import BUILDNUMBER
+    except ImportError:
+        BUILDNUMBER = "unknown"
+
+    subject = f"MVC Calculator authorisation report (MVC Calculator {BUILDNUMBER})"
+
+    try:
+        from utilities.license import get_machine_id, get_country
+        hwid = get_machine_id()
+        country = get_country() or "Unknown"
+    except Exception:
+        hwid = "unknown"
+        country = "unknown"
+
+    body = f"""License validation failed.
+
+Error: {error_message}
+
+Machine info:
+- HWID: {hwid}
+- Country: {country}
+- Platform: {platform.platform()}
+- Hostname: {platform.node()}
+- User: {getpass.getuser()}
+- Timestamp: {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}
+"""
+    send_email(subject=subject, body=body, recipient="telemetry@moviolabs.com")
+
+
+def send_license_success_report(license_email: str, hwid: str, country: str):
+    """
+    Send email to telemetry@moviolabs.com when license validation succeeds.
+    Subject format: MVC Calculator authorisation report (MVC Calculator {BUILDNUMBER}) - SUCCESS
+    """
+    try:
+        from utilities.version_info import BUILDNUMBER
+    except ImportError:
+        BUILDNUMBER = "unknown"
+
+    subject = f"MVC Calculator authorisation report (MVC Calculator {BUILDNUMBER}) - SUCCESS"
+
+    body = f"""License validation succeeded.
+
+Licensed email: {license_email}
+
+Machine info:
+- HWID: {hwid}
+- Country: {country}
+- Platform: {platform.platform()}
+- Hostname: {platform.node()}
+- User: {getpass.getuser()}
+- Timestamp: {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}
+"""
+    send_email(subject=subject, body=body, recipient="telemetry@moviolabs.com")
+

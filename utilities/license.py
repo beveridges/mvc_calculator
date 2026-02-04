@@ -52,6 +52,40 @@ LICENSE_FILENAME = "license.key"
 # Wildcard HWID for @hfmdd.de users (allows license to work on any machine)
 WILDCARD_HWID_HFMDD = "WILDCARD_HFMDD_DE"
 
+# Telemetry: only send one license failure/success report per application session
+_license_failure_reported = False
+_license_success_reported = False
+
+
+def _report_license_failure(error_message: str) -> None:
+    """Send email to telemetry@moviolabs.com on license failure (once per session)."""
+    global _license_failure_reported
+    if not ENFORCE_LICENSE or _license_failure_reported:
+        return
+    try:
+        from telemetry.notifier import send_license_failure_report
+        send_license_failure_report(error_message)
+        _license_failure_reported = True
+    except Exception as e:
+        logger.debug(f"Could not send license failure report: {e}")
+
+
+def _report_license_success(license_email: str) -> None:
+    """Send email to telemetry@moviolabs.com on license success (once per session)."""
+    global _license_success_reported
+    if not ENFORCE_LICENSE or _license_success_reported:
+        return
+    try:
+        from telemetry.notifier import send_license_success_report
+        send_license_success_report(
+            license_email=license_email,
+            hwid=get_machine_id(),
+            country=get_country() or "Unknown",
+        )
+        _license_success_reported = True
+    except Exception as e:
+        logger.debug(f"Could not send license success report: {e}")
+
 
 def get_machine_id() -> str:
     """
@@ -439,21 +473,27 @@ def load_and_validate_license() -> Tuple[bool, Optional[str]]:
     
     if not license_path:
         recommended_path = get_license_file_path()
-        return False, (
+        err = (
             f"License file not found.\n\n"
             f"Please place license.key in:\n{recommended_path}\n\n"
             f"This location persists across application updates."
         )
+        _report_license_failure(err)
+        return False, err
     
     try:
         license_key = license_path.read_text(encoding="utf-8").strip()
     except Exception as e:
-        return False, f"Error reading license file: {str(e)}"
+        err = f"Error reading license file: {str(e)}"
+        _report_license_failure(err)
+        return False, err
     
     # Validate license key format and signature
     is_valid, license_data, error = validate_license_key(license_key)
     if not is_valid:
-        return False, error or "Invalid license key"
+        err = error or "Invalid license key"
+        _report_license_failure(err)
+        return False, err
     
     # Get current machine info
     current_hwid = get_machine_id()
@@ -468,15 +508,22 @@ def load_and_validate_license() -> Tuple[bool, Optional[str]]:
             logger.info(f"Wildcard license detected for {license_data['email']} - skipping HWID validation")
         else:
             # Wildcard HWID but not @hfmdd.de - invalid
-            return False, "Wildcard license is only valid for @hfmdd.de email addresses."
+            err = "Wildcard license is only valid for @hfmdd.de email addresses."
+            _report_license_failure(err)
+            return False, err
     elif license_data["hwid"] != current_hwid:
-        return False, "License key is not valid for this machine. Hardware ID mismatch."
-    
+        err = "License key is not valid for this machine. Hardware ID mismatch."
+        _report_license_failure(err)
+        return False, err
+
     # Check country match
     if current_country and license_data["country"] != current_country:
-        return False, f"License key is not valid for this country. Expected: {license_data['country']}, Detected: {current_country}"
+        err = f"License key is not valid for this country. Expected: {license_data['country']}, Detected: {current_country}"
+        _report_license_failure(err)
+        return False, err
     
     logger.info(f"License validated successfully for {license_data['email']}")
+    _report_license_success(license_data["email"])
     return True, None
 
 
