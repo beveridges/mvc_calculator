@@ -35,24 +35,6 @@ out.write_text(inline_html, encoding="utf-8")
 print(f"[ok] wrote version_inline.html: {app_name} / {build}")
 
 
-def extract_build_badge_label(version_number: str) -> str:
-    """
-    Extract build badge label from VERSIONNUMBER.
-    Example: "25.12-alpha.01" -> "alpha--25.12--01"
-    """
-    # Parse version like "25.12-alpha.01"
-    parts = version_number.split("-")
-    if len(parts) >= 2:
-        yy_mm = parts[0]  # "25.12"
-        channel_parts = parts[1].split(".")  # ["alpha", "01"]
-        if len(channel_parts) >= 2:
-            channel_name = channel_parts[0]  # "alpha"
-            channel_num = channel_parts[1]  # "01"
-            return f"{channel_name}--{yy_mm}--{channel_num}"
-    # Fallback: use version with -- instead of -
-    return version_number.replace("-", "--")
-
-
 def update_build_badge(target: Path, new_label: str) -> None:
     """Update the Build badge in markdown/HTML files."""
     if not target.exists():
@@ -113,9 +95,9 @@ def update_version_badge(target: Path, new_label: str) -> None:
         print(f"[ok] updated version badge in {rel}")
 
 
-# Prepare badge labels
-build_badge_label = extract_build_badge_label(version)
-version_badge_label = build.replace("-", "--")
+# Prepare badge labels - both use consistent format; hyphens escaped for shields.io
+build_badge_label = version.replace("-", "--")   # Build: 26.01-alpha.01 (VERSIONNUMBER)
+version_badge_label = build.replace("-", "--")   # Version: 26.01-alpha.01.02 (BUILDNUMBER)
 
 targets = [
     root / "docs_site" / "docs" / "_index_raw.md",

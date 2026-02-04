@@ -7,7 +7,12 @@
 - Test changes locally
 
 
-### 1 In Windows: Build help files
+### 1. In Windows:  Activate the Conda environment
+```bash
+conda activate mvccalculator
+```
+
+### 2 In Windows: Build help files
 Navigate to the `docs_site` directory and run:
 
 ```bash
@@ -29,12 +34,9 @@ mkdocs serve
 ```
 Then open your browser to: `http://127.0.0.1:8000`
 
-### 2. In Windows:  Activate the Conda environment
-```bash
-conda activate mvccalculator
-```
 
-### 3. In Windows: Commit and Push to GitHub
+
+### 3. In Windows: Commit and Push to GitHub -> this is for WSL to pull
 ```bash
 git add .
 git commit -m "Your commit message"
