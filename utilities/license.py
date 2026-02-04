@@ -116,44 +116,73 @@ def get_machine_id() -> str:
 def get_country_offline() -> Optional[str]:
     """
     Get country code from Windows locale/region settings.
-    Returns 2-letter ISO country code (e.g., "CO", "US", "GB").
+    Returns 2-letter ISO country code (e.g., "CO", "US", "GB", "DE").
     """
     try:
         if platform.system() == "Windows":
-            # Method 1: GetUserGeoID (Windows API)
+            # Method 1: GetLocaleInfoEx - returns proper ISO 3166-1 alpha-2 country code (e.g. "DE", "US")
+            # Avoids locale strings like "German_Germany" which would yield "GERMANY" instead of "DE"
             try:
-                GetUserGeoID = ctypes.windll.kernel32.GetUserGeoID
-                GEOCLASS_NATION = 16
-                geo_id = GetUserGeoID(GEOCLASS_NATION)
-                
-                if geo_id:
-                    # Convert geo ID to country code (simplified mapping)
-                    # For production, use a proper GeoID to ISO country code mapping
-                    # This is a basic implementation
-                    import locale
-                    locale_str = locale.getdefaultlocale()[0] or ""
-                    if "_" in locale_str:
-                        # Extract country from locale (e.g., "en_GB" -> "GB")
-                        parts = locale_str.split("_")
-                        if len(parts) > 1:
-                            return parts[1].upper()
+                kernel32 = ctypes.windll.kernel32
+                LOCALE_SISO3166CTRYNAME = 0x5A  # Returns ISO 3166-1 alpha-2 country code
+                buf = ctypes.create_unicode_buffer(16)
+                result = kernel32.GetLocaleInfoEx(
+                    None,  # LOCALE_NAME_USER_DEFAULT - user's default locale
+                    LOCALE_SISO3166CTRYNAME,
+                    buf,
+                    ctypes.sizeof(buf) // ctypes.sizeof(ctypes.c_wchar),
+                )
+                if result > 0:
+                    code = buf.value.strip().upper()
+                    if len(code) == 2:
+                        return code
             except Exception:
                 pass
-            
-            # Method 2: Fallback to locale
+
+            # Method 2: Fallback to locale (may return full names like "GERMANY" on some Windows configs)
             try:
                 import locale
                 locale_str = locale.getdefaultlocale()[0] or ""
                 if "_" in locale_str:
                     parts = locale_str.split("_")
                     if len(parts) > 1:
-                        return parts[1].upper()
+                        raw = parts[1].upper()
+                        # If already 2 chars, use as ISO code (e.g. en_DE -> DE)
+                        if len(raw) == 2:
+                            return raw
+                        # Map full country names to ISO codes (e.g. German_Germany -> GERMANY)
+                        country_map = {
+                            "GERMANY": "DE",
+                            "UNITED STATES": "US",
+                            "UNITED KINGDOM": "GB",
+                            "FRANCE": "FR",
+                            "SPAIN": "ES",
+                            "ITALY": "IT",
+                            "BRAZIL": "BR",
+                            "COLOMBIA": "CO",
+                            "MEXICO": "MX",
+                            "ARGENTINA": "AR",
+                            "CHILE": "CL",
+                            "AUSTRALIA": "AU",
+                            "CANADA": "CA",
+                            "NETHERLANDS": "NL",
+                            "BELGIUM": "BE",
+                            "SWITZERLAND": "CH",
+                            "AUSTRIA": "AT",
+                            "PORTUGAL": "PT",
+                            "JAPAN": "JP",
+                            "CHINA": "CN",
+                            "INDIA": "IN",
+                            "SOUTH AFRICA": "ZA",
+                            "RUSSIA": "RU",
+                        }
+                        return country_map.get(raw)
             except Exception:
                 pass
-    
+
     except Exception as e:
         logger.warning(f"Error getting country: {e}")
-    
+
     return None
 
 
