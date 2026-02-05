@@ -19,6 +19,7 @@ from utilities.path_utils import base_path
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
+OA_MODE = "--oa" in sys.argv or "-oa" in sys.argv
 
 # ------------------------------------------------------------------------------
 # Configuration
@@ -48,7 +49,7 @@ for line in VERSION_INFO.read_text(encoding="utf-8").splitlines():
         break
 
 # Create versioned directory structure
-VERSION_DIR = BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"
+VERSION_DIR = BUILD_BASE / (f"MVC_Calculator-oa-{BUILDNUMBER}" if OA_MODE else f"MVC_Calculator-{BUILDNUMBER}")
 BUILDFILES_DIR = VERSION_DIR / "buildfiles"
 VERSION_DIR.mkdir(parents=True, exist_ok=True)
 BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
@@ -66,7 +67,8 @@ def wix_version_from_build(build: str) -> str:
 
 WIX_VERSION = wix_version_from_build(BUILDNUMBER)
 
-print(f"[OK] Using build number: {BUILDNUMBER}")
+MSI_BASENAME = f"{APP_BASENAME}-oa-{BUILDNUMBER}" if OA_MODE else f"{APP_BASENAME}-{BUILDNUMBER}"
+print(f"[OK] Using build number: {BUILDNUMBER}" + (" (OA mode)" if OA_MODE else ""))
 
 # ------------------------------------------------------------------------------
 # Determine latest archived build folder
@@ -118,7 +120,16 @@ def find_latest_build_dir(builds_root: Path) -> Path:
     print(f"[OK] Using archived build: {latest.name} (modified: {mtime})")
     return latest
 
-LATEST_BUILD_DIR = find_latest_build_dir(ARCHIVE_BUILDS_DIR)
+if OA_MODE:
+    OA_BUILD_DIR = ARCHIVE_BUILDS_DIR / f"MVC_Calculator-oa-{BUILDNUMBER}"
+    if not OA_BUILD_DIR.exists():
+        print(f"[ERROR] OA build not found: {OA_BUILD_DIR}")
+        print(f"[INFO] Run build_windows_portable.py --onedir --oa first")
+        sys.exit(1)
+    LATEST_BUILD_DIR = OA_BUILD_DIR
+    print(f"[OK] Using OA archived build: {LATEST_BUILD_DIR.name}")
+else:
+    LATEST_BUILD_DIR = find_latest_build_dir(ARCHIVE_BUILDS_DIR)
 print(f"[DEBUG] LATEST_BUILD_DIR resolved to: {LATEST_BUILD_DIR}")
 print(f"[DEBUG] LATEST_BUILD_DIR exists: {LATEST_BUILD_DIR.exists()}")
 
@@ -363,6 +374,14 @@ print(f"[DEBUG] WXS file lines: {len(wxs_content.splitlines()):,}")
 # ------------------------------------------------------------------------------
 # Run WiX (candle + light)
 # ------------------------------------------------------------------------------
+# Use short TEMP path to avoid LGHT0103 (WiX hits ~255 char path limit with long temp dirs)
+_wix_temp = Path("C:/WiXTemp")
+_wix_temp.mkdir(parents=True, exist_ok=True)
+_orig_temp = os.environ.get("TEMP")
+_orig_tmp = os.environ.get("TMP")
+os.environ["TEMP"] = str(_wix_temp)
+os.environ["TMP"] = str(_wix_temp)
+
 # Change to buildfiles directory where WXS file is located
 os.chdir(BUILDFILES_DIR)
 try:
@@ -372,7 +391,7 @@ try:
     print(f"[DEBUG] Candle completed successfully")
     
     # MSI goes to version directory (top level)
-    msi_path = VERSION_DIR / f"{APP_BASENAME}-{BUILDNUMBER}.msi"
+    msi_path = VERSION_DIR / f"{MSI_BASENAME}.msi"
     
     # CAB file goes to buildfiles directory
     cab_path = BUILDFILES_DIR / "cab1.cab"
@@ -404,7 +423,7 @@ try:
         print(f"[DEBUG] MSI file size: {msi_path.stat().st_size:,} bytes")
     
     # Move wixpdb to buildfiles if it was created in version directory
-    wixpdb_name = f"{APP_BASENAME}-{BUILDNUMBER}.wixpdb"
+    wixpdb_name = f"{MSI_BASENAME}.wixpdb"
     wixpdb_src = VERSION_DIR / wixpdb_name
     if wixpdb_src.exists():
         wixpdb_dest = BUILDFILES_DIR / wixpdb_name
@@ -455,11 +474,17 @@ try:
 except subprocess.CalledProcessError as e:
     print(f"[ERROR] WiX build failed: {e}")
     sys.exit(1)
+finally:
+    # Restore original TEMP/TMP
+    if _orig_temp is not None:
+        os.environ["TEMP"] = _orig_temp
+    if _orig_tmp is not None:
+        os.environ["TMP"] = _orig_tmp
 
 # ------------------------------------------------------------------------------
 # Create portable ZIP (from build directory)
 # ------------------------------------------------------------------------------
-ZIP_PATH = VERSION_DIR / f"{APP_BASENAME}-{BUILDNUMBER}-portable.zip"
+ZIP_PATH = VERSION_DIR / f"{MSI_BASENAME}-portable.zip"
 zip_base = ZIP_PATH.with_suffix("")
 if LATEST_BUILD_DIR.exists():
     print(f"[OK] Creating portable ZIP from {LATEST_BUILD_DIR.name}: {ZIP_PATH.name}")

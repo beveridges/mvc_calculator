@@ -3,17 +3,18 @@
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from utilities.version_info import BUILDNUMBER  # same as Windows build
 
-APP_ID = "mvc-calculator"          # Debian package name
+OA_MODE = "--oa" in sys.argv or "-oa" in sys.argv
+APP_ID = "mvc-calculator-oa" if OA_MODE else "mvc-calculator"
 DISPLAY_NAME = "MVC Calculator"    # Human-readable
 VERSION = BUILDNUMBER              # e.g. "25.11-alpha.01.72"
 
-# ROOT = Path("/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds")
 ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
-PORTABLE = ROOT / "pyinstaller"
+PORTABLE = ROOT / "pyinstaller_oa" if OA_MODE else ROOT / "pyinstaller"
 DEBROOT = ROOT / "deb" / f"{APP_ID}_{VERSION}_amd64"
 OUTFILE = ROOT / f"{APP_ID}_{VERSION}_amd64.deb"
 

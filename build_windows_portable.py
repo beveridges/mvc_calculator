@@ -242,7 +242,12 @@ def main():
     ap.add_argument("--name", default="MVC_Calculator", help="Application name")
     ap.add_argument("--entry", default="main.py", help="Entry script path")
     ap.add_argument("--dev", action="store_true", help="Build license-free development version")
+    ap.add_argument("--oa", action="store_true", help="Build Open Access (license-free) version, same build number as licensed")
     args = ap.parse_args()
+
+    # --oa implies license-free and uses existing BUILDNUMBER
+    if args.oa:
+        args.dev = True
 
     entry_script = project_root / args.entry
     if not entry_script.exists():
@@ -250,11 +255,21 @@ def main():
         sys.exit(2)
 
     # ---------- Versioning ----------
-    base = datetime.now().strftime("%y.%m")
-    VERSIONNUMBER = f"{base}-{args.channel}"
-    prev_build, prev_version = read_previous_from_file(project_root)
-    SEQ = increment_last_segment(prev_build) if prev_build and prev_version == VERSIONNUMBER else "00"
-    BUILDNUMBER = f"{VERSIONNUMBER}.{SEQ}"
+    if args.oa:
+        # OA build: use existing BUILDNUMBER from version_info (do not increment)
+        prev_build, _ = read_previous_from_file(project_root)
+        if not prev_build:
+            print("[error] --oa requires version_info.py with BUILDNUMBER. Run licensed build first.")
+            sys.exit(2)
+        BUILDNUMBER = prev_build
+        VERSIONNUMBER = BUILDNUMBER.rsplit(".", 1)[0] if "." in BUILDNUMBER else f"{datetime.now().strftime('%y.%m')}-{args.channel}"
+        print(f"[INFO] OA build using existing BUILDNUMBER: {BUILDNUMBER}")
+    else:
+        base = datetime.now().strftime("%y.%m")
+        VERSIONNUMBER = f"{base}-{args.channel}"
+        prev_build, prev_version = read_previous_from_file(project_root)
+        SEQ = increment_last_segment(prev_build) if prev_build and prev_version == VERSIONNUMBER else "00"
+        BUILDNUMBER = f"{VERSIONNUMBER}.{SEQ}"
     GITREVHEAD = git_rev_head() if in_git_repo() else "unknown"
     GITTAG = git_latest_tag() if in_git_repo() else ""
     FRIENDLYVERSIONNAME = args.name.replace("_", " ")
@@ -274,9 +289,11 @@ def main():
         sysinfo_dir = project_root / "utilities"
         sysinfo_dir.mkdir(parents=True, exist_ok=True)
         sysinfo_path = sysinfo_dir / "version_info.py"
-        # Add DEV_BUILD flag if --dev is specified
+        # Add DEV_BUILD flag if --dev is specified (includes --oa)
         dev_build_flag = "True" if args.dev else "False"
-        if args.dev:
+        if args.oa:
+            print("[INFO] Building Open Access (license-free) version (--oa flag enabled)")
+        elif args.dev:
             print("[INFO] Building license-free development version (--dev flag enabled)")
         
         sysinfo_txt = (
@@ -296,43 +313,44 @@ def main():
         sysinfo_path.write_text(sysinfo_txt, encoding="utf-8")
         print(f"[ok] wrote {sysinfo_path}")
         
-        # Update docs version and rebuild docs if they exist
-        try:
-            version_script = project_root / "docs_site" / "scripts" / "update_version_block.py"
-            if version_script.exists():
-                print("[info] Updating docs version...")
-                subprocess.run([sys.executable, str(version_script)], check=False, cwd=str(project_root))
-            
-            # Try to rebuild docs if mkdocs is available
-            docs_dir = project_root / "docs_site"
-            docs_site_index = docs_dir / "site" / "index.html"
-            if docs_dir.exists() and not SKIP_DOCS:
-                try:
-                    result = subprocess.run(
-                        ["mkdocs", "build"],
-                        cwd=str(docs_dir),
-                        capture_output=True,
-                        text=True,
-                        timeout=60
-                    )
-                    if result.returncode == 0:
-                        if docs_site_index.exists():
-                            print("[ok] Docs rebuilt with updated version")
+        # Update docs version and rebuild docs (skip for OA - same version as licensed)
+        if not args.oa:
+            try:
+                version_script = project_root / "docs_site" / "scripts" / "update_version_block.py"
+                if version_script.exists():
+                    print("[info] Updating docs version...")
+                    subprocess.run([sys.executable, str(version_script)], check=False, cwd=str(project_root))
+                
+                # Try to rebuild docs if mkdocs is available
+                docs_dir = project_root / "docs_site"
+                docs_site_index = docs_dir / "site" / "index.html"
+                if docs_dir.exists() and not SKIP_DOCS:
+                    try:
+                        result = subprocess.run(
+                            ["mkdocs", "build"],
+                            cwd=str(docs_dir),
+                            capture_output=True,
+                            text=True,
+                            timeout=60
+                        )
+                        if result.returncode == 0:
+                            if docs_site_index.exists():
+                                print("[ok] Docs rebuilt with updated version")
+                            else:
+                                print("[warn] mkdocs build completed but index.html not found")
                         else:
-                            print("[warn] mkdocs build completed but index.html not found")
-                    else:
-                        print(f"[warn] Docs build failed: {result.stderr[:200]}")
-                        print("[info] You may need to run 'mkdocs build' manually in docs_site/")
-                except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-                    print(f"[warn] mkdocs not available: {e}")
-                    print("[info] Install mkdocs and run 'mkdocs build' in docs_site/ to include help files")
-                # Check if docs exist even if build wasn't attempted
-                if not docs_site_index.exists():
-                    print("[warn] docs_site/site/index.html not found - help files will not be available in EXE")
-            elif docs_dir.exists() and SKIP_DOCS:
-                print("[info] SKIP_DOCS enabled — skipping MkDocs build for this branch.")
-        except Exception as e:
-            print(f"[warn] Could not update docs version (non-critical): {e}")
+                            print(f"[warn] Docs build failed: {result.stderr[:200]}")
+                            print("[info] You may need to run 'mkdocs build' manually in docs_site/")
+                    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                        print(f"[warn] mkdocs not available: {e}")
+                        print("[info] Install mkdocs and run 'mkdocs build' in docs_site/ to include help files")
+                    # Check if docs exist even if build wasn't attempted
+                    if not docs_site_index.exists():
+                        print("[warn] docs_site/site/index.html not found - help files will not be available in EXE")
+                elif docs_dir.exists() and SKIP_DOCS:
+                    print("[info] SKIP_DOCS enabled — skipping MkDocs build for this branch.")
+            except Exception as e:
+                print(f"[warn] Could not update docs version (non-critical): {e}")
 
     # ---------- PyInstaller dirs (external to project to avoid recursion) ----------
     base_build = Path.home() / "Documents" / ".builds" / "mvc_calculator" / "pyinstaller"
@@ -546,7 +564,7 @@ def main():
             print(f"[WARN] _internal directory not found in {build_dir} (might be onefile build)")
 
     # ---------- Archive ----------
-    tag = f"{args.name}-{BUILDNUMBER}"
+    tag = f"{args.name}-oa-{BUILDNUMBER}" if args.oa else f"{args.name}-{BUILDNUMBER}"
     archived_at = archive_latest(distpath, builds_dir, tag, app_name=args.name)
     if not archived_at:
         print("[error] archive step failed.")
@@ -617,6 +635,15 @@ def main():
         print(f"[ok] zipped archive: {zip_path}")
 
     purge_old_archives(builds_dir, keep=max(1, args.keep))
+
+    # Restore version_info: set DEV_BUILD=False so repo state is correct for next licensed build
+    if args.oa:
+        sysinfo_path = project_root / "utilities" / "version_info.py"
+        if sysinfo_path.exists():
+            text = sysinfo_path.read_text(encoding="utf-8")
+            text = re.sub(r"DEV_BUILD\s*=\s*True", "DEV_BUILD = False", text)
+            sysinfo_path.write_text(text, encoding="utf-8")
+            print("[ok] Restored version_info.py (DEV_BUILD=False)")
 
     print("\n✅ Done.")
     print(f"   Dist:     {distpath.resolve()}")

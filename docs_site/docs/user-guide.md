@@ -1,7 +1,7 @@
 # User Guide
 
 ![Build](https://img.shields.io/badge/build-26.02--alpha.01-blueviolet?style=flat-square)
-![Version](https://img.shields.io/badge/version-26.02--alpha.01.02-orange?style=flat-square)
+![Version](https://img.shields.io/badge/version-26.02--alpha.01.05-orange?style=flat-square)
 
 ## Table of Contents
 

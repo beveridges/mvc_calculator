@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import argparse
 import sys
 import shutil
 import subprocess
@@ -160,72 +161,67 @@ def cleanup_old_builds(current_buildnumber: str):
 # --------------------------------------------------------------
 # COPY RESULTING FILES TO WINDOWS DIRECTORY
 # --------------------------------------------------------------
-def copy_to_windows(buildnumber: str):
+def copy_to_windows(buildnumber: str, oa_mode: bool = False):
     """Copy Linux build artifacts to Windows versioned directory"""
-    WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{buildnumber}"
+    if oa_mode:
+        WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-oa-{buildnumber}"
+    else:
+        WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{buildnumber}"
     WIN_BUILDFILES_DIR = WIN_VERSION_DIR / "buildfiles"
     
     WIN_VERSION_DIR.mkdir(parents=True, exist_ok=True)
     WIN_BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n[INFO] Copying Linux build artifacts to Windows versioned directory:\n{WIN_VERSION_DIR}\n")
+    build_type = "OA" if oa_mode else "licensed"
+    print(f"\n[INFO] Copying Linux {build_type} build artifacts to:\n{WIN_VERSION_DIR}\n")
     print(f"[INFO] Filtering files for version: {buildnumber}\n")
-    
-    # Diagnostic: List all files in LINUX_ROOT to help debug
-    print(f"[DEBUG] Files found in {LINUX_ROOT}:")
-    for item in sorted(LINUX_ROOT.iterdir()):
-        if item.is_file():
-            print(f"  - {item.name} (suffix: {item.suffix})")
-    print()
 
     # Copy DEB and AppImage to version directory (main artifacts)
-    # Only copy files that match the current build number
+    # OA: copy *-oa* files; licensed: copy files without -oa
     copied_count = 0
     for item in LINUX_ROOT.iterdir():
         if item.is_file():
-            # Check file extension (case-insensitive for AppImage)
             suffix_lower = item.suffix.lower()
             if suffix_lower in [".deb", ".appimage"]:
-                # Check if file name contains the build number
-                if buildnumber in item.name:
+                has_oa = "-oa" in item.name or "mvc-calculator-oa" in item.name
+                version_match = buildnumber in item.name
+                if version_match and (has_oa if oa_mode else not has_oa):
                     dest = WIN_VERSION_DIR / item.name
                     shutil.copy(item, dest)
                     print(f"  ✓ Copied {item.name} to version directory")
                     copied_count += 1
-                else:
-                    print(f"  ⊘ Skipped {item.name} (version mismatch, expected {buildnumber})")
     
     if copied_count == 0:
         print(f"  ⚠️  Warning: No matching build files found for version {buildnumber}")
         print(f"     Checked directory: {LINUX_ROOT}")
         print(f"     Looking for files containing: {buildnumber}")
 
-    # Copy portable build and other files to buildfiles
-    # Skip main artifacts (.deb, .AppImage) which are already copied above
-    for item in LINUX_ROOT.iterdir():
-        # Skip temp_logs directory and main artifacts (already copied above)
-        if item.name == "temp_logs":
-            continue
-        # Skip .deb and .AppImage files (case-insensitive) - already copied to version directory
-        suffix_lower = item.suffix.lower() if item.is_file() else ""
-        if suffix_lower in [".deb", ".appimage"]:
-            continue
-        if item.name == "pyinstaller" or (item.is_file() and suffix_lower not in [".deb", ".appimage"]):
-            dest = WIN_BUILDFILES_DIR / item.name
-            if item.is_dir():
+    # Copy portable build to buildfiles (licensed only; OA dir just gets DEB/AppImage)
+    if not oa_mode:
+        for item in LINUX_ROOT.iterdir():
+            if item.name == "temp_logs":
+                continue
+            suffix_lower = item.suffix.lower() if item.is_file() else ""
+            if suffix_lower in [".deb", ".appimage"]:
+                continue
+            if item.name == "pyinstaller" and item.is_dir():
+                dest = WIN_BUILDFILES_DIR / item.name
                 if dest.exists():
                     shutil.rmtree(dest)
                 shutil.copytree(item, dest)
-            else:
-                shutil.copy(item, dest)
-            print(f"  ✓ Copied {item.name} to buildfiles")
+                print(f"  ✓ Copied {item.name} to buildfiles")
+                break
 
     print("[INFO] Copy complete.\n")
 
 
 
 def main():
-    print(f"\n🐧 FULL LINUX BUILD — logging to:\n{TEMP_LOG_FILE}\n")
+    ap = argparse.ArgumentParser(description="MVC Calculator Linux build")
+    ap.add_argument("-oa", "--oa", action="store_true", help="Also build Open Access (license-free) version")
+    args = ap.parse_args()
+
+    print(f"\n🐧 FULL LINUX BUILD" + (" (including OA)" if args.oa else "") + f" — logging to:\n{TEMP_LOG_FILE}\n")
     
     # Read build number BEFORE builds (Windows builds have already incremented it)
     # This ensures we use the correct version and can verify it before building
@@ -280,10 +276,16 @@ def main():
     
     print()
 
-    # Run all Linux builds
+    # Run licensed Linux builds
     run_step("Portable Linux Build", [sys.executable, str(PORTABLE_SCRIPT)], TEMP_LOG_FILE)
     run_step("AppImage Build",      [sys.executable, str(APPIMAGE_SCRIPT)], TEMP_LOG_FILE)
     run_step("DEB Package Build",   [sys.executable, str(DEB_SCRIPT)], TEMP_LOG_FILE)
+
+    # Run OA builds if requested
+    if args.oa:
+        run_step("OA Portable Linux Build", [sys.executable, str(PORTABLE_SCRIPT), "--oa"], TEMP_LOG_FILE)
+        run_step("OA AppImage Build",      [sys.executable, str(APPIMAGE_SCRIPT), "--oa"], TEMP_LOG_FILE)
+        run_step("OA DEB Package Build",   [sys.executable, str(DEB_SCRIPT), "--oa"], TEMP_LOG_FILE)
 
     print("\n✅ ALL LINUX ARTIFACTS BUILT SUCCESSFULLY\n")
     
@@ -314,8 +316,12 @@ def main():
         print(f"   - Build artifacts will be in: {WIN_BUILDFILES_DIR}")
         print(f"   - Log file moved to: {LOG_FILE}\n")
     
-    # Copy files to Windows versioned directory
-    copy_to_windows(BUILDNUMBER)
+    # Copy licensed files to Windows versioned directory
+    copy_to_windows(BUILDNUMBER, oa_mode=False)
+
+    # Copy OA files if built
+    if args.oa:
+        copy_to_windows(BUILDNUMBER, oa_mode=True)
 
 
 if __name__ == "__main__":

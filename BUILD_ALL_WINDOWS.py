@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import argparse
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
@@ -52,8 +53,9 @@ def cleanup_old_version_directories(build_base: Path, keep: int = 3):
     print(f"\n[CLEANUP] Cleaning up old version directories in {build_base}")
     print(f"[CLEANUP] Keeping only the last {keep} builds\n")
     
-    # Find all version directories (MVC_Calculator-{version})
+    # Find all version directories (MVC_Calculator-{version} and MVC_Calculator-oa-{version})
     version_pattern = re.compile(r"^MVC_Calculator-(\d{2}\.\d{2}-[^.]+\.\d{2}\.\d{2})$")
+    oa_pattern = re.compile(r"^MVC_Calculator-oa-(\d{2}\.\d{2}-[^.]+\.\d{2}\.\d{2})$")
     version_dirs = []
     
     for item in build_base.iterdir():
@@ -62,8 +64,8 @@ def cleanup_old_version_directories(build_base: Path, keep: int = 3):
         # Skip special directories
         if item.name in ["pyinstaller", "temp_logs"]:
             continue
-        # Check if it matches version directory pattern
-        if version_pattern.match(item.name):
+        # Check if it matches version directory pattern (licensed or OA)
+        if version_pattern.match(item.name) or oa_pattern.match(item.name):
             version_dirs.append(item)
     
     if len(version_dirs) <= keep:
@@ -164,7 +166,11 @@ def run_step(name, cmd, log_file):
         sys.exit(proc.returncode)
 
 
-print(f"\n🚀 FULL WINDOWS BUILD — logging to:\n{TEMP_LOG_FILE}\n")
+ap = argparse.ArgumentParser(description="MVC Calculator Windows build")
+ap.add_argument("-oa", "--oa", action="store_true", help="Also build Open Access (license-free) version")
+args = ap.parse_args()
+
+print(f"\n🚀 FULL WINDOWS BUILD" + (" (including OA)" if args.oa else "") + f" — logging to:\n{TEMP_LOG_FILE}\n")
 
 # ------------------------------------------------------------
 # 1) ALWAYS REBUILD PYINSTALLER PORTABLE ONEDIR
@@ -195,6 +201,13 @@ if TEMP_LOG_FILE.exists():
 #    (Files are created directly in versioned directory structure)
 # ------------------------------------------------------------
 run_step("MSI + ZIP Packaging", [sys.executable, str(MSI_SCRIPT)], LOG_FILE)
+
+# ------------------------------------------------------------
+# 2b) OA BUILD (if -oa flag): Portable + MSI + ZIP for Open Access
+# ------------------------------------------------------------
+if args.oa:
+    run_step("OA PyInstaller Portable Build", [sys.executable, str(PORTABLE_SCRIPT), "--onedir", "--oa"], LOG_FILE)
+    run_step("OA MSI + ZIP Packaging", [sys.executable, str(MSI_SCRIPT), "--oa"], LOG_FILE)
 
 # ------------------------------------------------------------
 # 3) CLEANUP: Remove old builds and PyInstaller artifacts

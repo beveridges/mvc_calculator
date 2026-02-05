@@ -38,17 +38,18 @@ Then open your browser to: `http://127.0.0.1:8000`
 # ----------------------------------
 ### 3. In Windows: BUILD_ALL_WINDOWS.py 
 ```bash
-  python BUILD_ALL_WINDOWS.py
+  python BUILD_ALL_WINDOWS.py           # Licensed only
+  python BUILD_ALL_WINDOWS.py -oa       # Licensed + Open Access
 ```
 **DETAILS**
 **Location:** Project root directory  
 **What it does:**
 - Runs `build_windows_portable.py` (PyInstaller onedir build - increments build number)
 - Runs `build_windows_msi.py` (creates MSI installer and portable ZIP)
-**Output location:** `C:\Users\Scott\Documents\.builds\mvc_calculator\MVC_Calculator-{BUILDNUMBER}\`
-  - MSI file: `MVC_Calculator-{version}.msi`
-  - ZIP file: `MVC_Calculator-{version}-portable.zip`
-  - Build artifacts/logs: `MVC_Calculator-{BUILDNUMBER}\buildfiles\`
+- **With -oa:** Also builds Open Access (license-free) version: portable + MSI + ZIP
+**Output location:** `C:\Users\Scott\Documents\.builds\mvc_calculator\`
+  - Licensed: `MVC_Calculator-{version}\` — MSI, portable ZIP, buildfiles
+  - Open Access (when -oa): `MVC_Calculator-oa-{version}\` — `MVC_Calculator-oa-{version}.msi`, `MVC_Calculator-oa-{version}-portable.zip`
 **Note:** This must be run on Windows (not WSL) because it uses Windows-specific build 
 tools.
 
@@ -77,7 +78,8 @@ git pull
 ### 7. In WSL: BUILD_ALL_LINUX.py 
 
 ```bash
-python BUILD_ALL_LINUX.py
+python BUILD_ALL_LINUX.py           # Licensed only
+python BUILD_ALL_LINUX.py -oa       # Licensed + Open Access
 ```
 
 **Location:** Project root directory (in WSL)  
@@ -85,12 +87,11 @@ python BUILD_ALL_LINUX.py
 - Runs `build_linux_portable.py` (Linux portable build)
 - Runs `build_linux_appimage.py` (creates AppImage)
 - Runs `build_linux_deb.py` (creates .deb package)
+- **With -oa:** Also builds OA portable, AppImage, and DEB
 **Initial output:** `~/.linux_builds/MVC_CALCULATOR/linux_builds/`
 **Final output:** Copies files to Windows directory:
-  - `C:\Users\Scott\Documents\.builds\mvc_calculator\MVC_Calculator-{BUILDNUMBER}\`
-  - DEB file: `mvc-calculator_{version}_amd64.deb`
-  - AppImage: `MVC_Calculator-{version}-x86_64.AppImage`
-  - Build artifacts: `MVC_Calculator-{BUILDNUMBER}\buildfiles\`
+  - Licensed: `MVC_Calculator-{BUILDNUMBER}\` — DEB, AppImage, buildfiles
+  - Open Access (when -oa): `MVC_Calculator-oa-{BUILDNUMBER}\` — `mvc-calculator-oa_{version}_amd64.deb`, `MVC_Calculator-oa-{version}-x86_64.AppImage`
 **Note:** This reads the build number that was incremented by the Windows build, ensuring version consistency.
 
 # ----------------------------------
@@ -117,13 +118,14 @@ python deploy_release_ftp.py -u
 **What it does:**
 - Scans for build files in versioned directories:
   - `C:\Users\Scott\Documents\.builds\mvc_calculator\MVC_Calculator-{version}\`
-- Finds all build files (MSI, ZIP, DEB, AppImage) for latest and previous releases
+- Finds all build files (MSI, ZIP, DEB, AppImage) for latest, previous, and Open Access releases
 - Reads `RELEASE_NOTES-{version}.txt` from:
   - `MVC_Calculator-{version}\buildfiles\RELEASE_NOTES-{version}.txt` (preferred)
   - Or `C:\Users\Scott\Documents\.builds\mvc_calculator\RELEASE_NOTES-{version}.txt` (fallback)
 - Generates `index.html` with:
   - Latest release (n) with all build files
   - Previous release (n-1) with all build files (if exists)
+  - Open Access section (if OA builds exist)
 - Uploads to FTP server:
   - **Target:** `ftp.moviolabs.com:/public_html/downloads/MVC_Calculator/releases`
   - Uploads logo, build files, release notes, and index.html
@@ -134,6 +136,7 @@ python deploy_release_ftp.py -u
 - Portable ZIP (Windows)
 - DEB package (Linux, if built)
 - AppImage (Linux, if built)
+- Open Access builds (MSI, ZIP, DEB, AppImage with -oa suffix, if built)
 - MaxMSP patch zip
 - Release notes (if present)
 - `index.html` (auto-generated)
@@ -147,15 +150,21 @@ python deploy_release_ftp.py -u
 
 ```
 C:\Users\Scott\Documents\.builds\mvc_calculator\
-├── MVC_Calculator-25.11-alpha.01.78\          (Latest version)
-│   ├── MVC_Calculator-25.11-alpha.01.78.msi
-│   ├── MVC_Calculator-25.11-alpha.01.78-portable.zip
-│   ├── mvc-calculator_25.11-alpha.01.78_amd64.deb
-│   ├── MVC_Calculator-25.11-alpha.01.78-x86_64.AppImage
+├── MVC_Calculator-26.02-alpha.01.03\          (Licensed - latest)
+│   ├── MVC_Calculator-26.02-alpha.01.03.msi
+│   ├── MVC_Calculator-26.02-alpha.01.03-portable.zip
+│   ├── mvc-calculator_26.02-alpha.01.03_amd64.deb
+│   ├── MVC_Calculator-26.02-alpha.01.03-x86_64.AppImage
 │   └── buildfiles\
-│       ├── RELEASE_NOTES-25.11-alpha.01.78.txt
+│       ├── RELEASE_NOTES-26.02-alpha.01.03.txt
 │       └── (build logs and artifacts)
-├── MVC_Calculator-25.11-alpha.01.77\          (Previous version)
+├── MVC_Calculator-oa-26.02-alpha.01.03\       (Open Access - same version)
+│   ├── MVC_Calculator-oa-26.02-alpha.01.03.msi
+│   ├── MVC_Calculator-oa-26.02-alpha.01.03-portable.zip
+│   ├── mvc-calculator-oa_26.02-alpha.01.03_amd64.deb
+│   ├── MVC_Calculator-oa-26.02-alpha.01.03-x86_64.AppImage
+│   └── buildfiles\
+├── MVC_Calculator-26.02-alpha.01.02\          (Previous version)
 │   └── (same structure)
 └── index.html                                 (generated by deploy script)
 ```
@@ -198,16 +207,20 @@ ftp.moviolabs.com:/public_html/downloads/MVC_Calculator/releases/
 
 4. **Release Notes:** The deploy script looks for release notes in the `buildfiles` subdirectory first, then falls back to the base directory.
 
-5. **HTML Generation:** The deploy script only includes the latest (n) and previous (n-1) releases in the generated HTML page.
+5. **HTML Generation:** The deploy script includes the latest (n), previous (n-1), and Open Access releases in the generated HTML page.
+
+6. **Open Access (OA) builds:** Use `-oa` with `BUILD_ALL_WINDOWS.py` and `BUILD_ALL_LINUX.py` to also produce license-free builds. OA uses the same version as the licensed build but different filenames (e.g. `MVC_Calculator-oa-26.02-alpha.01.03.msi`).
 
 ## Quick Reference Commands
 
 ```bash
 # Windows (PowerShell/CMD)
-python BUILD_ALL_WINDOWS.py
+python BUILD_ALL_WINDOWS.py           # Licensed only
+python BUILD_ALL_WINDOWS.py -oa       # Licensed + Open Access
 
 # WSL
-python BUILD_ALL_LINUX.py
+python BUILD_ALL_LINUX.py             # Licensed only
+python BUILD_ALL_LINUX.py -oa         # Licensed + Open Access
 python deploy_release_ftp.py -u
 ```
 

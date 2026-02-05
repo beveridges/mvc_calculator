@@ -43,29 +43,15 @@ DEFAULT_PASS = "xTQSz1g,n2we"
 MAXPATCHES_SOURCE = Path.home() / "Dropbox/__PROJECTS__/.AUGMENTED_FEEDBACK_DRUMMERS/AUGMENTED_FEEDBACK_DRUMMERS/MaxPatches"
 
 def find_logo_path():
-    """Find logo file in output directory or copy from resources."""
+    """Use icon.png from project resources/icons for the release HTML. Copy to BUILD_BASE if needed."""
     import shutil
-    
-    # Check for common logo file names in the output directory first
-    # icon.png is the primary logo name
-    logo_names = ["icon.png", "logo.svg", "logo.png", "coming.soon.light.on.darkL.svg", "manandsnareRASTERIZED.png"]
-    for name in logo_names:
-        logo_path = BUILD_BASE / name
-        if logo_path.exists():
-            return name
-    
-    # If not found, check resources/icons directory and copy it
+
     resources_dir = Path(__file__).parent / "resources" / "icons"
-    for name in logo_names:
-        source_logo = resources_dir / name
-        if source_logo.exists():
-            # Copy to output directory
-            dest_logo = BUILD_BASE / name
-            shutil.copy2(source_logo, dest_logo)
-            print(f"Copied logo from {source_logo} to {dest_logo}")
-            return name
-    
-    # Default fallback
+    source_logo = resources_dir / "icon.png"
+    dest_logo = BUILD_BASE / "icon.png"
+
+    if source_logo.exists():
+        shutil.copy2(source_logo, dest_logo)
     return "icon.png"
 
 PATTERNS = [
@@ -74,6 +60,12 @@ PATTERNS = [
     "mvc-calculator_*_amd64.deb",
     "MVC_Calculator-*-alpha.*-x86_64.AppImage",
     "MuscleMonitor-maxmsp-patch-*-alpha.*.zip",
+]
+OA_PATTERNS = [
+    "MVC_Calculator-oa-*-alpha.*.msi",
+    "MVC_Calculator-oa-*-alpha.*-portable.zip",
+    "mvc-calculator-oa_*_amd64.deb",
+    "MVC_Calculator-oa-*-alpha.*-x86_64.AppImage",
 ]
 
 VERSION_RE = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
@@ -84,7 +76,7 @@ def parse_version(name: str):
     return m.group(1) if m else None
 
 
-def load_notes(version: str):
+def load_notes(version: str, oa: bool = False):
     notes = {
         "date": "",
         "description": "",
@@ -94,7 +86,8 @@ def load_notes(version: str):
     }
 
     # Look for release notes in versioned directory's buildfiles subdirectory
-    version_dir = BUILD_BASE / f"MVC_Calculator-{version}"
+    dir_prefix = f"MVC_Calculator-oa-{version}" if oa else f"MVC_Calculator-{version}"
+    version_dir = BUILD_BASE / dir_prefix
     notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{version}.txt"
     
     # Fallback to base directory for backwards compatibility
@@ -306,11 +299,12 @@ def scan_builds():
     """Scan versioned directories for build files."""
     all_files = []
     
-    # Scan all versioned directories (MVC_Calculator-XX.XX-alpha.XX.XX)
+    # Scan all versioned directories (MVC_Calculator-XX.XX-alpha.XX.XX), exclude OA dirs
     if BUILD_BASE.exists():
         for version_dir in BUILD_BASE.iterdir():
             if version_dir.is_dir() and version_dir.name.startswith("MVC_Calculator-"):
-                # Look for build files in the version directory (not in buildfiles subdirectory)
+                if version_dir.name.startswith("MVC_Calculator-oa-"):
+                    continue  # OA dirs handled by scan_oa_builds()
                 for pat in PATTERNS:
                     all_files.extend(version_dir.glob(pat))
         
@@ -332,6 +326,30 @@ def scan_builds():
             versions.setdefault(v, []).append(f)
 
     return versions
+
+
+def scan_oa_builds():
+    """Scan for Open Access builds. Returns (version, files) for latest OA or (None, [])."""
+    if not BUILD_BASE.exists():
+        return None, []
+    oa_dirs = [d for d in BUILD_BASE.iterdir() if d.is_dir() and d.name.startswith("MVC_Calculator-oa-")]
+    if not oa_dirs:
+        return None, []
+    # Extract version from dir name: MVC_Calculator-oa-26.02-alpha.01.03
+    def get_oa_version(d):
+        rest = d.name.replace("MVC_Calculator-oa-", "")
+        m = VERSION_RE.search(rest)
+        return m.group(1) if m else ""
+    valid = [(d, get_oa_version(d)) for d in oa_dirs if get_oa_version(d)]
+    if not valid:
+        return None, []
+    # Sort by version descending, take latest
+    valid.sort(key=lambda x: x[1], reverse=True)
+    latest_dir, latest_version = valid[0]
+    all_files = []
+    for pat in OA_PATTERNS:
+        all_files.extend(latest_dir.glob(pat))
+    return latest_version, all_files
 
 
 def detect_description(filename: str):
@@ -714,6 +732,13 @@ def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions
                 if prev_notes_file.exists():
                     print(f"\n📤 Release notes: {prev_notes_file.name}")
                     upload_file_if_needed(ftp, prev_notes_file, existing_files, force=force)
+        
+        # Upload Open Access release files (if exists)
+        oa_version, oa_files = scan_oa_builds()
+        if oa_version and oa_files:
+            print(f"\n📤 Open Access release ({oa_version}) files:")
+            for f in oa_files:
+                upload_file_if_needed(ftp, f, existing_files, force=force)
         
         # Upload index.html if it exists (may not exist if no builds found)
         if OUTPUT.exists():
@@ -1102,6 +1127,56 @@ def main():
             html = html.replace("{{PREV_VERSION}}", prev_section)
         else:
             html = html.replace("{{PREV_VERSION}}", "")
+
+        # Open Access section
+        oa_version, oa_files = scan_oa_builds()
+        if oa_version and oa_files:
+            oa_notes = load_notes(oa_version, oa=True)
+            oa_date = oa_notes["date"] or datetime.now().strftime("%d %b %Y")
+            oa_desc = oa_notes["description"] or f"Open Access version {oa_version} — no license required."
+            oa_whats_new = make_li_list(oa_notes["whats_new"]) if oa_notes["whats_new"] else "<li>Same features as licensed version.</li>"
+            oa_bug_fixes = make_li_list(oa_notes["bug_fixes"]) if oa_notes["bug_fixes"] else "<li>—</li>"
+            oa_tags_html = " ".join(
+                f"<span class='tag tag-{normalize_tag_name(t)}'>{format_tag_display(t)}</span>"
+                for t in (oa_notes["tags"] or [])
+                if t and t.strip()
+            )
+            if oa_tags_html:
+                oa_tags_html = f"<div style='margin-top: 10px;'>{oa_tags_html}</div>"
+            oa_section = f'''<div class="release-section">
+    <div class="release-left">
+        <div>{oa_date}</div>
+        {oa_tags_html}
+    </div>
+
+    <div>
+        <div class="section-title">Open Access — {oa_version}</div>
+
+    <div class="release-description">
+        {oa_desc}
+    </div>
+
+    <div class="release-notes-text">
+
+        <h3>What's New</h3>
+        <ul>
+            {oa_whats_new}
+        </ul>
+
+        <h3>Bug Fixes</h3>
+        <ul>
+            {oa_bug_fixes}
+        </ul>
+
+    </div>
+
+        {build_table(oa_files)}
+
+    </div>
+</div>'''
+            html = html.replace("{{OA_SECTION}}", oa_section)
+        else:
+            html = html.replace("{{OA_SECTION}}", "")
 
         # Verify all placeholders were replaced
         if "{{" in html:

@@ -3,6 +3,7 @@
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from utilities.version_info import BUILDNUMBER  # same as Windows build
@@ -10,11 +11,11 @@ from utilities.version_info import BUILDNUMBER  # same as Windows build
 APP_NAME = "MVC_Calculator"
 VERSION = BUILDNUMBER  # e.g. "25.11-alpha.01.72"
 
-# ROOT = Path("/mnt/c/Users/Scott/Documents/.linux_builds/MVC_CALCULATOR/linux_builds")
 ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
-PORTABLE = ROOT / "pyinstaller"
-APPDIR = ROOT / "appimage" / "AppDir"
-OUTFILE = ROOT / f"{APP_NAME}-{VERSION}-x86_64.AppImage"
+OA_MODE = "--oa" in sys.argv or "-oa" in sys.argv
+PORTABLE = ROOT / "pyinstaller_oa" if OA_MODE else ROOT / "pyinstaller"
+APPDIR = ROOT / ("appimage_oa" if OA_MODE else "appimage") / "AppDir"
+OUTFILE = ROOT / (f"{APP_NAME}-oa-{VERSION}-x86_64.AppImage" if OA_MODE else f"{APP_NAME}-{VERSION}-x86_64.AppImage")
 
 
 def create_structure() -> None:
