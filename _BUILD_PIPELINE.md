@@ -76,6 +76,10 @@ git pull
 # ----------------------------------
 ### 7. In WSL: BUILD_ALL_LINUX.py 
 
+```bash
+python BUILD_ALL_LINUX.py
+```
+
 **Location:** Project root directory (in WSL)  
 **What it does:**
 - Runs `build_linux_portable.py` (Linux portable build)
