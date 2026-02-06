@@ -85,23 +85,31 @@ def load_notes(version: str, oa: bool = False):
         "tags": [],
     }
 
-    # Look for release notes in versioned directory's buildfiles subdirectory
+    # Look for release notes (same format: Date:, Description:, What's New, Bug Fixes, Tags:)
+    # 1) versioned dir buildfiles: MVC_Calculator-{version}/buildfiles/RELEASE_NOTES-{version}.txt
+    # 2) build base (OA only): RELEASE_NOTES-oa-{version}.txt — check before generic so OA-specific wins
+    # 3) build base: RELEASE_NOTES-{version}.txt
+    # 4) build base: text file named like the directory, e.g. MVC_Calculator-26.02-alpha.01.03.txt
     dir_prefix = f"MVC_Calculator-oa-{version}" if oa else f"MVC_Calculator-{version}"
     version_dir = BUILD_BASE / dir_prefix
     notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{version}.txt"
-    
-    # Fallback to base directory for backwards compatibility
+
+    if not notes_file.exists() and oa:
+        notes_file = BUILD_BASE / f"RELEASE_NOTES-oa-{version}.txt"
     if not notes_file.exists():
         notes_file = BUILD_BASE / f"RELEASE_NOTES-{version}.txt"
-    
+    if not notes_file.exists():
+        notes_file = BUILD_BASE / f"{dir_prefix}.txt"
+
     if not notes_file.exists():
         return notes
 
     content = notes_file.read_text(encoding="utf-8")
     
     # Find section markers first
-    whats_new_match = re.search(r'(?i)(?:^|\n)\s*(?:\[?what\'?s\s+new\]?|what\'?s\s+new:)\s*\n?', content)
-    bug_fixes_match = re.search(r'(?i)(?:^|\n)\s*(?:\[?bug\s+fixes\]?|bug\s+fixes:)\s*\n?', content)
+    # Prefer matching header with colon so ":" is not left as a line in the section content
+    whats_new_match = re.search(r'(?i)(?:^|\n)\s*(?:what\'?s\s+new:|\[?what\'?s\s+new\]?)\s*\n?', content)
+    bug_fixes_match = re.search(r'(?i)(?:^|\n)\s*(?:bug\s+fixes:|\[?bug\s+fixes\]?)\s*\n?', content)
     
     # Find where description section ends (before WHAT'S NEW or BUG FIXES)
     desc_end_idx = len(content)
@@ -166,17 +174,23 @@ def load_notes(version: str, oa: bool = False):
             whats_new_text = content[start_idx:].strip()
             bug_fixes_text = ""
         
-        # Extract bullet points from what's new
+        # Extract items from what's new (bullets "- item" or plain lines); skip empty or colon-only
         for line in whats_new_text.splitlines():
             s = line.strip()
-            if s.startswith("-"):
-                notes["whats_new"].append(s[1:].strip())
+            if not s or s == ":":
+                continue
+            item = s[1:].strip() if s.startswith("-") else s
+            if item:
+                notes["whats_new"].append(item)
         
-        # Extract bullet points from bug fixes
+        # Extract items from bug fixes (bullets "- item" or plain lines); skip empty or colon-only
         for line in bug_fixes_text.splitlines():
             s = line.strip()
-            if s.startswith("-"):
-                notes["bug_fixes"].append(s[1:].strip())
+            if not s or s == ":":
+                continue
+            item = s[1:].strip() if s.startswith("-") else s
+            if item:
+                notes["bug_fixes"].append(item)
     else:
         # Fallback: line-by-line parsing for WHAT'S NEW and BUG FIXES
         section = None
@@ -187,10 +201,14 @@ def load_notes(version: str, oa: bool = False):
                 section = "new"
             elif s.lower() in ["[bug fixes]", "bug fixes:", "bug fixes"]:
                 section = "bug"
-            elif section == "new" and s.startswith("-"):
-                notes["whats_new"].append(s[1:].strip())
-            elif section == "bug" and s.startswith("-"):
-                notes["bug_fixes"].append(s[1:].strip())
+            elif section == "new" and s and s != ":":
+                item = s[1:].strip() if s.startswith("-") else s
+                if item:
+                    notes["whats_new"].append(item)
+            elif section == "bug" and s and s != ":":
+                item = s[1:].strip() if s.startswith("-") else s
+                if item:
+                    notes["bug_fixes"].append(item)
 
     notes["description"] = notes["description"].strip()
     return notes
@@ -329,7 +347,7 @@ def scan_builds():
 
 
 def scan_oa_builds():
-    """Scan for Open Access builds. Returns (version, files) for latest OA or (None, [])."""
+    """Scan for Development Release builds. Returns (version, files) for latest OA or (None, [])."""
     if not BUILD_BASE.exists():
         return None, []
     oa_dirs = [d for d in BUILD_BASE.iterdir() if d.is_dir() and d.name.startswith("MVC_Calculator-oa-")]
@@ -733,10 +751,10 @@ def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions
                     print(f"\n📤 Release notes: {prev_notes_file.name}")
                     upload_file_if_needed(ftp, prev_notes_file, existing_files, force=force)
         
-        # Upload Open Access release files (if exists)
+        # Upload Development Release files (if exists)
         oa_version, oa_files = scan_oa_builds()
         if oa_version and oa_files:
-            print(f"\n📤 Open Access release ({oa_version}) files:")
+            print(f"\n📤 Development Release ({oa_version}) files:")
             for f in oa_files:
                 upload_file_if_needed(ftp, f, existing_files, force=force)
         
@@ -1128,14 +1146,14 @@ def main():
         else:
             html = html.replace("{{PREV_VERSION}}", "")
 
-        # Open Access section
+        # Development Release section
         oa_version, oa_files = scan_oa_builds()
         if oa_version and oa_files:
             oa_notes = load_notes(oa_version, oa=True)
             oa_date = oa_notes["date"] or datetime.now().strftime("%d %b %Y")
-            oa_desc = oa_notes["description"] or f"Open Access version {oa_version} — no license required."
-            oa_whats_new = make_li_list(oa_notes["whats_new"]) if oa_notes["whats_new"] else "<li>Same features as licensed version.</li>"
-            oa_bug_fixes = make_li_list(oa_notes["bug_fixes"]) if oa_notes["bug_fixes"] else "<li>—</li>"
+            oa_desc = oa_notes["description"] or f"Development Release version {oa_version}."
+            oa_whats_new = make_li_list(oa_notes["whats_new"]) if oa_notes["whats_new"] else "<li>No new features in this release.</li>"
+            oa_bug_fixes = make_li_list(oa_notes["bug_fixes"]) if oa_notes["bug_fixes"] else "<li>No bug fixes in this release.</li>"
             oa_tags_html = " ".join(
                 f"<span class='tag tag-{normalize_tag_name(t)}'>{format_tag_display(t)}</span>"
                 for t in (oa_notes["tags"] or [])
@@ -1150,7 +1168,7 @@ def main():
     </div>
 
     <div>
-        <div class="section-title">Open Access — {oa_version}</div>
+        <div class="section-title">Development Release — {oa_version}</div>
 
     <div class="release-description">
         {oa_desc}
