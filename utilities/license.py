@@ -240,14 +240,13 @@ def get_country_online() -> Optional[str]:
 
 def get_country() -> Optional[str]:
     """
-    Get country code, trying offline method first, then online if needed.
+    Get country code: try IP geolocation first (physical location), then Windows locale.
+    This way if you are in e.g. Colombia but Windows is set to UK region, we use CO not GB.
     """
-    country = get_country_offline()
+    country = get_country_online()
     if country:
         return country
-    
-    # Fallback to online if offline method fails
-    return get_country_online()
+    return get_country_offline()
 
 
 def generate_license_key(email: str, country: str, hwid: str, expiration_days: Optional[int] = None, use_wildcard_hwid: bool = False) -> str:

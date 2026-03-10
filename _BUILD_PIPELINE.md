@@ -131,7 +131,7 @@ python deploy_release_ftp.py -u
   - Uploads logo, build files, release notes, and index.html
   - **Smart upload:** Skips files that already exist with same size (prevents duplicates)
 
-  **What gets uploaded:**
+**What gets uploaded:**
 - MSI installer (Windows)
 - Portable ZIP (Windows)
 - DEB package (Linux, if built)
@@ -145,6 +145,7 @@ python deploy_release_ftp.py -u
 **Smart Upload Behavior:**
 - Files are only uploaded if they don't exist or have different sizes
 - Use `--force` flag to overwrite existing files: `python deploy_release_ftp.py -u --force`
+- Use `--force-file` to force upload specific file(s) only: `python deploy_release_ftp.py -u --force-file index.html`
 
 ## File Structure After Build
 

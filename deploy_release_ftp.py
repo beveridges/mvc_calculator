@@ -9,6 +9,9 @@ Usage:
     # Upload files to FTP server
     python deploy_release_ftp.py -u
     python deploy_release_ftp.py --upload
+    
+    # Force upload specific file(s) even if same size (e.g. index.html)
+    python deploy_release_ftp.py -u --force-file index.html
 """
 
 import re
@@ -137,12 +140,16 @@ def load_notes(version: str, oa: bool = False):
             # Tags might be on the same line or the next line(s)
             tags_str = s.split(":", 1)[1].strip()
             if not tags_str:
-                # Tags are on the next line(s) - skip blank lines
+                # Tags are on the next line(s) - skip blank lines and section headers
+                section_headers = ("date:", "description:", "what's new", "bug fixes", "version:")
                 for j in range(i + 1, len(lines)):
                     next_line = lines[j].strip()
-                    if next_line:  # Found first non-empty line
+                    if next_line and not next_line.lower().startswith(section_headers):
                         tags_str = next_line
                         skip_next_line = True  # Skip this line in next iteration
+                        break
+                    elif next_line and next_line.lower().startswith(section_headers):
+                        # Hit a section header - no tags on next line, stop looking
                         break
             if tags_str:
                 # Strip quotes and whitespace from tags
@@ -496,9 +503,11 @@ def get_existing_files(ftp: ftplib.FTP) -> dict[str, int]:
     return existing
 
 
-def should_upload_file(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int], force: bool = False) -> bool:
-    """Check if file should be uploaded (skip if exists with same size, unless force=True)."""
+def should_upload_file(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int], force: bool = False, force_files: set[str] | None = None) -> bool:
+    """Check if file should be uploaded (skip if exists with same size, unless force=True or path.name in force_files)."""
     if force:
+        return True
+    if force_files and path.name in force_files:
         return True
     
     filename = path.name
@@ -568,9 +577,9 @@ def create_maxmsp_zip(output_path: Path, found_files: dict[str, Path]) -> bool:
         return False
 
 
-def upload_file_if_needed(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int], force: bool = False):
-    """Upload file only if it doesn't exist or has different size (unless force=True)."""
-    if should_upload_file(ftp, path, existing_files, force=force):
+def upload_file_if_needed(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int], force: bool = False, force_files: set[str] | None = None):
+    """Upload file only if it doesn't exist or has different size (unless force=True or path.name in force_files)."""
+    if should_upload_file(ftp, path, existing_files, force=force, force_files=force_files):
         upload_file(ftp, path)
 
 
@@ -601,7 +610,7 @@ def find_maxmsp_zip(latest_version: str | None = None) -> Path | None:
     return maxmsp_zip if (maxmsp_zip and maxmsp_zip.exists()) else None
 
 
-def upload_maxmsp_only(force: bool = False):
+def upload_maxmsp_only(force: bool = False, force_files: set[str] | None = None):
     """Upload only the MaxMSP patch zip file."""
     try:
         print("\n🔌 Connecting to FTP...")
@@ -624,7 +633,7 @@ def upload_maxmsp_only(force: bool = False):
         maxmsp_zip = find_maxmsp_zip()
         if maxmsp_zip:
             print(f"\n📤 Uploading MaxMSP patch zip: {maxmsp_zip.name}")
-            upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force)
+            upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force, force_files=force_files)
             print("\n✅ MaxMSP patch upload complete!")
         else:
             print("\n❌ MaxMSP patch zip not found!")
@@ -642,13 +651,13 @@ def upload_maxmsp_only(force: bool = False):
         return False
 
 
-def upload_auxiliary_files(ftp: ftplib.FTP, existing_files: dict[str, int], include_test: bool = False, latest_version: str | None = None, force: bool = False):
+def upload_auxiliary_files(ftp: ftplib.FTP, existing_files: dict[str, int], include_test: bool = False, latest_version: str | None = None, force: bool = False, force_files: set[str] | None = None):
     """Upload auxiliary/non-release files (PHP scripts, etc.)."""
     # Upload PHP tracking script
     php_tracker = Path(__file__).parent / "track_download.php"
     if php_tracker.exists():
         print(f"\n📤 Uploading download tracker: track_download.php")
-        upload_file_if_needed(ftp, php_tracker, existing_files, force=force)
+        upload_file_if_needed(ftp, php_tracker, existing_files, force=force, force_files=force_files)
     else:
         print(f"⚠️  Warning: track_download.php not found")
     
@@ -657,16 +666,16 @@ def upload_auxiliary_files(ftp: ftplib.FTP, existing_files: dict[str, int], incl
         test_tracker = Path(__file__).parent / "test_track_download.php"
         if test_tracker.exists():
             print(f"\n📤 Uploading test script: test_track_download.php")
-            upload_file_if_needed(ftp, test_tracker, existing_files, force=force)
+            upload_file_if_needed(ftp, test_tracker, existing_files, force=force, force_files=force_files)
     
     # Upload MaxMSP patch zip if it exists
     maxmsp_zip = find_maxmsp_zip(latest_version)
     if maxmsp_zip:
         print(f"\n📤 Uploading MaxMSP patch zip: {maxmsp_zip.name}")
-        upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force)
+        upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force, force_files=force_files)
 
 
-def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions: dict, logo_path: str, upload_auxiliary: bool = True, include_test: bool = False, force: bool = False):
+def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions: dict, logo_path: str, upload_auxiliary: bool = True, include_test: bool = False, force: bool = False, force_files: set[str] | None = None):
     """Upload all files to FTP server."""
     ftp = None
     try:
@@ -690,7 +699,7 @@ def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions
         logo_file = BUILD_BASE / logo_path
         if logo_file.exists():
             print(f"\n📤 Logo: {logo_path}")
-            upload_file_if_needed(ftp, logo_file, existing_files, force=force)
+            upload_file_if_needed(ftp, logo_file, existing_files, force=force, force_files=force_files)
         else:
             print(f"⚠️  Warning: Logo file not found: {logo_path}")
         
@@ -704,7 +713,7 @@ def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions
                 if "maxmsp" in f.name.lower() and f.name.endswith(".zip"):
                     maxmsp_in_versions = True
                     print(f"  ✓ Found MaxMSP zip in scan: {f.name}")
-                upload_file_if_needed(ftp, f, existing_files, force=force)
+                upload_file_if_needed(ftp, f, existing_files, force=force, force_files=force_files)
             
             # Also upload MaxMSP zip if it exists and wasn't already uploaded
             if not maxmsp_in_versions:
@@ -712,7 +721,7 @@ def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions
                 maxmsp_zip = find_maxmsp_zip(latest_version)
                 if maxmsp_zip:
                     print(f"📤 MaxMSP patch zip: {maxmsp_zip.name}")
-                    upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force)
+                    upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force, force_files=force_files)
                 else:
                     print(f"\n⚠️  MaxMSP patch zip not found for version {latest_version}")
                     version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
@@ -733,13 +742,13 @@ def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions
             
             if notes_file.exists():
                 print(f"\n📤 Release notes: {notes_file.name}")
-                upload_file_if_needed(ftp, notes_file, existing_files, force=force)
+                upload_file_if_needed(ftp, notes_file, existing_files, force=force, force_files=force_files)
             
             # Upload previous release files (if exists)
             if prev_version:
                 print(f"\n📤 Previous release ({prev_version}) files:")
                 for f in versions[prev_version]:
-                    upload_file_if_needed(ftp, f, existing_files, force=force)
+                    upload_file_if_needed(ftp, f, existing_files, force=force, force_files=force_files)
                 
                 # Upload previous release notes
                 prev_version_dir = BUILD_BASE / f"MVC_Calculator-{prev_version}"
@@ -749,28 +758,25 @@ def upload_to_ftp(latest_version: str | None, prev_version: str | None, versions
                 
                 if prev_notes_file.exists():
                     print(f"\n📤 Release notes: {prev_notes_file.name}")
-                    upload_file_if_needed(ftp, prev_notes_file, existing_files, force=force)
+                    upload_file_if_needed(ftp, prev_notes_file, existing_files, force=force, force_files=force_files)
         
         # Upload Development Release files (if exists)
         oa_version, oa_files = scan_oa_builds()
         if oa_version and oa_files:
             print(f"\n📤 Development Release ({oa_version}) files:")
             for f in oa_files:
-                upload_file_if_needed(ftp, f, existing_files, force=force)
+                upload_file_if_needed(ftp, f, existing_files, force=force, force_files=force_files)
         
         # Upload index.html if it exists (may not exist if no builds found)
         if OUTPUT.exists():
             print(f"\n📤 Uploading index.html")
-            if force:
-                upload_file(ftp, OUTPUT)
-            else:
-                upload_file_if_needed(ftp, OUTPUT, existing_files, force=force)
+            upload_file_if_needed(ftp, OUTPUT, existing_files, force=force, force_files=force_files)
         else:
             print(f"⚠️  Info: index.html not found - skipping (normal if no builds exist)")
         
         # Upload auxiliary files if requested
         if upload_auxiliary:
-            upload_auxiliary_files(ftp, existing_files, include_test=include_test, latest_version=latest_version, force=force)
+            upload_auxiliary_files(ftp, existing_files, include_test=include_test, latest_version=latest_version, force=force, force_files=force_files)
         
         print("\n✅ FTP upload complete!")
     except Exception as e:
@@ -802,6 +808,8 @@ def main():
                       help="Upload only the MaxMSP patch zip file (skips all other files)")
     parser.add_argument("--force", action="store_true",
                       help="Force upload even if file already exists with same size (overwrites existing files)")
+    parser.add_argument("--force-file", action="append", default=[], metavar="FILENAME",
+                      help="Force upload specific file(s) even if same size (e.g. --force-file index.html; can be repeated)")
     parser.add_argument("--include-test", action="store_true",
                       help="Include test_track_download.php for debugging")
     parser.add_argument("--upload-html", action="store_true",
@@ -833,7 +841,8 @@ def main():
             print("="*60)
             return
         print("\n📦 MaxMSP Patch Only Upload Mode")
-        success = upload_maxmsp_only(force=args.force)
+        force_files = set(args.force_file) if args.force_file else None
+        success = upload_maxmsp_only(force=args.force, force_files=force_files)
         # Calculate duration for maxmsp-only mode
         end_time = datetime.now()
         end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -871,17 +880,16 @@ def main():
                     # Upload index.html if it exists (always upload if available)
                     if OUTPUT.exists():
                         print(f"\n📤 Uploading index.html")
-                        if args.force:
-                            upload_file(ftp, OUTPUT)
-                        else:
-                            upload_file_if_needed(ftp, OUTPUT, existing_files, force=args.force)
+                        force_files = set(args.force_file) if args.force_file else None
+                        upload_file_if_needed(ftp, OUTPUT, existing_files, force=args.force, force_files=force_files)
                     elif args.upload_html:
                         print(f"⚠️  index.html not found at {OUTPUT}")
                     
                     # Try to find latest version for MaxMSP zip lookup
                     version_dirs = sorted(BUILD_BASE.glob("MVC_Calculator-*"), reverse=True)
                     latest_ver = version_dirs[0].name.replace("MVC_Calculator-", "") if version_dirs else None
-                    upload_auxiliary_files(ftp, existing_files, include_test=args.include_test, latest_version=latest_ver, force=args.force)
+                    force_files = set(args.force_file) if args.force_file else None
+                    upload_auxiliary_files(ftp, existing_files, include_test=args.include_test, latest_version=latest_ver, force=args.force, force_files=force_files)
                     ftp.quit()
                     print("✓ Auxiliary files uploaded successfully")
                     
@@ -926,10 +934,8 @@ def main():
                     ensure_dir(ftp, TARGET_DIR)
                     ftp.cwd(TARGET_DIR)
                     existing_files = get_existing_files(ftp)
-                    if args.force:
-                        upload_file(ftp, OUTPUT)
-                    else:
-                        upload_file_if_needed(ftp, OUTPUT, existing_files, force=args.force)
+                    force_files = set(args.force_file) if args.force_file else None
+                    upload_file_if_needed(ftp, OUTPUT, existing_files, force=args.force, force_files=force_files)
                     ftp.quit()
                     print("✓ index.html uploaded successfully")
                     
@@ -1247,7 +1253,8 @@ def main():
         
         # Upload to FTP
         print(f"\n🚀 Starting FTP upload...")
-        upload_to_ftp(latest, prev, versions, logo_path, upload_auxiliary=True, include_test=args.include_test, force=args.force)
+        force_files = set(args.force_file) if args.force_file else None
+        upload_to_ftp(latest, prev, versions, logo_path, upload_auxiliary=True, include_test=args.include_test, force=args.force, force_files=force_files)
         
         # Calculate and display duration on success
         end_time = datetime.now()
