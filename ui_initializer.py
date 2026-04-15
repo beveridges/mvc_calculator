@@ -36,7 +36,7 @@ class UIInitializer:
         
         mw.aboutAction = QAction("&About")
         mw.indexAction = QAction("&Documentation")
-        mw.licenseInfoAction = QAction("&Request License...")
+        mw.licenseInfoAction = QAction("&Licence manager...")
 
         mw.file_menu.addAction(mw.load_MAT_action)
         mw.file_menu.addAction(mw.importXMLmot_action)

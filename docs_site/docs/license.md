@@ -2,217 +2,207 @@
 
 ## Overview
 
-MVC Calculator uses a hardware-locked license system to ensure proper software usage and prevent unauthorized distribution.
+MVC Calculator uses a **hardware-locked** licence. The application stores your entitlement on disk (see [Where your licence is stored](#where-your-licence-is-stored)) and checks it when you start the app.
+
+You can unlock the software in one of these ways:
+
+| Method | Typical use |
+|--------|-------------|
+| **Activation code** | You receive a code from support or your institution; you redeem it in the app (**Help** → **Licence manager...**). |
+| **License file (`license.key`)** | You receive a `license.key` attachment by email and place it in the [recommended folder](#installing-a-license-key-file). The first successful run **imports** it into your entitlement store. |
+| **Pre-installed entitlement** | Some institutional builds (for example HFMDD) ship with an entitlement already bundled; no separate file is needed if the bundle matches your machine and region. |
+
+!!! note "Spelling"
+    The menu uses **Licence** (British spelling) to match the application.
 
 ---
 
-## Requesting a License
+## Activating with an activation code
 
-### For @hfmdd.de Users
+This is the **preferred** flow when your organisation or Moviolabs issues you an **activation code** instead of (or in addition to) a `license.key` file.
+
+### Steps
+
+1. Start MVC Calculator.
+2. Open **Help** → **Licence manager...**
+3. Enter your **activation code** in the field provided.
+4. Choose the control that submits the code (for example **Activate**). The app contacts the activation service, receives a signed licence payload, and saves it as **`entitlement.json`** in your [user data folder](#where-your-licence-is-stored).
+5. If activation succeeds, restart the application if prompted. Your licence is validated automatically on the next start.
+
+### If activation is unavailable
+
+If you see a message that the **activation service URL is not configured** (or similar), your build may not include server settings for online activation. In that case use the [email-based `license.key`](#installing-a-license-key-file) method, or contact **support@moviolabs.com** with your Hardware ID and country.
+
+---
+
+## Requesting a licence (before you can activate or install a file)
+
+### For @hfmdd.de users
 
 If you have an `@hfmdd.de` email address:
 
-1. Send an email to **support@moviolabs.com** from your `@hfmdd.de` account
-2. Your license will be sent **automatically** via email
-3. Follow the [license installation instructions](#installing-your-license) below
+1. Send an email to **support@moviolabs.com** from your `@hfmdd.de` account.
+2. Your licence may be sent **automatically** via email (as a `license.key` file or with activation instructions), depending on current process.
+3. Follow either [activation code](#activating-with-an-activation-code) or [license file](#installing-a-license-key-file) instructions below.
 
-### For Other Users
+### For other users
 
-1. Go to **Help** → **Request License...** in the application menu
-2. **Copy the email template** (it already includes your Hardware ID and Country)
-3. **Paste it into your email client** and send it to **support@moviolabs.com**
-4. **Wait for your license.key file** (you'll receive it as an email attachment)
-5. Follow the [license installation instructions](#installing-your-license) below
+1. Go to **Help** → **Request License...** in the application menu.
+2. **Copy the email template** (it includes your Hardware ID and Country).
+3. Send it to **support@moviolabs.com**.
+4. Wait for either an **activation code** or a **`license.key`** attachment, then follow the matching section above.
 
-The dialog automatically includes:
-   - Your **Hardware ID (HWID)** - a unique identifier tied to your computer
-   - Your **Country** - detected automatically from your system settings
+The dialog includes:
+
+- Your **Hardware ID (HWID)** — unique to this computer  
+- Your **Country** — detected from system settings  
 
 !!! note
-    The email template in the dialog is pre-filled with your machine information. You can also contact support@moviolabs.com directly if you prefer, but be sure to include your Hardware ID and Country code.
+    You can also email **support@moviolabs.com** directly; include your Hardware ID and country code if you do not use the template.
 
 ---
 
-## Installing Your License
+## Installing a license key file
 
-### Step 1: Receive License Key File
+Use this when you receive a **`license.key`** file (for example as an email attachment). You do **not** need to convert it manually: on first successful validation, the app can **migrate** the key into **`entitlement.json`**.
 
-You will receive a `license.key` file attached to your email.
+### Step 1: Receive the file
 
-### Step 2: Save License File
+You should receive a file named **`license.key`**.
 
-**After receiving your license.key file via email:**
+### Step 2: Save the file
 
-1. **Download the attached `license.key` file** from the email
-2. **Save the file** to one of the locations shown below (keep the exact filename `license.key`)
-3. **Restart the application** to activate your license
+1. Download the attachment.
+2. Save it as **`license.key`** (exact name) in one of the locations below.
+3. Restart the application.
 
-### Step 3: Choose a Location
+### Step 3: Recommended location (Windows)
 
-**Recommended Location (Windows)** - persists across updates:
+Persistent location (recommended — survives updates):
+
 ```
-%APPDATA%\Roaming\MVC_Calculator\license.key
-```
-
-*(For example: C:\Users\YourName\AppData\Roaming\MVC_Calculator\license.key)*
-
-To find this folder:
-
-   1. Press <kbd>Win</kbd> + <kbd>R</kbd>
-   2. Type: `%APPDATA%`
-   3. Press <kbd>Enter</kbd>
-   4. Navigate to (or create) the `\Roaming\MVC_Calculator` folder
-   5. Place `license.key` in this folder
-
-**Alternative Locations** (the application will check these automatically):
-
-   - Same folder as the executable (e.g., `C:\Program Files\MVC_Calculator\license.key`)
-   - Portable version folder (e.g., `<portable unzip folder>\MVC_Calculator\license.key`)
-   - Your home directory
-   - Current working directory
-
-### Step 4: Restart Application
-
-Close and restart MVC Calculator. The license will be validated automatically.
-
----
-
-## License Validation
-
-### Validation Messages
-
-**Success**: The application starts normally - no message needed.
-
-**License Not Found**:
-```
-License file not found.
-
-Please place license.key in:
-C:\Users\YourName\AppData\Roaming\MVC_Calculator\license.key
+%APPDATA%\MVC_Calculator\license.key
 ```
 
-**Hardware Mismatch**:
-```
-License key is not valid for this machine. 
-Hardware ID mismatch.
-```
+*(Typically `C:\Users\YourName\AppData\Roaming\MVC_Calculator\license.key`.)*
 
-**Country Mismatch**:
-```
-License key is not valid for this country. 
-Expected: CO, Detected: US
-```
+To open the folder:
 
-**Expired License**:
+1. Press <kbd>Win</kbd> + <kbd>R</kbd>
+2. Type: `%APPDATA%\MVC_Calculator`
+3. Press <kbd>Enter</kbd>
+4. Place **`license.key`** here
+
+### Alternative locations
+
+The application also discovers `license.key` in legacy locations (for example next to the executable or in a portable folder). For new installs, prefer the **recommended** path above.
+
+### Linux
+
+Use the persistent data area for your user, for example:
+
 ```
-License key has expired.
+~/.local/share/MVC_Calculator/license.key
 ```
 
 ---
 
-## Troubleshooting License Issues
+## Where your licence is stored
 
-### License Not Found
+After activation or migration, the active credential is normally stored as **`entitlement.json`**:
 
-**Problem**: Application says license file not found.
+| Platform | Typical path |
+|----------|----------------|
+| **Windows** | `%APPDATA%\MVC_Calculator\entitlement.json` |
+| **Linux** | `~/.local/share/MVC_Calculator/entitlement.json` |
 
-**Solution**:
-
-   1. Verify the file is named exactly `license.key` (not `license.key.txt`)
-   2. Check the file is in the correct location (see installation above)
-   3. Ensure you have write permissions in the target folder
-   4. Try placing the file in the same folder as the executable
-
-### Hardware ID Mismatch
-
-**Problem**: License works on one computer but not another.
-
-**Explanation**: This is expected behavior. Licenses are tied to specific hardware.
-
-**Solution**:
-
-- Request a new license for the new computer
-- Provide the Hardware ID (HWID) from the error message if available
-- Contact support@moviolabs.com for assistance
-
-### Country Mismatch
-
-**Problem**: License is valid but shows country mismatch error.
-
-**Possible Causes**:
-
-   - Using a VPN that changes your detected country
-   - Windows region settings don't match license country
-   - License was issued for a different country
-
-**Solution**:
-
-   - Disable VPN if using one
-   - Check Windows region settings match your actual location
-   - Request a license for your actual country
-
-### License Expired
-
-**Problem**: License was working but now shows as expired.
-
-**Solution**:
-
-   - Contact support@moviolabs.com to renew your license
-   - Provide your email address and previous license details
+A legacy **`license.key`** in the same base folder may still be present; the app uses the entitlement record for validation once migration has occurred.
 
 ---
 
-## License Transfer
+## Licence validation
 
-### Can I Move My License?
+### When things work
 
-**Generally No**: Licenses are hardware-locked and cannot be easily transferred.
+The application starts with no licence error, and licensed features are available.
 
-**Exceptions**:
+### Common messages
 
-   - If you get a new computer, request a new license
-   - If your hardware changes significantly, contact support
-   - For institutional licenses, contact support for transfer options
+**Entitlement / licence missing**  
+The app could not find a valid entitlement or migratable `license.key`. Use **Help** → **Licence manager...** with an activation code, or install `license.key` as described above.
 
-### What If I Upgrade My Computer?
+**Hardware mismatch**  
+The licence is not valid for this computer (HWID does not match).
 
-If you upgrade hardware components:
+**Country mismatch**  
+The licence was issued for a different country than the one detected on this machine.
 
-- **Minor upgrades** (RAM, storage): License should still work
-- **Major upgrades** (motherboard, CPU): May require a new license
-- **New computer**: Requires a new license
+**Expired licence**  
+The licence has passed its expiration date.
 
-Contact support@moviolabs.com if you're unsure.
+**Wildcard / institutional rules**  
+Some institutional keys are restricted (for example to `@hfmdd.de` email domains). If you see a message about domain or wildcard rules, contact your administrator or **support@moviolabs.com**.
+
+---
+
+## Troubleshooting licence issues
+
+### Activation failed or “activation service not configured”
+
+- Confirm you typed the activation code correctly.
+- If the build cannot reach the activation service, use a **`license.key`** from support if available, or email **support@moviolabs.com** with your HWID and country.
+
+### Licence file not found
+
+1. Confirm the file is named exactly **`license.key`** (not `license.key.txt`).
+2. Use the [recommended Windows path](#step-3-recommended-location-windows) or Linux path above.
+3. Ensure you have permission to read the folder.
+4. Restart the application after moving the file.
+
+### Hardware ID mismatch
+
+Licences are tied to hardware. For a new PC, request a new licence or activation code from support.
+
+### Country mismatch
+
+Possible causes: VPN, travel, or region settings. Try without VPN; if the issue persists, contact support with your actual country.
+
+### Expired licence
+
+Contact **support@moviolabs.com** for renewal.
+
+---
+
+## Licence transfer
+
+**Generally:** Licences are hardware-locked and not casually transferable.
+
+- **New computer:** Request a new licence or activation code.
+- **Major hardware change:** May require a new licence — contact support.
+- **Institutional / site licences:** Ask your administrator or support.
 
 ---
 
 ## Support
 
-For license-related issues:
-
-   - **Email**: support@moviolabs.com
-   - **Include**: Your email address, error messages, and any relevant details
-   - **Response Time**: Typically within 1-2 business days
+- **Email:** support@moviolabs.com  
+- **Include:** Your email, exact error text, application version (from **About**), and steps you tried.
 
 ---
 
-## Frequently Asked Questions
+## Frequently asked questions
 
-**Q: Can I use my license on multiple computers?**  
-A: No, each license is tied to one computer. Contact support for multi-computer licenses.
+**Q: Should I use an activation code or a `license.key` file?**  
+A: Use whichever support gave you. Both result in a validated entitlement once successful.
+
+**Q: Can I use my licence on multiple computers?**  
+A: Not with a standard single-machine licence. Ask support about multi-seat or institutional options.
 
 **Q: What happens if I reinstall Windows?**  
-A: Your license should still work as long as the hardware hasn't changed significantly.
+A: If hardware is unchanged, your HWID may be the same; you may need to reinstall `license.key` or re-enter an activation code. Keep backups of your entitlement or key if your policy allows.
 
-**Q: Can I get a refund if the license doesn't work?**  
-A: Contact support@moviolabs.com - we'll work with you to resolve any issues.
+**Q: How long does a licence last?**  
+A: Depends on the licence type (some are perpetual, others time-limited).
 
-**Q: How long does a license last?**  
-A: Depends on your license type. Some licenses never expire, others have expiration dates.
-
-**Q: Can I share my license with colleagues?**  
-A: No, licenses are non-transferable and tied to specific hardware.
-
-
-
-
+**Q: Can I share my licence with colleagues?**  
+A: No — licences are issued for specific use as agreed with Moviolabs.

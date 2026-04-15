@@ -48,6 +48,7 @@ python generate_license.py user@example.com CO 365 <hwid>
 - `country`: 2-letter ISO country code (e.g., "CO", "US")
 - `expiration_days`: Days until expiration (0 = no expiration)
 - `--current-machine`: Use current machine's HWID
+- `--wildcard-hfmdd`: Create wildcard key for `@hfmdd.de` (any machine, still country-checked)
 - `<hwid>`: Specific hardware ID (optional, 5th argument)
 
 ### Examples
@@ -60,6 +61,9 @@ python generate_license.py user@example.com US 0 --current-machine
 
 # License for specific machine (requires HWID)
 python generate_license.py user@example.com GB 180 abc123def456...
+
+# Wildcard license for @hfmdd.de (any machine in matching country)
+python generate_license.py institutional@hfmdd.de DE 0 --wildcard-hfmdd
 ```
 
 ## Installing License Keys
@@ -77,6 +81,55 @@ The application also checks these locations and will automatically migrate licen
 3. User's home directory
 
 **Note**: The persistent location is recommended because it survives application updates. When you update to a new version, your license will automatically be found in the persistent location.
+
+## Activation (New Schema)
+
+The app now supports activation-code redemption in **Help -> Licence manager**.
+
+High-level flow:
+1. User enters activation code
+2. App sends code + HWID + country to activation API (`ACTIVATION_API_URL`)
+3. API returns a signed `license_key`
+4. App stores local entitlement in:
+   - **Windows**: `%APPDATA%\MVC_Calculator\entitlement.json`
+   - **Linux/Mac**: `~/.local/share/MVC_Calculator/entitlement.json`
+5. App validates entitlement locally and enables features
+
+Backward compatibility:
+- Existing `license.key` is migrated into `entitlement.json` when possible.
+
+Activation API contract (v1):
+- Request JSON:
+  - `activation_code`, `hwid`, `country`, `app_version`, `build_number`, `platform`, `timestamp_utc`
+- Response JSON:
+  - `license_key` (same base64 format described above), optional `email`, optional `message`
+
+Environment variables:
+- `ACTIVATION_API_URL`: activation endpoint URL
+- `ACTIVATION_HTTP_TIMEOUT_SECONDS`: request timeout (default 8)
+- `ACTIVATION_HTTP_RETRIES`: retry count (default 2)
+
+## Preactivated Institutional Distribution (@hfmdd.de)
+
+For institutional deployment, you can bundle a pre-generated entitlement artifact:
+
+1. Generate wildcard key:
+   - `python generate_license.py institutional@hfmdd.de DE 0 --wildcard-hfmdd`
+2. Build entitlement artifact:
+   - `python scripts/build_preactivated_entitlement.py --license-file license.key --output preactivated/entitlement.json --issued-for hfmdd.de --bundle-id HFMDD-YYYYMM`
+3. Build package with bundled entitlement:
+   - Windows: `python BUILD_ALL_WINDOWS.py --preactivated-entitlement preactivated/entitlement.json`
+   - Linux: `python BUILD_ALL_LINUX.py --preactivated-entitlement preactivated/entitlement.json`
+
+At runtime, the app auto-installs bundled `preactivated/entitlement.json` into the user-data entitlement path if no local entitlement exists.
+
+Recovery steps:
+- If activation is missing after install, reinstall from the institutional package.
+- Or manually place a valid `entitlement.json` in:
+  - Windows: `%APPDATA%\\MVC_Calculator\\entitlement.json`
+  - Linux/Mac: `~/.local/share/MVC_Calculator/entitlement.json`
+
+See `PREACTIVATED_HFMDD_RUNBOOK.md` for operator details.
 
 ## License Validation
 

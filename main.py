@@ -44,7 +44,7 @@ from PyQt5.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 from PyQt5.QtWidgets import (
     QSplashScreen, QMessageBox, QWidget, QVBoxLayout, QPushButton,
     QMenu, QAction, QFrame, QLabel, QFileDialog, QDialog, QLineEdit,
-    QHBoxLayout, QTextEdit, QScrollArea
+    QHBoxLayout,
 )
 
 
@@ -91,8 +91,10 @@ from utilities.version_info import (
     GITREVHEAD, BUILDNUMBER, VERSIONNUMBER, VERSIONNAME, FRIENDLYVERSIONNAME,
     GITTAG, CONDAENVIRONMENTNAME, PYTHONVERSION, CONDAENVIRONMENTFILENAME
 )
-from utilities.license import load_and_validate_license, find_license_file, get_license_file_path
 from utilities.path_utils import base_path
+from utilities.activation import activation_api_configured, redeem_activation_code
+from utilities.entitlement import get_entitlement_file_path, save_entitlement, validate_entitlement
+from utilities.license import ENFORCE_LICENSE, get_machine_id
 from sbui.consoleui.console_output import SBConsoleOutput
 
 # ============================================================
@@ -222,9 +224,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.btn_process.clicked.connect(self.on_process_clicked)
         self.btn_processBatch.clicked.connect(self.on_process_clicked_batch)
         self.btn_export.clicked.connect(self.export_mvc_xml)
-        
-        # Disable MVC calculation buttons if license is invalid
-        self._update_license_dependent_ui()
 
         self.file_path = None
 
@@ -234,6 +233,61 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         """)
         self.tw_plotting.clear()
         self._enable_tab_context_menu()
+        self._update_license_dependent_ui()
+
+    # ---------------- Licensing / activation ----------------
+    def _is_license_valid(self, recheck=False) -> bool:
+        """Return True when entitlement is valid or enforcement is disabled."""
+        if not ENFORCE_LICENSE:
+            return True
+
+        app = QtWidgets.QApplication.instance()
+        if not app:
+            return True
+
+        if recheck:
+            is_valid, error = validate_entitlement()
+            app.setProperty("license_valid", is_valid)
+            app.setProperty("license_error", error if not is_valid else None)
+            self._update_license_dependent_ui()
+            return is_valid
+
+        cached = app.property("license_valid")
+        return bool(cached) if cached is not None else True
+
+    def _show_license_required_message(self, feature_name: str):
+        app = QtWidgets.QApplication.instance()
+        err = app.property("license_error") if app else None
+        path = get_entitlement_file_path()
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Activation Required")
+        msg.setText(f"{feature_name} is disabled until activation succeeds.")
+        msg.setInformativeText(
+            (f"{err}\n\n" if err else "")
+            + f"Use Help -> Licence manager to activate.\n\n"
+            + f"Entitlement file path:\n{path}"
+        )
+        msg.exec_()
+
+    def _update_license_dependent_ui(self):
+        license_valid = self._is_license_valid(recheck=False)
+
+        for btn_name in (
+            "btn_loadMat",
+            "btn_burstDetection",
+            "btn_export",
+            "btn_process",
+            "btn_processBatch",
+        ):
+            btn = getattr(self, btn_name, None)
+            if btn is not None:
+                btn.setEnabled(license_valid)
+
+        for action_name in ("load_MAT_action", "importXMLmot_action", "exportXMLmot_action"):
+            action = getattr(self, action_name, None)
+            if action is not None:
+                action.setEnabled(license_valid)
 
     # ---------------- Tab context menu ----------------
     def _enable_tab_context_menu(self):
@@ -299,11 +353,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
     # ---------------- Data I/O ----------------
     def load_mat_files(self):
-        # Check license before loading files
         if not self._is_license_valid(recheck=True):
             self._show_license_required_message("Loading MAT files")
             return
-        
         dialog = LoadMat(self)
         dialog.matsImported.connect(self.on_mats_imported)
         dialog.exec_()
@@ -326,11 +378,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
     # ---------------- Burst detection ----------------
     def on_burst_detection(self):
-        # Check license before burst detection
         if not self._is_license_valid(recheck=True):
             self._show_license_required_message("Burst detection")
             return
-        
         idx = self.tw_plotting.currentIndex()
         if idx < 0:
             self.ledt_output.appendPlainText("[warn] No plotting tab is selected.")
@@ -449,11 +499,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
     # ---------------- Export / Import XML ----------------
     def export_mvc_xml(self):
-        # Check license before exporting
         if not self._is_license_valid(recheck=True):
-            self._show_license_required_message("Exporting XML files")
+            self._show_license_required_message("Export XML")
             return
-        
         savepath, _ = QFileDialog.getSaveFileName(self, "Export XML", "", "XML Files (*.xml)")
         if not savepath:
             logging.info("Export cancelled: no file path selected.")
@@ -500,11 +548,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         logging.info(f"XML export completed: {savepath}")
 
     def import_mvc_xml(self):
-        # Check license before importing
         if not self._is_license_valid(recheck=True):
-            self._show_license_required_message("Importing XML files")
+            self._show_license_required_message("Import XML")
             return
-        
         path, _ = QFileDialog.getOpenFileName(self, "Import XML", "", "XML Files (*.xml)")
         if not path:
             return
@@ -589,106 +635,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
         self.ledt_output.appendPlainText("=== End of import ===")
 
-    # ---------------- License check helper ----------------
-    def _show_license_required_message(self, feature_name="This feature"):
-        """Show a consistent license required message dialog."""
-        app = QtWidgets.QApplication.instance()
-        license_error = app.property("license_error") if app else None
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Warning)
-        msg.setWindowTitle("License Required")
-        msg.setText(f"{feature_name} requires a valid license")
-        msg.setInformativeText(
-            f"You need a valid license to use {feature_name.lower()}.\n\n"
-            f"{license_error if license_error else 'Please request a license key.'}\n\n"
-            "Go to Help → Request License... to get your Hardware ID and request a license."
-        )
-        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Help)
-        msg.button(QMessageBox.Help).setText("Request License...")
-        msg.button(QMessageBox.Help).clicked.connect(self.show_license_info)
-        msg.exec_()
-    
-    def _is_license_valid(self, recheck=False) -> bool:
-        """
-        Check if license is valid. 
-        If recheck=True, validates the license file again (useful when license may have been added).
-        Returns False if license check is enforced and license is invalid.
-        """
-        from utilities.license import ENFORCE_LICENSE
-        if not ENFORCE_LICENSE:
-            return True  # License not enforced (dev mode)
-        
-        app = QtWidgets.QApplication.instance()
-        if not app:
-            return True
-        
-        # If recheck is requested, validate license file again
-        if recheck:
-            license_file = find_license_file()
-            if not license_file:
-                license_valid = False
-                license_error = "License file not found."
-            else:
-                is_valid, error = load_and_validate_license()
-                license_valid = is_valid
-                license_error = error if not is_valid else None
-            
-            # Update app properties with new status
-            app.setProperty("license_valid", license_valid)
-            app.setProperty("license_error", license_error)
-            
-            # Update UI if license status changed
-            self._update_license_dependent_ui()
-            
-            return license_valid
-        
-        # Otherwise, use cached status from startup
-        license_valid = app.property("license_valid")
-        return license_valid if license_valid is not None else True
-    
-    def _update_license_dependent_ui(self):
-        """Update UI elements that depend on license validity."""
-        license_valid = self._is_license_valid()
-        
-        # Enable/disable all functionality buttons based on license status
-        self.btn_loadMat.setEnabled(license_valid)
-        self.btn_burstDetection.setEnabled(license_valid)
-        self.btn_export.setEnabled(license_valid)
-        self.btn_process.setEnabled(license_valid)
-        self.btn_processBatch.setEnabled(license_valid)
-        
-        # Disable/enable menu actions (except Request License which stays enabled)
-        if hasattr(self, 'load_MAT_action'):
-            self.load_MAT_action.setEnabled(license_valid)
-        if hasattr(self, 'importXMLmot_action'):
-            self.importXMLmot_action.setEnabled(license_valid)
-        if hasattr(self, 'exportXMLmot_action'):
-            self.exportXMLmot_action.setEnabled(license_valid)
-        # Note: licenseInfoAction (Request License) should always be enabled
-        
-        if not license_valid:
-            # Set tooltips explaining license requirement
-            self.btn_loadMat.setToolTip("License required to load files. Go to Help → Request License...")
-            self.btn_burstDetection.setToolTip("License required for burst detection. Go to Help → Request License...")
-            self.btn_export.setToolTip("License required to export data. Go to Help → Request License...")
-            self.btn_process.setToolTip("License required to calculate MVC values. Go to Help → Request License...")
-            self.btn_processBatch.setToolTip("License required to calculate MVC values. Go to Help → Request License...")
-        else:
-            # Restore normal tooltips
-            self.btn_loadMat.setToolTip("Load MAT files")
-            self.btn_burstDetection.setToolTip("Detect bursts in active row")
-            self.btn_export.setToolTip("Export MVC results to XML")
-            self.btn_process.setToolTip("Calculate MVC for current tab")
-            self.btn_processBatch.setToolTip("Calculate MVC for all open tabs")
-    
     # ---------------- Batch process ----------------
     def on_process_clicked(self):
         """Execute MATLAB-style MVC calculation for the current tab/row/selections."""
-        # Check license before processing (recheck to detect newly added license files)
         if not self._is_license_valid(recheck=True):
             self._show_license_required_message("MVC calculation")
             return
-        
         idx = self.tw_plotting.currentIndex()
         if idx < 0:
             self.ledt_output.appendPlainText("[warn] No tab selected")
@@ -738,11 +690,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
     def on_process_clicked_batch(self):
         """Run MVC batch across all tabs with ≥ BEST_OF selections."""
-        # Check license before processing (recheck to detect newly added license files)
         if not self._is_license_valid(recheck=True):
             self._show_license_required_message("Batch MVC calculation")
             return
-        
         total_tabs = self.tw_plotting.count()
         if total_tabs == 0:
             self.ledt_output.appendPlainText("[warn] No open tabs.")
@@ -859,278 +809,119 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not open browser:\n{e}")
 
-    # ---------------- License Info Dialog ---------------- 
+    # ---------------- Licence manager (activation) ----------------
     def show_license_info(self):
-        """Show dialog with HWID and license request information."""
-        from pathlib import Path
-        from utilities.license import get_machine_id, get_country, get_license_file_path
-        
-        # Get machine information
-        hwid = get_machine_id()
-        country = get_country() or "Unknown"
-        
-        # Create dialog
+        """Activation dialog: redeem code online and store signed entitlement locally."""
         dialog = QDialog(self)
-        dialog.setWindowTitle("Request License")
-        dialog.setMinimumWidth(700)
-        dialog.setMinimumHeight(600)
-        dialog.resize(700, 700)
-        
-        # Create scroll area for content
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        # Content widget
-        content_widget = QWidget()
-        layout = QVBoxLayout(content_widget)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
-        scroll.setWidget(content_widget)
-        
-        # Main dialog layout
-        main_layout = QVBoxLayout(dialog)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(scroll)
-        
-        # Title
-        title = QLabel("Request License Key")
-        title.setStyleSheet("font-size: 20pt; font-weight: bold; color: #2c3e50; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #3498db;")
-        layout.addWidget(title)
-        
-        # Step-by-step instructions
-        steps_label = QLabel("How to Request a License")
-        steps_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #34495e; margin-top: 15px; margin-bottom: 8px;")
-        layout.addWidget(steps_label)
-        
-        steps_text = QLabel(
-            "<ol>"
-            "<li><b>Copy the email template</b> below (it already includes your Hardware ID and Country)</li>"
-            "<li><b>Paste it into your email client</b> and send it to support@moviolabs.com</li>"
-            "<li><b>Wait for your license.key file</b> (you'll receive it as an email attachment)</li>"
-            "<li><b>Download and save the license.key file</b> to one of the locations shown below</li>"
-            "<li><b>Restart the application</b> to activate your license</li>"
-            "</ol>"
-        )
-        steps_text.setWordWrap(True)
-        steps_text.setStyleSheet("margin-left: 10px; margin-bottom: 15px;")
-        layout.addWidget(steps_text)
-        
-        # Separator
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(separator)
-        
-        # Section header
-        info_header = QLabel("Your Machine Information")
-        info_header.setStyleSheet("font-size: 14pt; font-weight: bold; color: #34495e; margin-top: 15px; margin-bottom: 8px;")
-        layout.addWidget(info_header)
-        
-        info_note = QLabel(
-            "<i>This information is automatically included in the email template below.</i>"
-        )
-        info_note.setWordWrap(True)
-        info_note.setStyleSheet("margin-bottom: 10px; color: #666;")
-        layout.addWidget(info_note)
-        
-        # HWID section (selectable and copyable)
-        hwid_label = QLabel("Hardware ID (HWID)")
-        hwid_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #2c3e50; margin-top: 12px; margin-bottom: 5px;")
+        dialog.setWindowTitle("Licence manager")
+        dialog.setMinimumWidth(500)
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        label = QLabel("Enter activation code")
+        label_font = label.font()
+        label_font.setPointSize(11)
+        label.setFont(label_font)
+        layout.addWidget(label)
+
+        activation_edit = QLineEdit()
+        activation_edit.setPlaceholderText("Activation code")
+        edit_font = activation_edit.font()
+        edit_font.setPointSize(12)
+        activation_edit.setFont(edit_font)
+        activation_edit.setMinimumHeight(36)
+        layout.addWidget(activation_edit)
+
+        hwid = get_machine_id()
+        hwid_label = QLabel(f"Machine HWID: {hwid}")
+        hwid_label.setWordWrap(True)
         layout.addWidget(hwid_label)
-        
-        hwid_explanation = QLabel(
-            "This unique identifier is tied to your computer. Your license will only work on this machine."
-        )
-        hwid_explanation.setWordWrap(True)
-        hwid_explanation.setStyleSheet("font-size: 9pt; color: #666; margin-bottom: 5px;")
-        layout.addWidget(hwid_explanation)
-        
-        hwid_layout = QHBoxLayout()
-        hwid_input = QLineEdit()
-        hwid_input.setText(hwid)
-        hwid_input.setReadOnly(True)
-        hwid_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
-        hwid_copy_btn = QPushButton("Copy HWID")
-        hwid_copy_btn.setStyleSheet("padding: 5px 15px;")
-        hwid_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(hwid))
-        hwid_layout.addWidget(hwid_input)
-        hwid_layout.addWidget(hwid_copy_btn)
-        layout.addLayout(hwid_layout)
-        
-        # Country section (display only, not copyable)
-        country_label = QLabel("Country")
-        country_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #2c3e50; margin-top: 12px; margin-bottom: 5px;")
-        layout.addWidget(country_label)
-        
-        country_explanation = QLabel(
-            "Your license will be valid only in this country. This helps prevent unauthorized use."
-        )
-        country_explanation.setWordWrap(True)
-        country_explanation.setStyleSheet("font-size: 9pt; color: #666; margin-bottom: 5px;")
-        layout.addWidget(country_explanation)
-        
-        country_display = QLabel(f"<b style='font-size: 11pt;'>{country}</b>")
-        country_display.setStyleSheet("padding: 8px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;")
-        layout.addWidget(country_display)
-        
-        # Separator before email template
-        separator2 = QFrame()
-        separator2.setFrameShape(QFrame.HLine)
-        separator2.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(separator2)
-        
-        # Email template section
-        email_label = QLabel("Quick Email Template")
-        email_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #34495e; margin-top: 15px; margin-bottom: 8px;")
-        layout.addWidget(email_label)
-        
-        email_note = QLabel(
-            "<i>You can copy this pre-filled email template and paste it into your email client.</i>"
-        )
-        email_note.setWordWrap(True)
-        email_note.setStyleSheet("margin-bottom: 5px; color: #666;")
-        layout.addWidget(email_note)
-        
-        email_template = f"""Subject: License Request for MVC Calculator
 
-Hello,
+        entitlement_path = get_entitlement_file_path()
+        path_label = QLabel(f"Entitlement file: {entitlement_path}")
+        path_label.setWordWrap(True)
+        layout.addWidget(path_label)
 
-I would like to request a license key for MVC Calculator.
+        copy_hwid_btn = QPushButton("Copy HWID")
+        copy_hwid_btn.clicked.connect(lambda: QtWidgets.QApplication.clipboard().setText(hwid))
+        layout.addWidget(copy_hwid_btn)
 
-Hardware ID: {hwid}
-Country: {country}
+        activate_btn = QPushButton("Activate")
+        btn_font = activate_btn.font()
+        btn_font.setPointSize(11)
+        activate_btn.setFont(btn_font)
+        activate_btn.setMinimumHeight(32)
 
-Thank you!"""
-        
-        email_text = QTextEdit()
-        email_text.setPlainText(email_template)
-        email_text.setReadOnly(True)
-        email_text.setMaximumHeight(150)
-        email_text.setStyleSheet("font-family: 'Courier New', monospace; padding: 5px;")
-        layout.addWidget(email_text)
-        
-        email_copy_btn = QPushButton("Copy Email Template")
-        email_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(email_template))
-        layout.addWidget(email_copy_btn)
-        
-        # Separator before license location
-        separator3 = QFrame()
-        separator3.setFrameShape(QFrame.HLine)
-        separator3.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(separator3)
-        
-        # License file location info
-        license_location_label = QLabel("Where to Save Your License Key")
-        license_location_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #34495e; margin-top: 15px; margin-bottom: 8px;")
-        layout.addWidget(license_location_label)
-        
-        location_instructions = QLabel(
-            "<b>After receiving your license.key file via email:</b><br>"
-            "1. Download the attached <b>license.key</b> file from the email<br>"
-            "2. Save the file to one of the locations shown below (keep the exact filename)<br>"
-            "3. Restart the application to activate your license"
-        )
-        location_instructions.setWordWrap(True)
-        location_instructions.setStyleSheet("margin-bottom: 10px; margin-left: 10px;")
-        layout.addWidget(location_instructions)
-        
-        # Recommended location (generic path - directory only)
-        recommended_path = "%APPDATA%\\Roaming\\MVC_Calculator"
-        recommended_label = QLabel("1. Recommended Location (persists across updates)")
-        recommended_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #27ae60; margin-top: 12px; margin-bottom: 5px;")
-        layout.addWidget(recommended_label)
-        
-        recommended_path_layout = QHBoxLayout()
-        recommended_path_input = QLineEdit()
-        recommended_path_input.setText(recommended_path)
-        recommended_path_input.setReadOnly(True)
-        recommended_path_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
-        recommended_path_copy_btn = QPushButton("Copy Path")
-        recommended_path_copy_btn.setStyleSheet("padding: 5px 15px;")
-        recommended_path_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(recommended_path))
-        recommended_path_layout.addWidget(recommended_path_input)
-        recommended_path_layout.addWidget(recommended_path_copy_btn)
-        layout.addLayout(recommended_path_layout)
-        
-        # Legacy location (example path - directory only)
-        legacy_path = "C:\\Program Files\\MVC_Calculator"
-        legacy_label = QLabel("2. Alternative Legacy Location (example)")
-        legacy_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #e67e22; margin-top: 12px; margin-bottom: 5px;")
-        layout.addWidget(legacy_label)
-        
-        legacy_path_layout = QHBoxLayout()
-        legacy_path_input = QLineEdit()
-        legacy_path_input.setText(legacy_path)
-        legacy_path_input.setReadOnly(True)
-        legacy_path_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
-        legacy_path_copy_btn = QPushButton("Copy Path")
-        legacy_path_copy_btn.setStyleSheet("padding: 5px 15px;")
-        legacy_path_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(legacy_path))
-        legacy_path_layout.addWidget(legacy_path_input)
-        legacy_path_layout.addWidget(legacy_path_copy_btn)
-        layout.addLayout(legacy_path_layout)
+        def on_activate_clicked():
+            code = activation_edit.text().strip()
+            if not code:
+                QMessageBox.warning(dialog, "Activation", "Please enter an activation code.")
+                return
+            if not activation_api_configured():
+                QMessageBox.critical(
+                    dialog,
+                    "Activation",
+                    "Activation API URL is not configured. Set ACTIVATION_API_URL and restart.",
+                )
+                return
 
-        # Portable version location (placeholder - directory only)
-        portable_path = "<portable unzip folder>\\MVC_Calculator"
-        portable_label = QLabel("3. Portable Version (example)")
-        portable_label.setStyleSheet("font-size: 12pt; font-weight: bold; color: #e67e22; margin-top: 12px; margin-bottom: 5px;")
-        layout.addWidget(portable_label)
+            activate_btn.setEnabled(False)
+            dialog.setCursor(Qt.WaitCursor)
+            QtWidgets.QApplication.processEvents()
 
-        portable_path_layout = QHBoxLayout()
-        portable_path_input = QLineEdit()
-        portable_path_input.setText(portable_path)
-        portable_path_input.setReadOnly(True)
-        portable_path_input.setStyleSheet("font-family: 'Courier New', monospace; padding: 8px; background-color: #f5f5f5;")
-        portable_path_copy_btn = QPushButton("Copy Path")
-        portable_path_copy_btn.setStyleSheet("padding: 5px 15px;")
-        portable_path_copy_btn.clicked.connect(lambda: self._copy_to_clipboard(portable_path))
-        portable_path_layout.addWidget(portable_path_input)
-        portable_path_layout.addWidget(portable_path_copy_btn)
-        layout.addLayout(portable_path_layout)
-        
-        location_note = QLabel(
-            "<b>Note:</b> Save the license.key file in one of these directories. "
-            "The recommended location (%APPDATA%\\Roaming\\MVC_Calculator) persists across application updates. "
-            "The legacy location (same directory as executable) and <portable unzip folder>\\MVC_Calculator also work but may be lost during updates."
-        )
-        location_note.setWordWrap(True)
-        location_note.setStyleSheet("margin-top: 5px; margin-bottom: 10px; padding: 8px; background-color: #e8f4f8; border-left: 3px solid #2196F3;")
-        layout.addWidget(location_note)
-        
-        # Support info
-        separator4 = QFrame()
-        separator4.setFrameShape(QFrame.HLine)
-        separator4.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(separator4)
-        
-        support_info = QLabel(
-            f"<b style='font-size: 13pt;'>Need Help?</b><br>"
-            f"Email: <a href='mailto:support@moviolabs.com' style='color: #3498db;'>support@moviolabs.com</a><br>"
-            f"<i style='color: #7f8c8d;'>Include your Hardware ID and Country in your message.</i>"
-        )
-        support_info.setWordWrap(True)
-        support_info.setOpenExternalLinks(True)
-        support_info.setStyleSheet("margin-top: 15px; padding: 12px; background-color: #ecf0f1; border-radius: 5px; border-left: 4px solid #3498db;")
-        layout.addWidget(support_info)
-        
-        # Close button (outside scroll area)
-        close_btn = QPushButton("Close")
-        close_btn.setStyleSheet("padding: 8px 20px; font-size: 10pt;")
-        close_btn.clicked.connect(dialog.accept)
-        main_layout.addWidget(close_btn)
-        
-        # Show dialog and refresh license status when it closes (in case user added a license file)
+            try:
+                ok, response_data, message = redeem_activation_code(code)
+                if not ok or not response_data:
+                    QMessageBox.critical(dialog, "Activation failed", message)
+                    return
+
+                license_key = str(response_data.get("license_key", "")).strip()
+                entitlement = {
+                    "format": "license_key_v1",
+                    "license_key": license_key,
+                    "source": "activation_api",
+                    "email": response_data.get("email"),
+                    "activation_code_hint": code[-4:] if len(code) >= 4 else code,
+                }
+                saved, save_error = save_entitlement(entitlement)
+                if not saved:
+                    QMessageBox.critical(
+                        dialog,
+                        "Activation failed",
+                        f"Activation succeeded but entitlement could not be saved:\n{save_error}",
+                    )
+                    return
+
+                is_valid, validation_error = validate_entitlement()
+                app = QtWidgets.QApplication.instance()
+                if app:
+                    app.setProperty("license_valid", is_valid)
+                    app.setProperty("license_error", validation_error if not is_valid else None)
+                self._update_license_dependent_ui()
+
+                if not is_valid:
+                    QMessageBox.critical(
+                        dialog,
+                        "Activation failed",
+                        validation_error or "Entitlement failed validation on this machine.",
+                    )
+                    return
+
+                QMessageBox.information(
+                    dialog,
+                    "Activation complete",
+                    f"{message}\n\nFeatures are now enabled.",
+                )
+                dialog.accept()
+            finally:
+                dialog.setCursor(Qt.ArrowCursor)
+                activate_btn.setEnabled(True)
+
+        activate_btn.clicked.connect(on_activate_clicked)
+        layout.addWidget(activate_btn)
+
         dialog.exec_()
-        # Recheck license after dialog closes - user may have added a license file
-        self._is_license_valid(recheck=True)
-    
-    def _copy_to_clipboard(self, text):
-        """Copy text to clipboard and show confirmation."""
-        clipboard = QApplication.clipboard()
-        clipboard.setText(text)
-        QMessageBox.information(self, "Copied", "Copied to clipboard!")
 
     # ---------------- Close/Cleanup ----------------
     def closeEvent(self, event):
@@ -1200,39 +991,13 @@ def main():
         os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 
         app = QtWidgets.QApplication(sys.argv)
-        
-        # License validation (only in frozen builds, must be after QApplication is created for dialogs)
-        # NOTE: We allow the application to start even without a license so users can access
-        # the "Request License" dialog to get their HWID. All functionality is blocked until a valid license is present.
-        from utilities.license import ENFORCE_LICENSE
         license_valid = True
         license_error = None
         if ENFORCE_LICENSE:
-            license_file = find_license_file()
-            if not license_file:
-                license_path = get_license_file_path()
-                license_valid = False
-                license_error = (
-                    f"License file not found.\n\n"
-                    f"Please place a valid license.key file in:\n{license_path}\n\n"
-                    f"This location persists across application updates.\n\n"
-                    f"⚠️ IMPORTANT: All application functionality is disabled until a valid license is installed.\n\n"
-                    f"You can still access Help → Request License... to get your Hardware ID and request a license."
-                )
-            else:
-                is_valid, error = load_and_validate_license()
-                if not is_valid:
-                    license_valid = False
-                    license_error = (
-                        f"{error}\n\n"
-                        "This license key is not valid for this machine or has expired.\n\n"
-                        "⚠️ IMPORTANT: All application functionality is disabled until a valid license is installed.\n\n"
-                        "You can still access Help → Request License... to get your Hardware ID and request a new license."
-                    )
-        
-        # Store license status for later use (e.g., showing warnings or limiting features)
+            license_valid, license_error = validate_entitlement()
         app.setProperty("license_valid", license_valid)
         app.setProperty("license_error", license_error)
+
         # ---------- WSLg ICON FIX (safe, no variable shadowing) ----------
         import platform as _plat
         import os as _os
@@ -1275,21 +1040,19 @@ def main():
         window.show()
         splash.showMessage("LISTO", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
         splash.finish(window)
-        
-        # Show non-blocking license warning if license is invalid (allows user to access Request License dialog)
+
         if ENFORCE_LICENSE and not license_valid:
             msg = QMessageBox(window)
             msg.setIcon(QMessageBox.Warning)
-            msg.setWindowTitle("License Required - Functionality Disabled")
-            msg.setText("License Not Found or Invalid")
+            msg.setWindowTitle("Activation Required - Functionality Disabled")
+            msg.setText("Activation missing or invalid")
             msg.setInformativeText(
-                license_error + "\n\n"
-                "All features (file loading, burst detection, MVC calculation, export) are disabled until a valid license is installed."
+                (license_error or "Entitlement validation failed.")
+                + "\n\nUse Help -> Licence manager to activate this machine."
             )
             msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Help)
-            msg.button(QMessageBox.Help).setText("Request License...")
+            msg.button(QMessageBox.Help).setText("Licence manager...")
             msg.button(QMessageBox.Help).clicked.connect(window.show_license_info)
-            # Show asynchronously (non-blocking) - user can dismiss and access Request License dialog
             msg.show()
 
         sys.exit(app.exec_())

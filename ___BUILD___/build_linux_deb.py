@@ -6,6 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from utilities.version_info import BUILDNUMBER  # same as Windows build
 
 OA_MODE = "--oa" in sys.argv or "-oa" in sys.argv

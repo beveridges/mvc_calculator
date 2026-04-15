@@ -1,7 +1,7 @@
 # User Guide
 
-![Build](https://img.shields.io/badge/build-26.02--alpha.01-blueviolet?style=flat-square)
-![Version](https://img.shields.io/badge/version-26.02--alpha.01.06-orange?style=flat-square)
+![Build](https://img.shields.io/badge/build-26.04--alpha.01-blueviolet?style=flat-square)
+![Version](https://img.shields.io/badge/version-26.04--alpha.01.01-orange?style=flat-square)
 
 ## Table of Contents
 
@@ -67,7 +67,7 @@ The latest builds for all platforms can be downloaded from the release archive:
 !!! info "Download access"
     The release archive is password-protected. Your **login credentials** (username and download password) will be sent to you via email.  
 	
-    MVC Calculator uses a hardware-locked license system.  Refer to the [License System](license.md) section for full details.
+    MVC Calculator uses a hardware-locked licence. You can unlock it with an **activation code** in **Help** → **Licence manager...**, or by installing a **`license.key`** file as described in [License Information](license.md).
 
 ---
 

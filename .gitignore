@@ -49,6 +49,23 @@ docs_site/bibtest/
 docs_site/site/_index_raw/
 
 # ============================================================
+# 🏗️ BUILD TOOLING (___BUILD___/)
+# ============================================================
+
+# Scripts under ___BUILD___/ are tracked. Only ignore disposable local junk:
+___BUILD___/trash/
+
+# ============================================================
+# 🔐 LICENCE / INSTITUTIONAL BUILD INPUTS (local only)
+# ============================================================
+
+# Entire directory — keep license.key and preactivation artifacts here; never commit
+MVC_Calculator/
+
+# Root-level key file (if used instead of or in addition to the folder above)
+license.key
+
+# ============================================================
 # 📦 OPTIONAL DEVELOPMENT FILES
 # ============================================================
 

@@ -42,6 +42,10 @@ except (ImportError, AttributeError):
 if "LICENSE_CHECK" in os.environ:
     ENFORCE_LICENSE = os.environ.get("LICENSE_CHECK", "").lower() not in ("0", "false")
 
+# Activation phase:
+# - Enforce in frozen builds by default.
+# - Developers can still override with LICENSE_CHECK=0.
+
 # Secret key for HMAC signing (in production, store this securely)
 # This should be the same key used to generate licenses
 LICENSE_SECRET = b"moviolabs_license_secret_key_2024_change_in_production"

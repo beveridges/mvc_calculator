@@ -9,7 +9,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-SCRIPT_ROOT = Path(__file__).resolve().parent
+_BUILD = Path(__file__).resolve().parent
+REPO_ROOT = _BUILD.parent
+SCRIPT_ROOT = REPO_ROOT
 APP_NAME = "MVC_Calculator"
 ICON = "resources/icons/icn_emg.png"
 LINUX_ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
@@ -17,6 +19,11 @@ LINUX_ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
 def run():
     ap = argparse.ArgumentParser(description="MVC Calculator Linux portable build")
     ap.add_argument("--oa", action="store_true", help="Build Open Access (license-free) version")
+    ap.add_argument(
+        "--preactivated-entitlement",
+        default="",
+        help="Optional path to entitlement.json to bundle at preactivated/entitlement.json",
+    )
     args = ap.parse_args()
     oa_mode = args.oa
 
@@ -53,7 +60,7 @@ def run():
     ]
 
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, cwd=str(REPO_ROOT))
     except subprocess.CalledProcessError as e:
         print("❌ PyInstaller failed with exit code:", e.returncode)
         sys.exit(e.returncode)
@@ -67,6 +74,16 @@ def run():
     print("[INFO] Copying result to output folder...")
     shutil.rmtree(OUT_DIR, ignore_errors=True)
     shutil.copytree(dist_dir, OUT_DIR)
+
+    if args.preactivated_entitlement:
+        ent_src = Path(args.preactivated_entitlement).resolve()
+        if not ent_src.exists():
+            print(f"❌ preactivated entitlement not found: {ent_src}")
+            sys.exit(2)
+        ent_dest = OUT_DIR / "preactivated" / "entitlement.json"
+        ent_dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ent_src, ent_dest)
+        print(f"[INFO] Bundled preactivated entitlement: {ent_dest}")
 
     print("\n[DONE] Portable Linux build created:")
     print(OUT_DIR)

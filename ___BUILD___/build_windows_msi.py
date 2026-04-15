@@ -14,6 +14,11 @@ import os, sys, shutil, subprocess
 from collections import defaultdict
 from pathlib import Path
 from datetime import datetime
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from utilities.path_utils import base_path
 
 sys.stdout.reconfigure(encoding='utf-8')

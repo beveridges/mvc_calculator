@@ -27,6 +27,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 
 # -*- coding: utf-8 -*-
 import sys
@@ -97,8 +101,8 @@ class Tee:
         self.log.flush()
 
 timestamp = datetime.now().strftime("%y.%m-%H%M%S")
-project_root = Path(__file__).resolve().parent
-# project_root = Path(__file__).resolve().parent.parent
+_BUILD = Path(__file__).resolve().parent
+project_root = _BUILD.parent  # repo root (this file lives in ___BUILD___/)
 logs_dir = project_root / ".build_logs"
 log_file = logs_dir / f"build_{timestamp}.log"
 sys.stdout = sys.stderr = Tee(log_file)
@@ -243,6 +247,11 @@ def main():
     ap.add_argument("--entry", default="main.py", help="Entry script path")
     ap.add_argument("--dev", action="store_true", help="Build license-free development version")
     ap.add_argument("--oa", action="store_true", help="Build Open Access (license-free) version, same build number as licensed")
+    ap.add_argument(
+        "--preactivated-entitlement",
+        default="",
+        help="Optional path to preactivated entitlement.json to bundle at preactivated/entitlement.json",
+    )
     args = ap.parse_args()
 
     # --oa implies license-free and uses existing BUILDNUMBER
@@ -596,6 +605,26 @@ def main():
     for src, dest_rel in data_map:
         if src.exists():
             copy_tree_to_dest(src, archived_at, dest_rel)
+
+    # Optional preactivated entitlement bundle
+    if args.preactivated_entitlement:
+        ent_src = Path(args.preactivated_entitlement).resolve()
+        if not ent_src.exists():
+            print(f"[error] --preactivated-entitlement file not found: {ent_src}")
+            sys.exit(5)
+        try:
+            import json
+            parsed = json.loads(ent_src.read_text(encoding="utf-8"))
+            if not isinstance(parsed, dict) or "license_key" not in parsed:
+                print("[error] preactivated entitlement must be JSON object containing license_key")
+                sys.exit(5)
+            ent_dest = archived_at / "preactivated" / "entitlement.json"
+            ent_dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ent_src, ent_dest)
+            print(f"[ok] bundled preactivated entitlement: {ent_dest}")
+        except Exception as e:
+            print(f"[error] failed to bundle preactivated entitlement: {e}")
+            sys.exit(5)
 
     # Code signing (if configured)
     try:
