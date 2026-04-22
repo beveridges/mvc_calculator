@@ -93,7 +93,7 @@ def load_notes(version: str, oa: bool = False):
     # 1) versioned dir buildfiles: MVC_Calculator-{version}/buildfiles/RELEASE_NOTES-{version}.txt
     # 2) build base (OA only): RELEASE_NOTES-oa-{version}.txt — check before generic so OA-specific wins
     # 3) build base: RELEASE_NOTES-{version}.txt
-    # 4) build base: text file named like the directory, e.g. MVC_Calculator-26.02-alpha.01.03.txt
+    # 4) build base: text file named like the directory, e.g. MVC_Calculator-26.04-alpha.01.03.txt
     dir_prefix = f"MVC_Calculator-oa-{version}" if oa else f"MVC_Calculator-{version}"
     version_dir = BUILD_BASE / dir_prefix
     notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{version}.txt"
@@ -361,7 +361,7 @@ def scan_oa_builds():
     oa_dirs = [d for d in BUILD_BASE.iterdir() if d.is_dir() and d.name.startswith("MVC_Calculator-oa-")]
     if not oa_dirs:
         return None, []
-    # Extract version from dir name: MVC_Calculator-oa-26.02-alpha.01.03
+    # Extract version from dir name: MVC_Calculator-oa-26.04-alpha.01.03
     def get_oa_version(d):
         rest = d.name.replace("MVC_Calculator-oa-", "")
         m = VERSION_RE.search(rest)

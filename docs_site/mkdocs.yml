@@ -8,7 +8,6 @@ theme:
 # Homepage redirects to user-guide
 nav:
   - User Guide: user-guide.md
-  - License Information: license.md
   - Troubleshooting Guide: troubleshooting.md
   - File Formats: file-formats.md
   - Keyboard Shortcuts: keyboard-shortcuts.md

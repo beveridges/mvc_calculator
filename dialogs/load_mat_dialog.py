@@ -11,12 +11,12 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5 import uic
-import scipy.io
 import os
 
 # -- CUSTOM --------------------- #
 from utilities.path_utils import resource_path
 from utilities.path_utils import base_path
+from utilities.mat_file_reader import load_mat_for_mvc
 
 
 # ---------------- Worker that runs in a background thread ----------------
@@ -42,15 +42,7 @@ class ImportWorker(QObject):
                 return
             try:
                 self.progress.emit(i, total, os.path.basename(path))
-                mat = scipy.io.loadmat(path, struct_as_record=False, squeeze_me=True)
-                key = next((k for k in mat.keys() if not k.startswith("__")), None)
-                if key:
-                    tl = mat[key]
-                    results.append({
-                        "path": path,
-                        "data": tl.Analog.Data,
-                        "labels": tl.Analog.Labels,
-                    })
+                results.append(load_mat_for_mvc(path))
             except Exception as e:
                 self.error.emit(f"{os.path.basename(path)}: {e}")
         self.finished.emit(results)

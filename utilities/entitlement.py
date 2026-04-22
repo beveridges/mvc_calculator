@@ -27,6 +27,13 @@ from utilities.license import (
     validate_license_key,
 )
 
+
+def is_preactivated_bundle_entitlement(data: Optional[Dict]) -> bool:
+    """True when entitlement was installed from a bundled preactivated artifact."""
+    if not isinstance(data, dict):
+        return False
+    return str(data.get("source", "")).strip().lower() == "preactivated_bundle"
+
 logger = logging.getLogger(__name__)
 
 ENTITLEMENT_FILENAME = "entitlement.json"
@@ -83,7 +90,9 @@ def build_preactivated_entitlement(
     return payload
 
 
-def _validate_license_data_on_this_machine(license_data: Dict[str, str]) -> Tuple[bool, Optional[str]]:
+def _validate_license_data_on_this_machine(
+    license_data: Dict[str, str], *, skip_country: bool = False
+) -> Tuple[bool, Optional[str]]:
     current_hwid = get_machine_id()
     current_country = get_country()
 
@@ -95,7 +104,7 @@ def _validate_license_data_on_this_machine(license_data: Dict[str, str]) -> Tupl
     elif license_data.get("hwid") != current_hwid:
         return False, "License key is not valid for this machine. Hardware ID mismatch."
 
-    if current_country and license_data.get("country") != current_country:
+    if not skip_country and current_country and license_data.get("country") != current_country:
         return (
             False,
             f"License key is not valid for this country. Expected: {license_data.get('country')}, Detected: {current_country}",
@@ -201,7 +210,10 @@ def validate_entitlement() -> Tuple[bool, Optional[str]]:
     if not ok or not license_data:
         return False, err or "Invalid license key in entitlement."
 
-    ok, machine_error = _validate_license_data_on_this_machine(license_data)
+    skip_country = is_preactivated_bundle_entitlement(entitlement)
+    ok, machine_error = _validate_license_data_on_this_machine(
+        license_data, skip_country=skip_country
+    )
     if not ok:
         return False, machine_error
 

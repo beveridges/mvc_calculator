@@ -12,12 +12,14 @@ Features:
 import hashlib
 import hmac
 import base64
+import re
 import subprocess
 import platform
 import ctypes
 from ctypes import wintypes
 from pathlib import Path
 from typing import Optional, Dict, Tuple
+from datetime import datetime
 import logging
 import sys
 
@@ -52,6 +54,7 @@ LICENSE_SECRET = b"moviolabs_license_secret_key_2024_change_in_production"
 
 # License file location (in same directory as executable or in user data)
 LICENSE_FILENAME = "license.key"
+LICENSE_TIMESTAMPED_REGEX = re.compile(r"^license-(\d{8}T\d{6}Z)-([A-Za-z0-9_-]+)\.key$")
 
 # Wildcard HWID for @hfmdd.de users (allows license to work on any machine)
 WILDCARD_HWID_HFMDD = "WILDCARD_HFMDD_DE"
@@ -59,6 +62,46 @@ WILDCARD_HWID_HFMDD = "WILDCARD_HFMDD_DE"
 # Telemetry: only send one license failure/success report per application session
 _license_failure_reported = False
 _license_success_reported = False
+
+
+def _parse_timestamped_license_filename(filename: str) -> Optional[datetime]:
+    match = LICENSE_TIMESTAMPED_REGEX.match(filename)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ")
+    except ValueError:
+        return None
+
+
+def _find_latest_timestamped_license_file(directory: Path) -> Optional[Path]:
+    try:
+        candidates = []
+        for child in directory.iterdir():
+            if not child.is_file():
+                continue
+            parsed = _parse_timestamped_license_filename(child.name)
+            if parsed is not None:
+                candidates.append((parsed, child.name, child))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return candidates[0][2]
+    except Exception:
+        return None
+
+
+def _find_license_file_in_directory(directory: Path) -> Optional[Path]:
+    """
+    Return best license file candidate inside one directory.
+    Priority:
+    1) exact license.key
+    2) newest timestamped license-YYYYMMDDTHHMMSSZ-<client>.key
+    """
+    exact = directory / LICENSE_FILENAME
+    if exact.exists():
+        return exact
+    return _find_latest_timestamped_license_file(directory)
 
 
 def _report_license_failure(error_message: str) -> None:
@@ -377,45 +420,45 @@ def migrate_license_from_old_locations() -> Optional[Path]:
     import shutil
     
     user_data_dir = get_user_data_dir()
-    persistent_license_path = user_data_dir / LICENSE_FILENAME
-    
-    # If license already exists in persistent location, no migration needed
-    if persistent_license_path.exists():
-        return persistent_license_path
-    
-    # Check old locations and migrate if found
-    old_locations = []
-    
+    # If license already exists in persistent location, no migration needed.
+    existing_in_persistent = _find_license_file_in_directory(user_data_dir)
+    if existing_in_persistent:
+        return existing_in_persistent
+
+    # Check old locations and migrate if found.
+    old_directories = []
+
     # 1. Same directory as executable (for PyInstaller builds)
     if getattr(sys, "frozen", False):
-        exe_dir = Path(sys.executable).parent
-        old_locations.append(exe_dir / LICENSE_FILENAME)
-    
+        old_directories.append(Path(sys.executable).parent)
+
     # 2. Current working directory
-    old_locations.append(Path.cwd() / LICENSE_FILENAME)
-    
+    old_directories.append(Path.cwd())
+
     # 3. User's home directory
-    old_locations.append(Path.home() / LICENSE_FILENAME)
-    
-    # Try to migrate from old locations
-    for old_path in old_locations:
-        if old_path.exists() and old_path != persistent_license_path:
-            try:
-                # Copy to persistent location
-                shutil.copy2(old_path, persistent_license_path)
-                logger.info(f"Migrated license from {old_path} to {persistent_license_path}")
-                return persistent_license_path
-            except Exception as e:
-                logger.warning(f"Failed to migrate license from {old_path}: {e}")
-                # If migration fails, still try to use the old location
-                return old_path
+    old_directories.append(Path.home())
+
+    # Try to migrate best candidate from old locations
+    for old_dir in old_directories:
+        old_path = _find_license_file_in_directory(old_dir)
+        if not old_path:
+            continue
+        try:
+            target_path = user_data_dir / old_path.name
+            shutil.copy2(old_path, target_path)
+            logger.info(f"Migrated license from {old_path} to {target_path}")
+            return target_path
+        except Exception as e:
+            logger.warning(f"Failed to migrate license from {old_path}: {e}")
+            # If migration fails, still try to use the old location
+            return old_path
     
     return None
 
 
 def find_license_file() -> Optional[Path]:
     """
-    Find the license.key file.
+    Find the best license file candidate.
     Checks in this order:
     1. Persistent user data directory (survives updates) - PRIORITY
     2. Old locations (for backward compatibility and migration)
@@ -429,30 +472,30 @@ def find_license_file() -> Optional[Path]:
     
     # Check persistent location (even if migration didn't find anything)
     user_data_dir = get_user_data_dir()
-    persistent_license_path = user_data_dir / LICENSE_FILENAME
-    if persistent_license_path.exists():
-        return persistent_license_path
-    
+    persistent_candidate = _find_license_file_in_directory(user_data_dir)
+    if persistent_candidate:
+        return persistent_candidate
+
     # Fallback: check old locations (for backward compatibility)
     import sys
-    
+
+    old_directories = []
+
     # Same directory as executable (for PyInstaller builds)
     if getattr(sys, "frozen", False):
-        exe_dir = Path(sys.executable).parent
-        license_path = exe_dir / LICENSE_FILENAME
-        if license_path.exists():
-            return license_path
-    
+        old_directories.append(Path(sys.executable).parent)
+
     # Current working directory
-    license_path = Path.cwd() / LICENSE_FILENAME
-    if license_path.exists():
-        return license_path
-    
+    old_directories.append(Path.cwd())
+
     # User's home directory
-    license_path = Path.home() / LICENSE_FILENAME
-    if license_path.exists():
-        return license_path
-    
+    old_directories.append(Path.home())
+
+    for directory in old_directories:
+        candidate = _find_license_file_in_directory(directory)
+        if candidate:
+            return candidate
+
     return None
 
 
@@ -478,7 +521,7 @@ def load_and_validate_license() -> Tuple[bool, Optional[str]]:
         recommended_path = get_license_file_path()
         err = (
             f"License file not found.\n\n"
-            f"Please place license.key in:\n{recommended_path}\n\n"
+            f"Please place a license file (license.key or license-YYYYMMDDTHHMMSSZ-<client>.key) in:\n{recommended_path.parent}\n\n"
             f"This location persists across application updates."
         )
         _report_license_failure(err)

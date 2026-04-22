@@ -29,6 +29,58 @@ class QtPlainTextEditHandler(logging.Handler):
             # widget was deleted — remove handler to avoid future crashes
             logging.getLogger().removeHandler(self)
 
+
+class _SendLogThread(QThread):
+    """Runs SMTP send on a background thread (does not block the GUI)."""
+
+    send_done = pyqtSignal(bool)
+
+    def __init__(self, subject, body, attachments, parent=None):
+        super().__init__(parent)
+        self._subject = subject
+        self._body = body
+        self._attachments = list(attachments)
+
+    def run(self):
+        ok = send_email(
+            subject=self._subject,
+            body=self._body,
+            attachments=self._attachments,
+            recipient=RECIPIENT_EMAIL,
+            sender=SENDER_EMAIL,
+            password=APP_PASSWORD,
+        )
+        self.send_done.emit(ok)
+
+
+class _SendLogFinisher(QObject):
+    """Receives send result on the GUI thread (parent widget thread)."""
+
+    def __init__(self, progress, parent_widget):
+        super().__init__(parent_widget)
+        self._progress = progress
+        self._parent = parent_widget
+
+    def on_send_finished(self, success):
+        if self._progress:
+            self._progress.close()
+            self._progress = None
+        if success:
+            logging.info("Log file sent successfully.")
+            QMessageBox.information(
+                self._parent,
+                "Email Sent",
+                "The email was sent successfully.",
+            )
+        else:
+            logging.error("Failed to send log file.")
+            QMessageBox.warning(
+                self._parent,
+                "Email Failed",
+                "Failed to send the email. Please check your connection and try again.",
+            )
+
+
 class SBConsoleOutput:
     '''
     target:  the target QPlainTextEdit
@@ -108,55 +160,34 @@ class SBConsoleOutput:
         if dialog.exec_() == QDialog.Accepted:
             user_message = dialog.get_message()
             logging.info(f"Sending session log with user message...")
-            
-            # Show progress dialog
-            progress = QProgressDialog("Sending email...", None, 0, 0, parent)
+
+            progress = QProgressDialog("Sending email…", None, 0, 0, parent)
             progress.setWindowTitle("Sending Log File")
-            progress.setWindowModality(Qt.WindowModal)
+            progress.setWindowModality(Qt.ApplicationModal)
             progress.setMinimumDuration(0)
             progress.setValue(0)
             progress.setMinimumWidth(400)
             progress.show()
             QApplication.processEvents()
-            
+
             from datetime import datetime
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             subject = f"MVCCalc Session Log — {now}"
-            
-            # Build email body with user message
+
             body = "Please find attached the session log."
             if user_message and user_message.strip():
                 body += f"\n\n--- User Message ---\n{user_message.strip()}"
-            
-            # Send email
-            success = send_email(
-                subject=subject,
-                body=body,
-                attachments=[self._logfile],
-                recipient=RECIPIENT_EMAIL,
-                sender=SENDER_EMAIL,
-                password=APP_PASSWORD
+
+            owner = parent if parent is not None else self._target
+            send_thread = _SendLogThread(subject, body, [self._logfile], owner)
+            finisher = _SendLogFinisher(progress, owner)
+            send_thread.send_done.connect(
+                finisher.on_send_finished, Qt.QueuedConnection
             )
-            
-            # Close progress dialog
-            progress.close()
-            
-            if success:
-                logging.info("Log file sent successfully.")
-                QMessageBox.information(
-                    parent,
-                    "Email Sent",
-                    "The email was sent successfully."
-                )
-            else:
-                logging.error("Failed to send log file.")
-                QMessageBox.warning(
-                    parent,
-                    "Email Failed",
-                    "Failed to send the email. Please check your connection and try again."
-                )
-            
-            return success
+            send_thread.finished.connect(send_thread.deleteLater)
+            send_thread.finished.connect(finisher.deleteLater)
+            send_thread.start()
+            return True
         else:
             # User cancelled
             logging.info("Send log cancelled by user.")

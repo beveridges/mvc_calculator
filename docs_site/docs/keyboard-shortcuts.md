@@ -31,7 +31,6 @@
 |--------|----------|---------------|
 | Open Documentation | - | Help → Documentation |
 | About Dialog | - | Help → About |
-| Request License | - | Help → Request License... |
 
 ---
 

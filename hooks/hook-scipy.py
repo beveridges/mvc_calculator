@@ -49,5 +49,9 @@ hiddenimports += [
     'scipy.stats',
     'scipy._lib',
     'scipy._lib._ccallback',
+    # MATLAB v7.3 (HDF5) .mat — scipy loads h5py dynamically; keep names for hook graph
+    'h5py',
+    'h5py._errors',
+    'h5py._hl',
 ]
 

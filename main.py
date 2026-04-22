@@ -21,7 +21,11 @@ import numpy as np
 
 from telemetry.telemetry import log_startup, log_shutdown, log_event, log_error
 from telemetry.perf_monitor import start_performance_monitor, stop_performance_monitor
-from telemetry.notifier import record_launch_info, send_session_summary_email
+from telemetry.notifier import (
+    record_launch_info,
+    schedule_preactivated_launch_report_silent,
+    send_session_summary_email,
+)
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
@@ -93,7 +97,13 @@ from utilities.version_info import (
 )
 from utilities.path_utils import base_path
 from utilities.activation import activation_api_configured, redeem_activation_code
-from utilities.entitlement import get_entitlement_file_path, save_entitlement, validate_entitlement
+from utilities.entitlement import (
+    get_entitlement_file_path,
+    is_preactivated_bundle_entitlement,
+    load_entitlement,
+    save_entitlement,
+    validate_entitlement,
+)
 from utilities.license import ENFORCE_LICENSE, get_machine_id
 from sbui.consoleui.console_output import SBConsoleOutput
 
@@ -259,19 +269,41 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         app = QtWidgets.QApplication.instance()
         err = app.property("license_error") if app else None
         path = get_entitlement_file_path()
+        activation_hint = (
+            "This preactivated build is managed by your administrator."
+            if self._is_preactivated_install()
+            else "Use Help -> Licence manager to activate."
+        )
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Warning)
         msg.setWindowTitle("Activation Required")
         msg.setText(f"{feature_name} is disabled until activation succeeds.")
         msg.setInformativeText(
             (f"{err}\n\n" if err else "")
-            + f"Use Help -> Licence manager to activate.\n\n"
+            + f"{activation_hint}\n\n"
             + f"Entitlement file path:\n{path}"
         )
         msg.exec_()
 
+    def _is_preactivated_install(self) -> bool:
+        return is_preactivated_bundle_entitlement(load_entitlement())
+
+    def _update_license_manager_action_state(self):
+        action = getattr(self, "licenseInfoAction", None)
+        if action is None:
+            return
+        is_preactivated = self._is_preactivated_install()
+        action.setEnabled(not is_preactivated)
+        if is_preactivated:
+            action.setToolTip("This build is preactivated. Licence manager is disabled.")
+            action.setStatusTip("Preactivated build: Licence manager disabled.")
+        else:
+            action.setToolTip("Open licence activation and entitlement details.")
+            action.setStatusTip("Open licence manager.")
+
     def _update_license_dependent_ui(self):
         license_valid = self._is_license_valid(recheck=False)
+        self._update_license_manager_action_state()
 
         for btn_name in (
             "btn_loadMat",
@@ -812,6 +844,13 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     # ---------------- Licence manager (activation) ----------------
     def show_license_info(self):
         """Activation dialog: redeem code online and store signed entitlement locally."""
+        if self._is_preactivated_install():
+            QMessageBox.information(
+                self,
+                "Licence manager",
+                "This build is preactivated. Licence manager is disabled.",
+            )
+            return
         dialog = QDialog(self)
         dialog.setWindowTitle("Licence manager")
         dialog.setMinimumWidth(500)
@@ -998,6 +1037,11 @@ def main():
         app.setProperty("license_valid", license_valid)
         app.setProperty("license_error", license_error)
 
+        if ENFORCE_LICENSE and license_valid:
+            ent = load_entitlement()
+            if is_preactivated_bundle_entitlement(ent):
+                schedule_preactivated_launch_report_silent(ent)
+
         # ---------- WSLg ICON FIX (safe, no variable shadowing) ----------
         import platform as _plat
         import os as _os
@@ -1042,13 +1086,18 @@ def main():
         splash.finish(window)
 
         if ENFORCE_LICENSE and not license_valid:
+            activation_hint = (
+                "This preactivated build is managed by your administrator."
+                if window._is_preactivated_install()
+                else "Use Help -> Licence manager to activate this machine."
+            )
             msg = QMessageBox(window)
             msg.setIcon(QMessageBox.Warning)
             msg.setWindowTitle("Activation Required - Functionality Disabled")
             msg.setText("Activation missing or invalid")
             msg.setInformativeText(
                 (license_error or "Entitlement validation failed.")
-                + "\n\nUse Help -> Licence manager to activate this machine."
+                + f"\n\n{activation_hint}"
             )
             msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Help)
             msg.button(QMessageBox.Help).setText("Licence manager...")

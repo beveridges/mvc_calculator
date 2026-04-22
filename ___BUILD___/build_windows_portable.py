@@ -408,7 +408,19 @@ def main():
         print("        pip install scipy")
         print(f"[ERROR] Current Python: {sys.executable}")
         sys.exit(1)
-    
+
+    print("\n[verify] Checking if h5py is installed (MATLAB v7.3 / HDF5 .mat)...")
+    try:
+        import h5py
+
+        print(f"[OK] h5py version {h5py.__version__} found at: {h5py.__file__}")
+    except ImportError as e:
+        print(f"[ERROR] h5py is not installed or not importable: {e}")
+        print("[ERROR] scipy.io.loadmat requires h5py for MATLAB v7.3 (HDF5) files.")
+        print("[ERROR] Install in your build environment, e.g.:  conda install h5py")
+        print(f"[ERROR] Current Python: {sys.executable}")
+        sys.exit(1)
+
     # ---------- PyInstaller args ----------
     mode_flag = "--onefile" if args.onefile else "--onedir"
     datasep = ";" if os.name == "nt" else ":"
@@ -422,6 +434,13 @@ def main():
         f"--specpath={specpath}",
         f"--paths={project_root}",
     ]
+
+    # Conda builds keep many native runtime DLLs under <env>/Library/bin.
+    # Add this path so PyInstaller can resolve PyQt5/h5py/scipy native deps.
+    conda_lib_bin = Path(sys.prefix) / "Library" / "bin"
+    if conda_lib_bin.exists():
+        args_pi.append(f"--paths={conda_lib_bin}")
+        print(f"[ok] Added conda DLL search path: {conda_lib_bin}")
     
     # Add custom hooks directory if it exists
     if hooks_dir.exists():
@@ -464,6 +483,31 @@ def main():
         "--hidden-import=scipy._lib._ccallback",
         "--hidden-import=scipy._lib._testutils",
     ]
+
+    # h5py + native HDF5 libs — scipy.io.loadmat imports h5py only for MATLAB v7.3
+    # (HDF5) files; PyInstaller does not see that dynamic import without --collect-all.
+    args_pi += [
+        "--collect-all",
+        "h5py",
+        "--collect-submodules",
+        "h5py",
+        "--collect-binaries",
+        "h5py",
+        "--collect-data",
+        "h5py",
+        "--hidden-import=h5py",
+        "--hidden-import=h5py._errors",
+        "--hidden-import=h5py._hl",
+    ]
+
+    # Ensure required runtime DLLs are included from the active conda env.
+    # We include all DLLs from Library/bin so Qt and numeric stack dependencies
+    # are available at runtime in frozen builds on clean machines/VMs.
+    if conda_lib_bin.exists():
+        dll_paths = sorted(conda_lib_bin.glob("*.dll"))
+        for dll_path in dll_paths:
+            args_pi += ["--add-binary", f"{dll_path}{datasep}."]
+        print(f"[ok] Added {len(dll_paths)} runtime DLLs from: {conda_lib_bin}")
 
     # Exclude unused PyQt5 modules to reduce size
     args_pi += [
@@ -569,6 +613,26 @@ def main():
                 print("[ERROR] scipy NOT found in _internal directory!")
                 print(f"      Searched in: {internal_dir}")
                 print("[ERROR] This build will fail at runtime. Check PyInstaller output above.")
+
+            h5py_dirs = list(internal_dir.glob("h5py"))
+            h5py_pyds = list(internal_dir.glob("**/h5py*.pyd"))
+            hdf5_dlls = list(internal_dir.glob("**/hdf5*.dll")) + list(
+                internal_dir.glob("**/libhdf5*.dll")
+            )
+            if h5py_dirs or h5py_pyds:
+                print(
+                    f"[OK] Found h5py in build: {len(h5py_dirs)} package dir(s), {len(h5py_pyds)} .pyd"
+                )
+            else:
+                print(
+                    "[WARN] h5py not detected in _internal — MATLAB v7.3 (HDF5) .mat import may fail."
+                )
+            if hdf5_dlls:
+                print(f"[OK] Found HDF5-related DLLs: {len(hdf5_dlls)} file(s)")
+            else:
+                print(
+                    "[WARN] No hdf5*.dll / libhdf5*.dll under _internal — if v7.3 .mat fails, check PyInstaller logs."
+                )
         else:
             print(f"[WARN] _internal directory not found in {build_dir} (might be onefile build)")
 
@@ -598,6 +662,20 @@ def main():
                 print("      No scipy directories found")
             if not scipy_io.exists():
                 print(f"      scipy.io module missing: {scipy_io}")
+
+        h5py_dirs = list(archived_internal.glob("h5py"))
+        h5py_init = archived_internal / "h5py" / "__init__.py"
+        hdf5_dlls = list(archived_internal.glob("**/hdf5*.dll")) + list(
+            archived_internal.glob("**/libhdf5*.dll")
+        )
+        if h5py_dirs and h5py_init.exists():
+            print(f"[OK] h5py verified in archived build: {h5py_init}")
+        else:
+            print("[WARN] h5py missing or incomplete in archived build (v7.3 .mat may fail).")
+        if hdf5_dlls:
+            print(f"[OK] HDF5 DLLs in archived build: {len(hdf5_dlls)} file(s)")
+        else:
+            print("[WARN] No HDF5 DLLs found in archived _internal.")
     else:
         print(f"[WARN] _internal directory not found in archived build: {archived_at}")
 

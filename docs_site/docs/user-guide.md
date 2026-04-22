@@ -1,7 +1,7 @@
 # User Guide
 
 ![Build](https://img.shields.io/badge/build-26.04--alpha.01-blueviolet?style=flat-square)
-![Version](https://img.shields.io/badge/version-26.04--alpha.01.01-orange?style=flat-square)
+![Version](https://img.shields.io/badge/version-26.04--alpha.01.15-orange?style=flat-square)
 
 ## Table of Contents
 
@@ -66,8 +66,6 @@ The latest builds for all platforms can be downloaded from the release archive:
 
 !!! info "Download access"
     The release archive is password-protected. Your **login credentials** (username and download password) will be sent to you via email.  
-	
-    MVC Calculator uses a hardware-locked licence. You can unlock it with an **activation code** in **Help** → **Licence manager...**, or by installing a **`license.key`** file as described in [License Information](license.md).
 
 ---
 
@@ -652,7 +650,6 @@ Kinesiological Electromyography.* Noraxon<sup>&#174;</sup> Inc.
 
 ## Additional Resources
 
-- [License Information](license.md)
 - [Troubleshooting Guide](troubleshooting.md)
 - [File Formats](file-formats.md)
 - [Keyboard Shortcuts](keyboard-shortcuts.md)

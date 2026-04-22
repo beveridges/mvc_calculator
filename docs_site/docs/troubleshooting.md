@@ -14,15 +14,11 @@
       - Linux with required dependencies (for Linux builds)
       - Sufficient RAM (4GB minimum recommended)
 
-   2. **Check licence / activation**:
-      - Ensure you have activated via **Help** → **Licence manager...** (activation code), **or** placed a valid `license.key` in the recommended folder (see [License Guide](license.md))
-      - The app stores your entitlement as `entitlement.json` after successful activation or migration
-
-   3. **Check Console/Terminal**:
+   2. **Check Console/Terminal**:
       - During alpha phase, a terminal window shows error messages
       - Look for error messages that indicate the problem
 
-   4. **Reinstall**:
+   3. **Reinstall**:
       - Try uninstalling and reinstalling the application
       - For portable version, try extracting to a new location
 
@@ -220,22 +216,6 @@
 
 ---
 
-### Licence / activation issues
-
-**Problem**: Licence-related errors or the application won't start because the licence is missing or invalid
-
-**Solutions**:
-
-   1. **See [License Guide](license.md)** for activation codes, `license.key` installation, and where `entitlement.json` is stored
-   2. **Common issues**:
-      - No entitlement yet → Use **Help** → **Licence manager...** with your activation code, or install `license.key` as described in the guide
-      - Activation service not available in your build → Use the email `license.key` method or contact support
-      - Hardware mismatch → Licence is for a different computer
-      - Country mismatch → Licence doesn't match your detected location
-      - Expired licence → Contact support for renewal
-
----
-
 ### Installation Issues
 
 **Problem**: Can't install or application won't run after installation
@@ -350,13 +330,11 @@ To verify your `.mat` file structure:
 1. **Regular Backups**: Export XML files regularly to preserve your work
 2. **File Management**: Keep `.mat` files organized and named clearly
 3. **System Maintenance**: Keep your operating system updated
-4. **Licence management**: Keep a safe copy of your activation details or `license.key` if your policy allows (entitlement lives under `%APPDATA%\MVC_Calculator\` on Windows)
-5. **Documentation**: Note any custom settings or workflows
+4. **Documentation**: Note any custom settings or workflows
 
 ---
 
 For more help, see:
 - [User Guide](user-guide.md)
-- [License Guide](license.md)
 - [File Formats](file-formats.md)
 

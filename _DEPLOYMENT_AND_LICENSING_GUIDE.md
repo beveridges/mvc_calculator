@@ -129,6 +129,10 @@ ftp.moviolabs.com:/public_html/downloads/MVC_Calculator/releases/
 
 ### License Generation Methods
 
+`generate_license.py` writes timestamped filenames for traceability while keeping key payload unchanged:
+- `license-YYYYMMDDTHHMMSSZ-CLT0002.key`
+- Payload remains `base64(email|country|hwid|expiration|signature)`
+
 #### Method 1: Generate for Current Machine
 
 If the user's machine is available, generate a license directly:
@@ -214,15 +218,19 @@ For special `@hfmdd.de` email addresses, there's an automated system:
 
 **Installation Instructions for Users:**
 
-Save the license key to a file named `license.key` and place it in one of these locations:
+Place the generated license file (`license.key` or `license-YYYYMMDDTHHMMSSZ-<client>.key`) in one of these locations:
 
 **Windows:**
-- `%APPDATA%\MVC_Calculator\license.key` (recommended - persists across updates)
+- `%APPDATA%\MVC_Calculator\` (recommended - persists across updates)
 - Same folder as the executable
 
 **Linux/Mac:**
-- `~/.local/share/MVC_Calculator/license.key` (recommended - persists across updates)
+- `~/.local/share/MVC_Calculator/` (recommended - persists across updates)
 - Same folder as the executable
+
+If multiple license files are present in a directory, the app uses:
+1. exact `license.key` first
+2. otherwise the newest timestamped `license-YYYYMMDDTHHMMSSZ-<client>.key` by filename timestamp
 
 ### Special License Types
 

@@ -4,21 +4,23 @@
 
 This document is the canonical guide for building and releasing MVC Calculator on Windows and Linux, including optional **@hfmdd.de institutional (preactivated)** packages.
 
-**Layout:** Implementation scripts live under **`___BUILD___/`** (see `___BUILD___/README.md`). You still run **`python BUILD_ALL_WINDOWS.py`** and **`python deploy_release_ftp.py`** from the **repository root** — thin launchers forward into `___BUILD___/` with the correct working directory.
+**Layout:** Implementation scripts live under `**___BUILD___/`** (see `___BUILD___/README.md`). You still run `**python BUILD_ALL_WINDOWS.py`** and `**python deploy_release_ftp.py**` from the **repository root** — thin launchers forward into `___BUILD___/` with the correct working directory.
 
 ### Paths (repository layout)
 
-| What | Where |
-|------|--------|
-| **Working directory for all build/deploy commands** | **Repository root** (where `main.py` lives). Launchers set this automatically. |
-| **Entry launchers** (short names) | `BUILD_ALL_WINDOWS.py`, `BUILD_ALL_LINUX.py`, `deploy_release_ftp.py`, `deploy_release_ftp_configurable.py` at **repo root** — they invoke scripts under `___BUILD___/`. |
-| **Build implementation** | `___BUILD___/BUILD_ALL_WINDOWS.py`, `___BUILD___/BUILD_ALL_LINUX.py`, `___BUILD___/build_windows_portable.py`, `___BUILD___/build_windows_msi.py`, `___BUILD___/build_linux_*.py`, `___BUILD___/deploy_release_ftp.py`, `___BUILD___/deploy_release_ftp_configurable.py` |
-| **Release HTML template** | `___BUILD___/TEMPLATE_RELEASE.html` |
-| **Preactivation helper** (unchanged) | `scripts/build_preactivated_entitlement.py` |
-| **Version file (read/written by portable build)** | `utilities/version_info.py` |
-| **Windows build output tree** | `%USERPROFILE%\Documents\.builds\mvc_calculator\` |
-| **Linux staging + logs** | `~/.linux_builds/MVC_CALCULATOR/linux_builds/` (artifacts then copied next to Windows output; **`WIN_BUILD_BASE`** is set in `___BUILD___/BUILD_ALL_LINUX.py`) |
-| **Local junk / old backups** | `___BUILD___/trash/` (gitignored) |
+
+| What                                                | Where                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Working directory for all build/deploy commands** | **Repository root** (where `main.py` lives). Launchers set this automatically.                                                                                                                                                                                           |
+| **Entry launchers** (short names)                   | `BUILD_ALL_WINDOWS.py`, `BUILD_ALL_LINUX.py`, `deploy_release_ftp.py`, `deploy_release_ftp_configurable.py` at **repo root** — they invoke scripts under `___BUILD___/`.                                                                                                 |
+| **Build implementation**                            | `___BUILD___/BUILD_ALL_WINDOWS.py`, `___BUILD___/BUILD_ALL_LINUX.py`, `___BUILD___/build_windows_portable.py`, `___BUILD___/build_windows_msi.py`, `___BUILD___/build_linux_*.py`, `___BUILD___/deploy_release_ftp.py`, `___BUILD___/deploy_release_ftp_configurable.py` |
+| **Release HTML template**                           | `___BUILD___/TEMPLATE_RELEASE.html`                                                                                                                                                                                                                                      |
+| **Preactivation helper** (unchanged)                | `scripts/build_preactivated_entitlement.py`                                                                                                                                                                                                                              |
+| **Version file (read/written by portable build)**   | `utilities/version_info.py`                                                                                                                                                                                                                                              |
+| **Windows build output tree**                       | `%USERPROFILE%\Documents\.builds\mvc_calculator\`                                                                                                                                                                                                                        |
+| **Linux staging + logs**                            | `~/.linux_builds/MVC_CALCULATOR/linux_builds/` (artifacts then copied next to Windows output; `**WIN_BUILD_BASE`** is set in `___BUILD___/BUILD_ALL_LINUX.py`)                                                                                                           |
+| **Local junk / old backups**                        | `___BUILD___/trash/` (gitignored)                                                                                                                                                                                                                                        |
+
 
 **Direct invocation (optional):** `python ___BUILD___/BUILD_ALL_WINDOWS.py` from repo root — same effect as the launcher if the current working directory is the repo root.
 
@@ -26,16 +28,18 @@ This document is the canonical guide for building and releasing MVC Calculator o
 
 ## Build modes (choose one path per release)
 
-| Mode | When to use | Windows | Linux (WSL) |
-|------|-------------|---------|-------------|
-| **Standard licensed** | Normal customers; activation via Licence manager or entitlement | `python BUILD_ALL_WINDOWS.py` | After Windows: `python BUILD_ALL_LINUX.py` |
-| **Licensed + Open Access** | Same version: licensed build plus license-free OA variant | `python BUILD_ALL_WINDOWS.py -oa` | `python BUILD_ALL_LINUX.py -oa` |
+
+| Mode                                       | When to use                                                                    | Windows                                            | Linux (WSL)                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Standard licensed**                      | Normal customers; activation via Licence manager or entitlement                | `python BUILD_ALL_WINDOWS.py`                      | After Windows: `python BUILD_ALL_LINUX.py`                                                       |
+| **Licensed + Open Access**                 | Same version: licensed build plus license-free OA variant                      | `python BUILD_ALL_WINDOWS.py -oa`                  | `python BUILD_ALL_LINUX.py -oa`                                                                  |
 | **Institutional @hfmdd.de (preactivated)** | Bundled entitlement; app unlocks from packaged `preactivated/entitlement.json` | `python BUILD_ALL_WINDOWS.py --preactivated-hfmdd` | `python BUILD_ALL_LINUX.py --preactivated-hfmdd --hfmdd-license-file MVC_Calculator/license.key` |
+
 
 **Rules:**
 
-- **Linux builds** assume you already ran **`BUILD_ALL_WINDOWS.py`** so `utilities/version_info.py` has the correct incremented `BUILDNUMBER`.
-- **`--preactivated-hfmdd`** requires a valid **`license.key`**. Recommended location is `MVC_Calculator/license.key` (gitignored local folder), then pass `--hfmdd-license-file MVC_Calculator/license.key`. Generate it first (see [Phase AA — HFMDD key creation](#phase-aa--hfmdd-key-creation-preactivated-only) below).
+- **Linux builds** assume you already ran `**BUILD_ALL_WINDOWS.py`** so `utilities/version_info.py` has the correct incremented `BUILDNUMBER`.
+- `**--preactivated-hfmdd`** requires a valid `**license.key**`. Recommended location is `MVC_Calculator/license.key` (gitignored local folder), then pass `--hfmdd-license-file MVC_Calculator/license.key`. Generate it first (see [Phase AA — HFMDD key creation](#phase-aa--hfmdd-key-creation-preactivated-only) below).
 - Do **not** combine `--preactivated-entitlement` and `--preactivated-hfmdd` on the same command (use one or the other).
 
 ---
@@ -45,7 +49,7 @@ This document is the canonical guide for building and releasing MVC Calculator o
 ### Phase A — Prepare (Windows, developer machine)
 
 1. Activate Conda: `conda activate mvccalculator`
-2. **Help / MkDocs (optional manual step):** `cd docs_site` then `mkdocs build` — use this for **doc-only edits** (Markdown, theme, nav) when you are **not** running a full `BUILD_ALL_WINDOWS.py` yet, or to **preview** (`mkdocs serve`). A normal **`BUILD_ALL_WINDOWS.py`** already runs **`mkdocs build`** via **`___BUILD___/build_windows_portable.py`** after updating `version_info.py`; run mkdocs yourself if the portable step **skipped or failed** docs (e.g. mkdocs missing on PATH, `SKIP_DOCS`, or build error).
+2. **Help / MkDocs (optional manual step):** `cd docs_site` then `mkdocs build` — use this for **doc-only edits** (Markdown, theme, nav) when you are **not** running a full `BUILD_ALL_WINDOWS.py` yet, or to **preview** (`mkdocs serve`). A normal `**BUILD_ALL_WINDOWS.py`** already runs `**mkdocs build`** via `**___BUILD___/build_windows_portable.py**` after updating `version_info.py`; run mkdocs yourself if the portable step **skipped or failed** docs (e.g. mkdocs missing on PATH, `SKIP_DOCS`, or build error).
 3. **Choose build mode** (see table above).
 4. **If institutional HFMDD:** complete **Phase AA** below, then continue to Phase B.
 
@@ -56,23 +60,23 @@ Run once per institutional build cycle (or whenever you rotate keys).
 1. Create/enter local key folder (gitignored):
 
 ```bash
-mkdir MVC_Calculator
-cd MVC_Calculator
+mkdir keyskeyskeys (if it doesn't exist)
+cd keyskeyskeys
 ```
 
-2. Generate wildcard institutional license (example: Germany, no expiration):
+1. Generate wildcard institutional license (example: Germany, no expiration):
 
 ```bash
-python ..\generate_license.py institutional@hfmdd.de DE 0 --wildcard-hfmdd
+python ../generate_license.py institutional@hfmdd.de DE 0 --wildcard-hfmdd
 ```
 
-This writes **`license.key`** in `MVC_Calculator/` (recommended local secret path).
+This writes `**license.key**` in `MVC_Calculator/` (recommended local secret path).
 
-3. Return to repo root, then run build with explicit key path:
+1. Return to repo root, then run build with explicit key path:
 
 ```bash
 cd ..
-python BUILD_ALL_WINDOWS.py --preactivated-hfmdd --hfmdd-license-file MVC_Calculator\license.key
+python BUILD_ALL_WINDOWS.py --preactivated-hfmdd --hfmdd-license-file keyskeyskeys/license.key
 ```
 
 ### Phase B — Windows build (increments build number)
@@ -95,12 +99,13 @@ python BUILD_ALL_WINDOWS.py --preactivated-hfmdd --hfmdd-license-file path\to\li
 **What runs:** `___BUILD___/build_windows_portable.py` (PyInstaller onedir) → `___BUILD___/build_windows_msi.py` (MSI + portable ZIP). With `-oa`, a second portable + MSI + ZIP for Open Access.
 
 **Output:** `%USERPROFILE%\Documents\.builds\mvc_calculator\`  
+
 - `MVC_Calculator-{BUILDNUMBER}\` — MSI, portable ZIP, `buildfiles\`  
-- If `-oa`: `MVC_Calculator-oa-{BUILDNUMBER}\` — OA MSI and ZIP  
+- If `-oa`: `MVC_Calculator-oa-{BUILDNUMBER}\` — OA MSI and ZIP
 
 ### Phase C — Sync source (for Linux)
 
-5. Commit and push so WSL (or Linux builder) has the same `version_info.py`:
+1. Commit and push so WSL (or Linux builder) has the same `version_info.py`:
 
 ```bash
 git add .
@@ -110,9 +115,9 @@ git push
 
 ### Phase D — Linux build (WSL)
 
-6. `conda activate mvccalculator`
-7. `git pull`
-8. From **project root in WSL**:
+1. `conda activate mvccalculator`
+2. `git pull`
+3. From **project root in WSL**:
 
 ```bash
 python BUILD_ALL_LINUX.py
@@ -123,22 +128,22 @@ python BUILD_ALL_LINUX.py --preactivated-hfmdd --hfmdd-license-file MVC_Calculat
 
 **What runs:** `___BUILD___/build_linux_portable.py` → `___BUILD___/build_linux_appimage.py` → `___BUILD___/build_linux_deb.py` (and OA variants if `-oa`).
 
-**Artifacts:** Built under `~/.linux_builds/MVC_CALCULATOR/linux_builds/`, then copied next to the matching Windows output folder. The Windows destination is **`WIN_BUILD_BASE`** in **`___BUILD___/BUILD_ALL_LINUX.py`** (default: `%USERPROFILE%\Documents\.builds\mvc_calculator\`, accessed from WSL as `/mnt/c/Users/<you>/...`). Adjust that constant if your drive letter or username differs.
+**Artifacts:** Built under `~/.linux_builds/MVC_CALCULATOR/linux_builds/`, then copied next to the matching Windows output folder. The Windows destination is `**WIN_BUILD_BASE`** in `**___BUILD___/BUILD_ALL_LINUX.py`** (default: `%USERPROFILE%\Documents\.builds\mvc_calculator\`, accessed from WSL as `/mnt/c/Users/<you>/...`). Adjust that constant if your drive letter or username differs.
 
 ### Phase E — Deploy (optional)
 
-9. Preview the download page locally: `python deploy_release_ftp.py`  
-10. Upload builds + generated `index.html`: `python deploy_release_ftp.py -u`  
-    Target: `ftp.moviolabs.com:/public_html/downloads/MVC_Calculator/releases/`  
+1. Preview the download page locally: `python deploy_release_ftp.py`
+2. Upload builds + generated `index.html`: `python deploy_release_ftp.py -u`
+  Target: `ftp.moviolabs.com:/public_html/downloads/MVC_Calculator/releases/`  
     Public URL (typical): `https://moviolabs.com/downloads/MVC_Calculator/releases/` (or `https://downloads.moviolabs.com/MVC_Calculator/releases/` depending on hosting)
 
-**What the deploy script produces:** `index.html` in your build base (e.g. `%USERPROFILE%\Documents\.builds\mvc_calculator\index.html`) from **`___BUILD___/TEMPLATE_RELEASE.html`**, using scanned installers under `MVC_Calculator-{version}\`. See [Releases page sections (Latest, Previous, LTS, Development)](#releases-page-sections-latest-previous-lts-development) below.
+**What the deploy script produces:** `index.html` in your build base (e.g. `%USERPROFILE%\Documents\.builds\mvc_calculator\index.html`) from `**___BUILD___/TEMPLATE_RELEASE.html`**, using scanned installers under `MVC_Calculator-{version}\`. See [Releases page sections (Latest, Previous, LTS, Development)](#releases-page-sections-latest-previous-lts-development) below.
 
 ---
 
 ## Institutional @hfmdd.de prerequisite (preactivated builds)
 
-Before **`--preactivated-hfmdd`**, the signing key file must exist:
+Before `**--preactivated-hfmdd`**, the signing key file must exist:
 
 1. Create/enter local key folder (gitignored):
 
@@ -147,41 +152,43 @@ mkdir MVC_Calculator
 cd MVC_Calculator
 ```
 
-2. Generate wildcard institutional license (example: Germany, no expiration):
+1. Generate wildcard institutional license (example: Germany, no expiration):
 
 ```bash
 python ..\generate_license.py institutional@hfmdd.de DE 0 --wildcard-hfmdd
 ```
 
-This writes **`license.key`** in `MVC_Calculator/` (recommended local secret path).
+This writes `**license.key**` in `MVC_Calculator/` (recommended local secret path).
 
-3. Run build from repo root with explicit key path:
+1. Run build from repo root with explicit key path:
 
 ```bash
 cd ..
 python BUILD_ALL_WINDOWS.py --preactivated-hfmdd --hfmdd-license-file MVC_Calculator\license.key
 ```
 
-4. Or build entitlement manually and use the explicit entitlement path:
+1. Or build entitlement manually and use the explicit entitlement path:
 
 ```bash
 python scripts/build_preactivated_entitlement.py --license-file MVC_Calculator/license.key --output preactivated/entitlement.json --issued-for hfmdd.de --bundle-id HFMDD-2026-04
 python BUILD_ALL_WINDOWS.py --preactivated-entitlement preactivated/entitlement.json
 ```
 
-Full operator notes: **`PREACTIVATED_HFMDD_RUNBOOK.md`**.
+Full operator notes: `**PREACTIVATED_HFMDD_RUNBOOK.md**`.
 
 ---
 
 ## Build flags reference (`BUILD_ALL_WINDOWS.py` / `BUILD_ALL_LINUX.py`)
 
-| Flag | Meaning |
-|------|---------|
-| `-oa` / `--oa` | Also build Open Access (license-free) artifacts for the same `BUILDNUMBER`. |
-| `--preactivated-hfmdd` | Run `scripts/build_preactivated_entitlement.py`, write `preactivated/entitlement.json` from the specified key file, bundle into portable output. |
-| `--hfmdd-license-file PATH` | Source license file for `--preactivated-hfmdd` (default: `license.key`; recommended: `MVC_Calculator/license.key`). |
-| `--hfmdd-bundle-id ID` | Optional metadata stored in generated entitlement JSON. |
-| `--preactivated-entitlement PATH` | Use a pre-built `entitlement.json` file (do not combine with `--preactivated-hfmdd`). |
+
+| Flag                              | Meaning                                                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-oa` / `--oa`                    | Also build Open Access (license-free) artifacts for the same `BUILDNUMBER`.                                                                      |
+| `--preactivated-hfmdd`            | Run `scripts/build_preactivated_entitlement.py`, write `preactivated/entitlement.json` from the specified key file, bundle into portable output. |
+| `--hfmdd-license-file PATH`       | Source license file for `--preactivated-hfmdd` (default: `license.key`; recommended: `MVC_Calculator/license.key`).                              |
+| `--hfmdd-bundle-id ID`            | Optional metadata stored in generated entitlement JSON.                                                                                          |
+| `--preactivated-entitlement PATH` | Use a pre-built `entitlement.json` file (do not combine with `--preactivated-hfmdd`).                                                            |
+
 
 Lower-level scripts (run from **repo root** so imports resolve):
 
@@ -192,16 +199,18 @@ Lower-level scripts (run from **repo root** so imports resolve):
 
 ## Releases page sections (Latest, Previous, LTS, Development)
 
-The deploy script (**launcher** `deploy_release_ftp.py` → **`___BUILD___/deploy_release_ftp.py`**) generates the public downloads listing. Section **headings** (em dash before the version string):
+The deploy script (**launcher** `deploy_release_ftp.py` → `**___BUILD___/deploy_release_ftp.py`**) generates the public downloads listing. Section **headings** (em dash before the version string):
 
-| Section | Source |
-|--------|--------|
-| **Latest Release —** `{version}` | Newest licensed build found by the scan. |
-| **Development Release —** `{version}` | Newest **Open Access** build (`MVC_Calculator-oa-*`), if present. |
-| **Previous Release —** `{version}` | Second-newest **licensed** build. |
+
+| Section                                           | Source                                                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Latest Release —** `{version}`                  | Newest licensed build found by the scan.                                                                      |
+| **Development Release —** `{version}`             | Newest **Open Access** build (`MVC_Calculator-oa-`*), if present.                                             |
+| **Previous Release —** `{version}`                | Second-newest **licensed** build.                                                                             |
 | **Long Term Support (LTS) Release —** `{version}` | Third-newest **licensed** build — **only if at least three** distinct licensed versions exist with artifacts. |
 
-**LTS pipeline implication:** The LTS block appears automatically when your build directory still contains **three or more** licensed version folders (e.g. `MVC_Calculator-26.02-alpha.01.05`, `.01.04`, `.01.03`) each with the usual MSI / portable ZIP / DEB / AppImage files. If you delete older directories and only two licensed versions remain, the LTS section is omitted from `index.html`.
+
+**LTS pipeline implication:** The LTS block appears automatically when your build directory still contains **three or more** licensed version folders (e.g. `MVC_Calculator-26.04-alpha.01.05`, `.01.04`, `.01.03`) each with the usual MSI / portable ZIP / DEB / AppImage files. If you delete older directories and only two licensed versions remain, the LTS section is omitted from `index.html`.
 
 **Copy under each section title** comes from `RELEASE_NOTES-{version}.txt` (`Description:` line). If omitted:
 
@@ -281,8 +290,8 @@ python deploy_release_ftp.py -u
 **Deploy script behavior:**
 
 - Scans versioned directories under the build base (e.g. `C:\Users\Scott\Documents\.builds\mvc_calculator\MVC_Calculator-{version}\`) for licensed artifacts; OA builds under `MVC_Calculator-oa-{version}\`.
-- Builds `index.html` from **`___BUILD___/TEMPLATE_RELEASE.html`** (placeholders: latest table, optional OA section, previous section, optional LTS section — see [Releases page sections](#releases-page-sections-latest-previous-lts-development)).
-- Prefers `MVC_Calculator-{version}\buildfiles\RELEASE_NOTES-{version}.txt`, then fallbacks documented in **`___BUILD___/deploy_release_ftp.py`**.
+- Builds `index.html` from `**___BUILD___/TEMPLATE_RELEASE.html`** (placeholders: latest table, optional OA section, previous section, optional LTS section — see [Releases page sections](#releases-page-sections-latest-previous-lts-development)).
+- Prefers `MVC_Calculator-{version}\buildfiles\RELEASE_NOTES-{version}.txt`, then fallbacks documented in `**___BUILD___/deploy_release_ftp.py`**.
 - Uploads binaries and matching release notes for latest, previous, and LTS rows when applicable, then OA, `index.html`, logo, and auxiliary files.
 - Smart skip if remote file same size; `--force` / `--force-file` available.
 
@@ -290,18 +299,18 @@ python deploy_release_ftp.py -u
 
 ## File structure after build (example)
 
-Keeping **multiple** licensed version folders (here `.01.05` newest, `.01.04` previous, `.01.03` LTS) allows the deploy script to fill **Latest**, **Previous**, and **LTS** on the downloads page:
+Keeping **multiple** licensed version folders (here `.01.05` newest, `.01.04` previous, `.01.03` LTS) allows the deploy script to fill **Latest**, **Previous**, and **LTS** on the downloads page. Folder names always match `BUILDNUMBER` in `utilities/version_info.py` at the time of that build (illustrative suffixes only):
 
 ```
 C:\Users\Scott\Documents\.builds\mvc_calculator\
-├── MVC_Calculator-26.02-alpha.01.05\          ← Latest
+├── MVC_Calculator-26.04-alpha.01.05\          ← Latest
 │   ├── …msi, …zip, …deb, …AppImage
-│   └── buildfiles\RELEASE_NOTES-26.02-alpha.01.05.txt
-├── MVC_Calculator-26.02-alpha.01.04\          ← Previous
+│   └── buildfiles\RELEASE_NOTES-26.04-alpha.01.05.txt
+├── MVC_Calculator-26.04-alpha.01.04\          ← Previous
 │   └── …
-├── MVC_Calculator-26.02-alpha.01.03\          ← LTS (third-newest licensed)
+├── MVC_Calculator-26.04-alpha.01.03\          ← LTS (third-newest licensed)
 │   └── …
-├── MVC_Calculator-oa-26.02-alpha.01.05\       ← Development (OA), same plan as builds
+├── MVC_Calculator-oa-26.04-alpha.01.05\       ← Development (OA), same plan as builds
 │   └── …
 └── index.html                                 (generated by `deploy_release_ftp.py` launcher → `___BUILD___/deploy_release_ftp.py`)
 ```
@@ -323,16 +332,16 @@ python deploy_release_ftp.py -u --force
 ## Important notes
 
 1. **Version consistency:** Linux master build reads `BUILDNUMBER` from `utilities/version_info.py` updated by the Windows portable step — run Windows first.
-2. **OA builds:** `-oa` produces separate `MVC_Calculator-oa-*` artifacts; same semantic version, different filenames.
+2. **OA builds:** `-oa` produces separate `MVC_Calculator-oa-`* artifacts; same semantic version, different filenames.
 3. **Preactivated builds:** Do not commit production `license.key` / `preactivated/entitlement.json` to public repos; treat as release secrets.
 4. **Release notes:** Deploy script looks under `buildfiles\` first for `RELEASE_NOTES-{version}.txt`.
-5. **LTS on the website:** Requires **three** licensed version directories with artifacts under the build base. **`___BUILD___/BUILD_ALL_WINDOWS.py`** runs `cleanup_old_version_directories(..., keep=3)` by default, which keeps the three newest licensed folders — matching **Latest**, **Previous**, and **LTS**. If you change `keep` to **2** (or delete old folders by hand), the LTS section will not appear. Linux staging cleanup in **`___BUILD___/BUILD_ALL_LINUX.py`** only trims **old `.deb` / `.AppImage` files** in the Linux build scratch area; it does not remove whole `MVC_Calculator-{version}` trees on Windows.
+5. **LTS on the website:** Requires **three** licensed version directories with artifacts under the build base. `**___BUILD___/BUILD_ALL_WINDOWS.py`** runs `cleanup_old_version_directories(..., keep=3)` by default, which keeps the three newest licensed folders — matching **Latest**, **Previous**, and **LTS**. If you change `keep` to **2** (or delete old folders by hand), the LTS section will not appear. Linux staging cleanup in `**___BUILD___/BUILD_ALL_LINUX.py`** only trims **old `.deb` / `.AppImage` files** in the Linux build scratch area; it does not remove whole `MVC_Calculator-{version}` trees on Windows.
 
 ---
 
 ## Quick reference
 
-Commands below use **repo-root launchers**; implementations live under **`___BUILD___/`** — see [Paths (repository layout)](#paths-repository-layout).
+Commands below use **repo-root launchers**; implementations live under `**___BUILD___/`** — see [Paths (repository layout)](#paths-repository-layout).
 
 ```bash
 # Windows — standard
@@ -352,3 +361,4 @@ python BUILD_ALL_LINUX.py --preactivated-hfmdd --hfmdd-license-file MVC_Calculat
 # Upload (includes index.html + artifacts for Latest / Previous / LTS when 3+ licensed versions exist)
 python deploy_release_ftp.py -u
 ```
+

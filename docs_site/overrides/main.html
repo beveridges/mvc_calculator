@@ -105,70 +105,59 @@
         });
       }
       
-      // Replace shields.io badges with CSS-styled badges for offline/MSI builds
-      function replaceBadgesWithCSS() {
-        var badges = document.querySelectorAll('img[alt="Build"], img[alt="Version"]');
-        badges.forEach(function(img) {
-          // Check if image failed to load or if we're offline
-          var shouldReplace = false;
-          if (window.location.protocol === 'file:') {
-            // Always replace in offline mode
-            shouldReplace = true;
-          } else if (img.complete && img.naturalWidth === 0) {
-            // Image failed to load
-            shouldReplace = true;
+      // Shields-style badges: only replace when shields images cannot load (file:// or broken img).
+      // Do not replace on a timer over http(s) — that caused a visible flicker from correct badges to wrong ones.
+      function extractShieldsValue(src, fallbackAlt) {
+        if (!src) return fallbackAlt;
+        var marker = src.includes('build-') ? 'build-' : (src.includes('version-') ? 'version-' : '');
+        if (!marker) return fallbackAlt;
+        var start = src.indexOf(marker);
+        if (start < 0) return fallbackAlt;
+        start += marker.length;
+        var queryIdx = src.indexOf('?', start);
+        var end = queryIdx >= 0 ? queryIdx : src.length;
+        var segment = src.slice(start, end);
+        var lastDash = segment.lastIndexOf('-');
+        var raw = lastDash > 0 ? segment.slice(0, lastDash) : segment;
+        return raw.replace(/--/g, '-');
+      }
+
+      function createShieldBadge(img) {
+        var src = img.getAttribute('src') || '';
+        var kind = img.alt === 'Build' ? 'build' : 'version';
+        var valueText = extractShieldsValue(src, img.alt);
+        var wrap = document.createElement('span');
+        wrap.className = 'badge-shield badge-shield--' + kind;
+        wrap.setAttribute('role', 'img');
+        wrap.setAttribute('aria-label', kind + ' ' + valueText);
+        var lab = document.createElement('span');
+        lab.className = 'badge-shield__label';
+        lab.textContent = kind;
+        var val = document.createElement('span');
+        val.className = 'badge-shield__value';
+        val.textContent = valueText;
+        wrap.appendChild(lab);
+        wrap.appendChild(val);
+        return wrap;
+      }
+
+      function replaceBadgesWhenNeeded() {
+        document.querySelectorAll('img[alt="Build"], img[alt="Version"]').forEach(function(img) {
+          var replaceNow = (window.location.protocol === 'file:')
+            || (img.complete && img.naturalWidth === 0);
+          if (replaceNow) {
+            img.parentNode.replaceChild(createShieldBadge(img), img);
+            return;
           }
-          
-          if (shouldReplace) {
-            var badge = document.createElement('span');
-            badge.className = 'badge-inline ' + (img.alt === 'Build' ? 'build' : 'version');
-            
-            // Extract text from src URL
-            var src = img.getAttribute('src') || '';
-            var text = img.alt;
-            
-            if (src.includes('build-')) {
-              var match = src.match(/build-([^-\?]+)/);
-              if (match) {
-                text = match[1].replace(/--/g, '-');
-              }
-            } else if (src.includes('version-')) {
-              var match = src.match(/version-([^-\?]+)/);
-              if (match) {
-                text = match[1].replace(/--/g, '-');
-              }
+          img.onerror = function() {
+            if (this.parentNode) {
+              this.parentNode.replaceChild(createShieldBadge(this), this);
             }
-            
-            badge.textContent = text;
-            img.parentNode.replaceChild(badge, img);
-          } else {
-            // Add error handler for images that fail after load
-            img.onerror = function() {
-              var badge = document.createElement('span');
-              badge.className = 'badge-inline ' + (this.alt === 'Build' ? 'build' : 'version');
-              var src = this.getAttribute('src') || '';
-              var text = this.alt;
-              if (src.includes('build-')) {
-                var match = src.match(/build-([^-\?]+)/);
-                if (match) text = match[1].replace(/--/g, '-');
-              } else if (src.includes('version-')) {
-                var match = src.match(/version-([^-\?]+)/);
-                if (match) text = match[1].replace(/--/g, '-');
-              }
-              badge.textContent = text;
-              this.parentNode.replaceChild(badge, this);
-            };
-          }
+          };
         });
       }
-      
-      // Run badge replacement immediately for file://, or after delay for http://
-      if (window.location.protocol === 'file:') {
-        replaceBadgesWithCSS();
-      } else {
-        setTimeout(replaceBadgesWithCSS, 500);
-        setTimeout(replaceBadgesWithCSS, 2000);
-      }
+
+      replaceBadgesWhenNeeded();
       
       // Fix navigation links for local file:// protocol
       // Convert directory links (ending with /) to index.html links

@@ -33,6 +33,11 @@ The license key contains:
 
 ## Generating License Keys
 
+`generate_license.py` now writes timestamped files to keep payload pure while adding an identifier in the filename:
+
+- `license-YYYYMMDDTHHMMSSZ-CLT0002.key`
+- Payload remains unchanged: `base64(email|country|hwid|expiration|signature)`
+
 ### For Current Machine
 ```bash
 python generate_license.py user@example.com CO 365 --current-machine
@@ -69,10 +74,14 @@ python generate_license.py institutional@hfmdd.de DE 0 --wildcard-hfmdd
 ## Installing License Keys
 
 **Recommended Location (Persistent across updates):**
-- **Windows**: `%APPDATA%\MVC_Calculator\license.key` (expands to `C:\Users\YourName\AppData\Roaming\MVC_Calculator\license.key`)
-- **Linux/Mac**: `~/.local/share/MVC_Calculator/license.key`
+- **Windows**: `%APPDATA%\MVC_Calculator\` (for either `license.key` or `license-YYYYMMDDTHHMMSSZ-<client>.key`)
+- **Linux/Mac**: `~/.local/share/MVC_Calculator/` (for either naming format)
 
 The application automatically migrates licenses from old locations to this persistent directory.
+
+When multiple files exist in one directory, selection priority is:
+1. exact `license.key`
+2. newest timestamped `license-YYYYMMDDTHHMMSSZ-<client>.key` (newest by timestamp in filename)
 
 **Legacy Locations (for backward compatibility):**
 The application also checks these locations and will automatically migrate licenses found here:
@@ -116,7 +125,7 @@ For institutional deployment, you can bundle a pre-generated entitlement artifac
 1. Generate wildcard key:
    - `python generate_license.py institutional@hfmdd.de DE 0 --wildcard-hfmdd`
 2. Build entitlement artifact:
-   - `python scripts/build_preactivated_entitlement.py --license-file license.key --output preactivated/entitlement.json --issued-for hfmdd.de --bundle-id HFMDD-YYYYMM`
+   - `python scripts/build_preactivated_entitlement.py --license-file <generated-license-file> --output preactivated/entitlement.json --issued-for hfmdd.de --bundle-id HFMDD-YYYYMM`
 3. Build package with bundled entitlement:
    - Windows: `python BUILD_ALL_WINDOWS.py --preactivated-entitlement preactivated/entitlement.json`
    - Linux: `python BUILD_ALL_LINUX.py --preactivated-entitlement preactivated/entitlement.json`
@@ -134,7 +143,7 @@ See `PREACTIVATED_HFMDD_RUNBOOK.md` for operator details.
 ## License Validation
 
 The application validates the license at startup:
-1. **File check**: Ensures `license.key` exists
+1. **File check**: Ensures a supported license file exists (`license.key` or `license-YYYYMMDDTHHMMSSZ-<client>.key`)
 2. **Format check**: Validates base64 encoding and structure
 3. **Signature check**: Verifies HMAC signature (prevents tampering)
 4. **HWID check**: Compares current machine HWID with license HWID
@@ -143,7 +152,7 @@ The application validates the license at startup:
 
 ### Error Messages
 
-- **"License file not found"**: Place `license.key` in the correct location
+- **"License file not found"**: Place `license.key` or `license-YYYYMMDDTHHMMSSZ-<client>.key` in the correct location
 - **"Invalid license key format"**: License file is corrupted or invalid
 - **"Invalid license key signature"**: License has been tampered with
 - **"Hardware ID mismatch"**: License is for a different machine

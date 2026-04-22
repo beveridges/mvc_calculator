@@ -222,7 +222,6 @@ Kinesiological Electromyography.* Noraxon<sup>&#174;</sup> Inc.
 For more detailed information, see the following guides:
 
 - **[User Guide](user-guide.md)** - Comprehensive guide to using MVC Calculator
-- **[License System](license.md)** - Information about licensing and installation
 - **[Troubleshooting](troubleshooting.md)** - Solutions to common problems
 - **[Keyboard Shortcuts](keyboard-shortcuts.md)** - Complete list of keyboard shortcuts
 - **[File Formats](file-formats.md)** - Details about supported file formats
@@ -234,4 +233,3 @@ For more detailed information, see the following guides:
 - **Getting Started**: See [Quick Start](#quick-start) above
 - **Interface Overview**: See [The Interface](#the-interface) above
 - **Need Help?**: Check the [Troubleshooting Guide](troubleshooting.md)
-- **License Issues?**: See the [License Guide](license.md)

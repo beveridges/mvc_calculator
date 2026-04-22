@@ -21,7 +21,8 @@ def send_email(subject,
                sender=SENDER_EMAIL,
                password=APP_PASSWORD,
                smtp_server=SMTP_SERVER,
-               port=SMTP_PORT):
+               port=SMTP_PORT,
+               timeout=90):
     """
     Send an email with optional attachments.
     """
@@ -50,7 +51,9 @@ def send_email(subject,
 
     try:
         context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+        with smtplib.SMTP_SSL(
+            smtp_server, port, context=context, timeout=timeout
+        ) as server:
             server.login(sender, password)
             server.sendmail(sender, recipient, msg.as_string())
         logging.debug(f"Email sent to {recipient} ({subject})")

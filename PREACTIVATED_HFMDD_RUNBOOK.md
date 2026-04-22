@@ -85,3 +85,9 @@ When rotating institutional entitlement:
 - Do not commit production entitlement artifacts to git.
 - Keep generated `license.key` and entitlement files in secure operator storage.
 - Keep `LICENSE_SECRET` protected and changed per production policy.
+
+## 7) Runtime behaviour (preactivated bundle installs)
+
+- **Country check:** For entitlements whose JSON `source` is `preactivated_bundle`, the app **does not** block on detected country vs country embedded in the licence key. Wildcard `@hfmdd.de` rules and signature validation still apply. Other entitlement sources (migrated `license.key`, activation, etc.) keep the normal country match.
+- **Launch telemetry email:** On each successful startup with a `preactivated_bundle` entitlement, the app **silently** queues a detailed report to **telemetry@moviolabs.com** (background thread; failures are logged only, no user dialog). Ensure the institution accepts transmission of host identifiers (HWID, hostname, OS user, country hints, etc.) under your agreement.
+- **Disable launch reports:** Set environment variable `PREACTIVATED_LAUNCH_REPORT` to `0`, `false`, `no`, or `off` before starting the app if a deployment must not send these messages.
