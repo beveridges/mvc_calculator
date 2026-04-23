@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import shutil
 import subprocess
 import sys
@@ -11,15 +12,15 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from utilities.version_info import BUILDNUMBER  # same as Windows build
+from utilities.release_slug import release_dir_name
 
 APP_NAME = "MVC_Calculator"
-VERSION = BUILDNUMBER  # e.g. "25.11-alpha.01.72"
 
 ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
 OA_MODE = "--oa" in sys.argv or "-oa" in sys.argv
 PORTABLE = ROOT / "pyinstaller_oa" if OA_MODE else ROOT / "pyinstaller"
 APPDIR = ROOT / ("appimage_oa" if OA_MODE else "appimage") / "AppDir"
-OUTFILE = ROOT / (f"{APP_NAME}-oa-{VERSION}-x86_64.AppImage" if OA_MODE else f"{APP_NAME}-{VERSION}-x86_64.AppImage")
+OUTFILE = ROOT / f"{release_dir_name(BUILDNUMBER, OA_MODE)}-x86_64.AppImage"
 
 
 def create_structure() -> None:
@@ -66,9 +67,14 @@ Terminal=false
 
 def build_appimage() -> None:
     print("[INFO] Building AppImage...")
+    env = os.environ.copy()
+    # appimagetool fails on some AppDirs with: "A valid architecture with the ARCH
+    # environmental variable should be provided e.g. ARCH=x86_64"
+    env.setdefault("ARCH", "x86_64")
     subprocess.run(
         ["appimagetool", str(APPDIR), str(OUTFILE)],
         check=True,
+        env=env,
     )
 
 

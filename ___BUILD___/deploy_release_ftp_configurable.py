@@ -51,6 +51,16 @@ DEFAULT_PASS = "xTQSz1g,n2we"
 
 # Repo root (parent of ___BUILD___/) — for resources/icons when script lives under ___BUILD___
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from utilities.release_slug import (
+    legacy_release_dir_name,
+    licensed_version_dir_is_candidate,
+    release_dir_name,
+    resolve_licensed_version_dir,
+    to_internal_version_tail,
+)
 
 def find_logo_path(build_base: Path, script_dir: Path):
     """Find logo file in output directory or copy from resources."""
@@ -78,18 +88,24 @@ def find_logo_path(build_base: Path, script_dir: Path):
     return "icon.png"
 
 PATTERNS = [
+    "mvcalc-*-al.*.msi",
+    "mvcalc-*-al.*-portable.zip",
+    "mvcalc_*_amd64.deb",
+    "mvcalc-*-al.*-x86_64.AppImage",
+    "mvc-calculator_*_amd64.deb",
     "MVC_Calculator-*-alpha.*.msi",
     "MVC_Calculator-*-alpha.*-portable.zip",
-    "mvc-calculator_*_amd64.deb",
     "MVC_Calculator-*-alpha.*-x86_64.AppImage",
 ]
 
-VERSION_RE = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
+VERSION_RE = re.compile(r"(\d{2}\.\d{2}-(?:alpha|al)\.\d{2}\.\d{2})")
 
 
 def parse_version(name: str):
     m = VERSION_RE.search(name)
-    return m.group(1) if m else None
+    if not m:
+        return None
+    return to_internal_version_tail(m.group(1))
 
 
 def load_notes(version: str, build_base: Path):
@@ -101,15 +117,17 @@ def load_notes(version: str, build_base: Path):
         "tags": [],
     }
 
-    # Look for release notes in versioned directory's buildfiles subdirectory
-    version_dir = build_base / f"MVC_Calculator-{version}"
-    notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{version}.txt"
-    
-    # Fallback to base directory for backwards compatibility
-    if not notes_file.exists():
-        notes_file = build_base / f"RELEASE_NOTES-{version}.txt"
-    
-    if not notes_file.exists():
+    notes_file = None
+    for dir_prefix in (release_dir_name(version, False), legacy_release_dir_name(version, False)):
+        p = build_base / dir_prefix / "buildfiles" / f"RELEASE_NOTES-{version}.txt"
+        if p.exists():
+            notes_file = p
+            break
+    if notes_file is None:
+        p = build_base / f"RELEASE_NOTES-{version}.txt"
+        if p.exists():
+            notes_file = p
+    if notes_file is None:
         return notes
 
     content = notes_file.read_text(encoding="utf-8")
@@ -236,7 +254,7 @@ def scan_builds(build_base: Path, patterns):
     
     if build_base.exists():
         for version_dir in build_base.iterdir():
-            if version_dir.is_dir() and version_dir.name.startswith("MVC_Calculator-"):
+            if version_dir.is_dir() and licensed_version_dir_is_candidate(version_dir.name):
                 for pat in patterns:
                     all_files.extend(version_dir.glob(pat))
         
@@ -592,7 +610,7 @@ Examples:
             print(f"  2. {logo_path} (⚠️  not found)")
         
         print(f"\n📁 Build files in version directory:")
-        version_dir = args.build_base / f"MVC_Calculator-{latest}"
+        version_dir = resolve_licensed_version_dir(args.build_base, latest)
         if version_dir.exists():
             for f in sorted(version_dir.iterdir()):
                 if f.is_file() and f.suffix in [".msi", ".zip", ".deb", ".AppImage"]:

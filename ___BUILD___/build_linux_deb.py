@@ -11,16 +11,18 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from utilities.version_info import BUILDNUMBER  # same as Windows build
+from utilities.release_slug import release_dir_name
 
 OA_MODE = "--oa" in sys.argv or "-oa" in sys.argv
 APP_ID = "mvc-calculator-oa" if OA_MODE else "mvc-calculator"
 DISPLAY_NAME = "MVC Calculator"    # Human-readable
-VERSION = BUILDNUMBER              # e.g. "25.11-alpha.01.72"
+VERSION = BUILDNUMBER              # e.g. "25.11-alpha.01.72" (dpkg control Version)
 
 ROOT = Path.home() / ".linux_builds" / "MVC_CALCULATOR" / "linux_builds"
 PORTABLE = ROOT / "pyinstaller_oa" if OA_MODE else ROOT / "pyinstaller"
-DEBROOT = ROOT / "deb" / f"{APP_ID}_{VERSION}_amd64"
-OUTFILE = ROOT / f"{APP_ID}_{VERSION}_amd64.deb"
+PKG_FILE_BASE = release_dir_name(BUILDNUMBER, OA_MODE)
+DEBROOT = ROOT / "deb" / f"{PKG_FILE_BASE}_amd64"
+OUTFILE = ROOT / f"{PKG_FILE_BASE}_amd64.deb"
 
 
 def create_structure() -> None:

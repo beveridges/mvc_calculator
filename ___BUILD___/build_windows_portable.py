@@ -8,7 +8,7 @@ MVC_Calculator — Safe, Non-Spawning PyInstaller Build Template
 - Versioning: YY.MM-<channel>.<seq>
 - Writes utilities/version_info.py
 - Builds to ~/Documents/.builds/mvc_calculator/pyinstaller/{work,dist,builds}
-- Archives latest build to .../builds/MVC_Calculator-<BUILDNUMBER> and (optionally) zips
+- Archives latest build to .../builds/mvcalc[-oa]-<public-tail> and (optionally) zips
 
 ------------------------------------------------------------
 USAGE:
@@ -30,6 +30,8 @@ from typing import Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from utilities.release_slug import release_dir_name
 
 
 # -*- coding: utf-8 -*-
@@ -637,7 +639,7 @@ def main():
             print(f"[WARN] _internal directory not found in {build_dir} (might be onefile build)")
 
     # ---------- Archive ----------
-    tag = f"{args.name}-oa-{BUILDNUMBER}" if args.oa else f"{args.name}-{BUILDNUMBER}"
+    tag = release_dir_name(BUILDNUMBER, args.oa)
     archived_at = archive_latest(distpath, builds_dir, tag, app_name=args.name)
     if not archived_at:
         print("[error] archive step failed.")

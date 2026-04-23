@@ -16,6 +16,11 @@ _BUILD = Path(__file__).resolve().parent
 REPO_ROOT = _BUILD.parent
 SCRIPT_ROOT = _BUILD  # sibling scripts under ___BUILD___
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from utilities.release_slug import public_version_tail, release_dir_name
+
 PORTABLE_SCRIPT = SCRIPT_ROOT / "build_linux_portable.py"
 APPIMAGE_SCRIPT = SCRIPT_ROOT / "build_linux_appimage.py"
 DEB_SCRIPT      = SCRIPT_ROOT / "build_linux_deb.py"
@@ -104,8 +109,8 @@ def cleanup_old_builds(current_buildnumber: str):
     print(f"\n[INFO] Cleaning up old builds in {LINUX_ROOT}")
     print(f"[INFO] Keeping: current ({current_buildnumber}) and previous build only\n")
     
-    # Version pattern: e.g., "25.11-alpha.01.80"
-    VERSION_PATTERN = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
+    # Version pattern in artifact filenames (internal alpha or public al)
+    VERSION_PATTERN = re.compile(r"(\d{2}\.\d{2}-(?:alpha|al)\.\d{2}\.\d{2})")
     
     # Find all versions in the directory
     versions_found = set()
@@ -122,7 +127,8 @@ def cleanup_old_builds(current_buildnumber: str):
         # Extract version from filename
         match = VERSION_PATTERN.search(item.name)
         if match:
-            version = match.group(1)
+            raw = match.group(1)
+            version = raw.replace("-al.", "-alpha.", 1) if "-al." in raw else raw
             versions_found.add(version)
             if version not in files_by_version:
                 files_by_version[version] = []
@@ -165,12 +171,20 @@ def cleanup_old_builds(current_buildnumber: str):
 # --------------------------------------------------------------
 # COPY RESULTING FILES TO WINDOWS DIRECTORY
 # --------------------------------------------------------------
+def _linux_artifact_matches_version(item_name: str, buildnumber: str, oa_mode: bool) -> bool:
+    tail = public_version_tail(buildnumber)
+    if oa_mode:
+        if "mvcalc-oa" not in item_name and "mvc-calculator-oa" not in item_name.lower():
+            return False
+    else:
+        if "mvcalc-oa" in item_name or "mvc-calculator-oa" in item_name.lower():
+            return False
+    return tail in item_name or buildnumber in item_name
+
+
 def copy_to_windows(buildnumber: str, oa_mode: bool = False):
     """Copy Linux build artifacts to Windows versioned directory"""
-    if oa_mode:
-        WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-oa-{buildnumber}"
-    else:
-        WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{buildnumber}"
+    WIN_VERSION_DIR = WIN_BUILD_BASE / release_dir_name(buildnumber, oa_mode)
     WIN_BUILDFILES_DIR = WIN_VERSION_DIR / "buildfiles"
     
     WIN_VERSION_DIR.mkdir(parents=True, exist_ok=True)
@@ -187,9 +201,8 @@ def copy_to_windows(buildnumber: str, oa_mode: bool = False):
         if item.is_file():
             suffix_lower = item.suffix.lower()
             if suffix_lower in [".deb", ".appimage"]:
-                has_oa = "-oa" in item.name or "mvc-calculator-oa" in item.name
-                version_match = buildnumber in item.name
-                if version_match and (has_oa if oa_mode else not has_oa):
+                version_match = _linux_artifact_matches_version(item.name, buildnumber, oa_mode)
+                if version_match:
                     dest = WIN_VERSION_DIR / item.name
                     shutil.copy(item, dest)
                     print(f"  ✓ Copied {item.name} to version directory")
@@ -354,7 +367,7 @@ def main():
     cleanup_old_builds(BUILDNUMBER)
     
     # Set up version directory structure
-    WIN_VERSION_DIR = WIN_BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"
+    WIN_VERSION_DIR = WIN_BUILD_BASE / release_dir_name(BUILDNUMBER, False)
     WIN_BUILDFILES_DIR = WIN_VERSION_DIR / "buildfiles"
     WIN_BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
     

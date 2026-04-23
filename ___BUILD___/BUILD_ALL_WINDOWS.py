@@ -22,6 +22,14 @@ import re
 _BUILD = Path(__file__).resolve().parent
 REPO_ROOT = _BUILD.parent
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from utilities.release_slug import (
+    is_versioned_release_directory,
+    release_dir_name,
+)
+
 # Correct builder scripts (live under ___BUILD___; repo root is REPO_ROOT)
 PORTABLE_SCRIPT = _BUILD / "build_windows_portable.py"
 MSI_SCRIPT      = _BUILD / "build_windows_msi.py"
@@ -55,19 +63,16 @@ def cleanup_old_version_directories(build_base: Path, keep: int = 3):
     print(f"\n[CLEANUP] Cleaning up old version directories in {build_base}")
     print(f"[CLEANUP] Keeping only the last {keep} builds\n")
     
-    # Find all version directories (MVC_Calculator-{version} and MVC_Calculator-oa-{version})
-    version_pattern = re.compile(r"^MVC_Calculator-(\d{2}\.\d{2}-[^.]+\.\d{2}\.\d{2})$")
-    oa_pattern = re.compile(r"^MVC_Calculator-oa-(\d{2}\.\d{2}-[^.]+\.\d{2}\.\d{2})$")
+    # Licensed + OA version dirs: mvcalc-* / mvcalc-oa-* and legacy MVC_Calculator-* names
     version_dirs = []
-    
+
     for item in build_base.iterdir():
         if not item.is_dir():
             continue
         # Skip special directories
         if item.name in ["pyinstaller", "temp_logs"]:
             continue
-        # Check if it matches version directory pattern (licensed or OA)
-        if version_pattern.match(item.name) or oa_pattern.match(item.name):
+        if is_versioned_release_directory(item.name):
             version_dirs.append(item)
     
     if len(version_dirs) <= keep:
@@ -229,7 +234,7 @@ run_step("PyInstaller Portable Build", portable_cmd, TEMP_LOG_FILE)
 # Read the build number AFTER portable build (it was incremented)
 # ------------------------------------------------------------
 BUILDNUMBER = read_build_number()
-VERSION_DIR = BUILD_BASE / f"MVC_Calculator-{BUILDNUMBER}"
+VERSION_DIR = BUILD_BASE / release_dir_name(BUILDNUMBER, False)
 BUILDFILES_DIR = VERSION_DIR / "buildfiles"
 VERSION_DIR.mkdir(parents=True, exist_ok=True)
 BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)

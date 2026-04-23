@@ -20,6 +20,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from utilities.path_utils import base_path
+from utilities.release_slug import release_dir_name
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
@@ -53,8 +54,8 @@ for line in VERSION_INFO.read_text(encoding="utf-8").splitlines():
         BUILDNUMBER = line.split("=")[1].strip().strip('"')
         break
 
-# Create versioned directory structure
-VERSION_DIR = BUILD_BASE / (f"MVC_Calculator-oa-{BUILDNUMBER}" if OA_MODE else f"MVC_Calculator-{BUILDNUMBER}")
+# Create versioned directory structure (short public slug; internal BUILDNUMBER unchanged)
+VERSION_DIR = BUILD_BASE / release_dir_name(BUILDNUMBER, OA_MODE)
 BUILDFILES_DIR = VERSION_DIR / "buildfiles"
 VERSION_DIR.mkdir(parents=True, exist_ok=True)
 BUILDFILES_DIR.mkdir(parents=True, exist_ok=True)
@@ -72,7 +73,7 @@ def wix_version_from_build(build: str) -> str:
 
 WIX_VERSION = wix_version_from_build(BUILDNUMBER)
 
-MSI_BASENAME = f"{APP_BASENAME}-oa-{BUILDNUMBER}" if OA_MODE else f"{APP_BASENAME}-{BUILDNUMBER}"
+MSI_BASENAME = release_dir_name(BUILDNUMBER, OA_MODE)
 print(f"[OK] Using build number: {BUILDNUMBER}" + (" (OA mode)" if OA_MODE else ""))
 
 # ------------------------------------------------------------------------------
@@ -126,7 +127,7 @@ def find_latest_build_dir(builds_root: Path) -> Path:
     return latest
 
 if OA_MODE:
-    OA_BUILD_DIR = ARCHIVE_BUILDS_DIR / f"MVC_Calculator-oa-{BUILDNUMBER}"
+    OA_BUILD_DIR = ARCHIVE_BUILDS_DIR / release_dir_name(BUILDNUMBER, True)
     if not OA_BUILD_DIR.exists():
         print(f"[ERROR] OA build not found: {OA_BUILD_DIR}")
         print(f"[INFO] Run build_windows_portable.py --onedir --oa first")

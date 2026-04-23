@@ -17,6 +17,8 @@ Usage:
 import re
 import argparse
 import ftplib
+import sys
+import time
 import zipfile
 from pathlib import Path
 from datetime import datetime
@@ -33,6 +35,20 @@ BUILD_BASE = Path.home() / "Documents/.builds/mvc_calculator"
 NOTES_DIR = BUILD_BASE
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from utilities.release_slug import (
+    internal_version_from_licensed_dir,
+    internal_version_from_oa_dir,
+    legacy_release_dir_name,
+    licensed_version_dir_is_candidate,
+    oa_version_dir_is_candidate,
+    release_dir_name,
+    resolve_licensed_version_dir,
+    to_internal_version_tail,
+)
+
 TEMPLATE  = Path(__file__).parent / "TEMPLATE_RELEASE.html"
 OUTPUT    = BUILD_BASE / "index.html"
 
@@ -59,25 +75,48 @@ def find_logo_path():
     return "icon.png"
 
 PATTERNS = [
+    "mvcalc-*-al.*.msi",
+    "mvcalc-*-al.*-portable.zip",
+    "mvcalc_*_amd64.deb",
+    "mvcalc-*-al.*-x86_64.AppImage",
+    "mvc-calculator_*_amd64.deb",
     "MVC_Calculator-*-alpha.*.msi",
     "MVC_Calculator-*-alpha.*-portable.zip",
-    "mvc-calculator_*_amd64.deb",
     "MVC_Calculator-*-alpha.*-x86_64.AppImage",
     "MuscleMonitor-maxmsp-patch-*-alpha.*.zip",
+    "MuscleMonitor-maxmsp-patch-*-al.*.zip",
 ]
 OA_PATTERNS = [
+    "mvcalc-oa-*-al.*.msi",
+    "mvcalc-oa-*-al.*-portable.zip",
+    "mvcalc-oa_*_amd64.deb",
+    "mvcalc-oa-*-al.*-x86_64.AppImage",
+    "mvc-calculator-oa_*_amd64.deb",
     "MVC_Calculator-oa-*-alpha.*.msi",
     "MVC_Calculator-oa-*-alpha.*-portable.zip",
-    "mvc-calculator-oa_*_amd64.deb",
     "MVC_Calculator-oa-*-alpha.*-x86_64.AppImage",
 ]
 
-VERSION_RE = re.compile(r"(\d{2}\.\d{2}-alpha\.\d{2}\.\d{2})")
+VERSION_RE = re.compile(r"(\d{2}\.\d{2}-(?:alpha|al)\.\d{2}\.\d{2})")
 
 
 def parse_version(name: str):
     m = VERSION_RE.search(name)
-    return m.group(1) if m else None
+    if not m:
+        return None
+    return to_internal_version_tail(m.group(1))
+
+
+def _latest_licensed_internal_version(build_base: Path) -> str | None:
+    dirs = [
+        d
+        for d in build_base.iterdir()
+        if d.is_dir() and licensed_version_dir_is_candidate(d.name)
+    ]
+    if not dirs:
+        return None
+    dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return internal_version_from_licensed_dir(dirs[0].name)
 
 
 def load_notes(version: str, oa: bool = False):
@@ -90,22 +129,27 @@ def load_notes(version: str, oa: bool = False):
     }
 
     # Look for release notes (same format: Date:, Description:, What's New, Bug Fixes, Tags:)
-    # 1) versioned dir buildfiles: MVC_Calculator-{version}/buildfiles/RELEASE_NOTES-{version}.txt
-    # 2) build base (OA only): RELEASE_NOTES-oa-{version}.txt — check before generic so OA-specific wins
-    # 3) build base: RELEASE_NOTES-{version}.txt
-    # 4) build base: text file named like the directory, e.g. MVC_Calculator-26.04-alpha.01.03.txt
-    dir_prefix = f"MVC_Calculator-oa-{version}" if oa else f"MVC_Calculator-{version}"
-    version_dir = BUILD_BASE / dir_prefix
-    notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{version}.txt"
+    # 1) versioned dir buildfiles: mvcalc[-oa]-…/buildfiles/RELEASE_NOTES-{internal_version}.txt
+    # 2) legacy MVC_Calculator-* dirs
+    # 3) build base (OA only): RELEASE_NOTES-oa-{version}.txt
+    # 4) build base: RELEASE_NOTES-{version}.txt
+    # 5) build base: text file named like the directory
+    notes_candidates = []
+    for dir_prefix in (release_dir_name(version, oa), legacy_release_dir_name(version, oa)):
+        notes_candidates.append(BUILD_BASE / dir_prefix / "buildfiles" / f"RELEASE_NOTES-{version}.txt")
+    if oa:
+        notes_candidates.append(BUILD_BASE / f"RELEASE_NOTES-oa-{version}.txt")
+    notes_candidates.append(BUILD_BASE / f"RELEASE_NOTES-{version}.txt")
+    for dir_prefix in (release_dir_name(version, oa), legacy_release_dir_name(version, oa)):
+        notes_candidates.append(BUILD_BASE / f"{dir_prefix}.txt")
 
-    if not notes_file.exists() and oa:
-        notes_file = BUILD_BASE / f"RELEASE_NOTES-oa-{version}.txt"
-    if not notes_file.exists():
-        notes_file = BUILD_BASE / f"RELEASE_NOTES-{version}.txt"
-    if not notes_file.exists():
-        notes_file = BUILD_BASE / f"{dir_prefix}.txt"
+    notes_file = None
+    for p in notes_candidates:
+        if p.exists():
+            notes_file = p
+            break
 
-    if not notes_file.exists():
+    if notes_file is None:
         return notes
 
     content = notes_file.read_text(encoding="utf-8")
@@ -325,12 +369,10 @@ def scan_builds():
     """Scan versioned directories for build files."""
     all_files = []
     
-    # Scan all versioned directories (MVC_Calculator-XX.XX-alpha.XX.XX), exclude OA dirs
+    # Scan licensed version dirs (mvcalc-* / legacy MVC_Calculator-*), exclude OA dirs
     if BUILD_BASE.exists():
         for version_dir in BUILD_BASE.iterdir():
-            if version_dir.is_dir() and version_dir.name.startswith("MVC_Calculator-"):
-                if version_dir.name.startswith("MVC_Calculator-oa-"):
-                    continue  # OA dirs handled by scan_oa_builds()
+            if version_dir.is_dir() and licensed_version_dir_is_candidate(version_dir.name):
                 for pat in PATTERNS:
                     all_files.extend(version_dir.glob(pat))
         
@@ -358,14 +400,14 @@ def scan_oa_builds():
     """Scan for Development Release builds. Returns (version, files) for latest OA or (None, [])."""
     if not BUILD_BASE.exists():
         return None, []
-    oa_dirs = [d for d in BUILD_BASE.iterdir() if d.is_dir() and d.name.startswith("MVC_Calculator-oa-")]
+    oa_dirs = [d for d in BUILD_BASE.iterdir() if d.is_dir() and oa_version_dir_is_candidate(d.name)]
     if not oa_dirs:
         return None, []
-    # Extract version from dir name: MVC_Calculator-oa-26.04-alpha.01.03
+
     def get_oa_version(d):
-        rest = d.name.replace("MVC_Calculator-oa-", "")
-        m = VERSION_RE.search(rest)
-        return m.group(1) if m else ""
+        iv = internal_version_from_oa_dir(d.name)
+        return iv or ""
+
     valid = [(d, get_oa_version(d)) for d in oa_dirs if get_oa_version(d)]
     if not valid:
         return None, []
@@ -451,26 +493,66 @@ def build_table(files):
     )
 
 
-def upload_file(ftp: ftplib.FTP, path: Path):
-    """Upload file to FTP with progress bar (if tqdm is available)."""
+def connect_ftp_session() -> ftplib.FTP:
+    """Log in to DEFAULT_HOST and cwd to TARGET_DIR (same session shape as upload_to_ftp)."""
+    ftp = ftplib.FTP(DEFAULT_HOST)
+    ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
+    ensure_dir(ftp, TARGET_DIR)
+    ftp.cwd(TARGET_DIR)
+    return ftp
+
+
+def upload_file(ftp_holder: list, path: Path):
+    """Upload file to FTP with progress bar (if tqdm is available).
+
+    ``ftp_holder`` is a one-element list so the connection can be replaced on transient
+    TCP failures during large uploads (common with big binaries over FTP).
+    """
     total = path.stat().st_size
-    
-    if HAS_TQDM:
-        bar = tqdm(total=total, unit="B", unit_scale=True, desc=f"Uploading {path.name}")
-        
-        def callback(chunk):
-            bar.update(len(chunk))
-        
-        with path.open("rb") as f:
-            ftp.storbinary(f"STOR {path.name}", f, 8192, callback)
-        
-        bar.close()
-    else:
-        # Fallback: upload without progress bar
-        print(f"  Uploading {path.name} ({total / (1024*1024):.1f} MB)...")
-        with path.open("rb") as f:
-            ftp.storbinary(f"STOR {path.name}", f, 8192)
-        print(f"  ✓ Uploaded: {path.name}")
+    transient = (BrokenPipeError, ConnectionResetError, OSError)
+
+    max_attempts = 12
+    for attempt in range(1, max_attempts + 1):
+        ftp = ftp_holder[0]
+        try:
+            if HAS_TQDM:
+                bar = tqdm(total=total, unit="B", unit_scale=True, desc=f"Uploading {path.name}")
+
+                def callback(chunk):
+                    bar.update(len(chunk))
+
+                try:
+                    with path.open("rb") as f:
+                        ftp.storbinary(f"STOR {path.name}", f, 8192, callback)
+                finally:
+                    bar.close()
+            else:
+                print(f"  Uploading {path.name} ({total / (1024*1024):.1f} MB)...")
+                with path.open("rb") as f:
+                    ftp.storbinary(f"STOR {path.name}", f, 8192)
+                print(f"  ✓ Uploaded: {path.name}")
+            return
+        except transient as e:
+            if attempt >= max_attempts:
+                raise
+            print(
+                f"  ⚠️  Upload interrupted ({type(e).__name__}: {e!s}), "
+                f"reconnecting ({attempt}/{max_attempts})..."
+            )
+            try:
+                ftp.quit()
+            except Exception:
+                try:
+                    ftp.close()
+                except Exception:
+                    pass
+            time.sleep(min(60.0, 5.0 * attempt))
+            fresh = connect_ftp_session()
+            try:
+                fresh.delete(path.name)
+            except Exception:
+                pass
+            ftp_holder[0] = fresh
 
 
 def ensure_dir(ftp: ftplib.FTP, remote: str):
@@ -578,10 +660,11 @@ def create_maxmsp_zip(output_path: Path, found_files: dict[str, Path]) -> bool:
         return False
 
 
-def upload_file_if_needed(ftp: ftplib.FTP, path: Path, existing_files: dict[str, int], force: bool = False, force_files: set[str] | None = None):
+def upload_file_if_needed(ftp_holder: list, path: Path, existing_files: dict[str, int], force: bool = False, force_files: set[str] | None = None):
     """Upload file only if it doesn't exist or has different size (unless force=True or path.name in force_files)."""
+    ftp = ftp_holder[0]
     if should_upload_file(ftp, path, existing_files, force=force, force_files=force_files):
-        upload_file(ftp, path)
+        upload_file(ftp_holder, path)
 
 
 def find_maxmsp_zip(latest_version: str | None = None) -> Path | None:
@@ -591,21 +674,25 @@ def find_maxmsp_zip(latest_version: str | None = None) -> Path | None:
     """
     maxmsp_zip = None
     if latest_version:
-        version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
+        version_dir = resolve_licensed_version_dir(BUILD_BASE, latest_version)
         maxmsp_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{latest_version}.zip"
-    
+
     # If not found in specific version, scan for latest version directory
     if not maxmsp_zip or not maxmsp_zip.exists():
-        # Find all version directories and get the latest one
-        version_dirs = sorted(BUILD_BASE.glob("MVC_Calculator-*"), reverse=True)
+        version_dirs = [
+            d
+            for d in BUILD_BASE.iterdir()
+            if d.is_dir() and licensed_version_dir_is_candidate(d.name)
+        ]
+        version_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         for version_dir in version_dirs:
-            if version_dir.is_dir():
-                # Extract version from directory name
-                dir_version = version_dir.name.replace("MVC_Calculator-", "")
-                potential_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{dir_version}.zip"
-                if potential_zip.exists():
-                    maxmsp_zip = potential_zip
-                    break
+            dir_version = internal_version_from_licensed_dir(version_dir.name)
+            if not dir_version:
+                continue
+            potential_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{dir_version}.zip"
+            if potential_zip.exists():
+                maxmsp_zip = potential_zip
+                break
     
     # DO NOT fallback to old naming convention - only return versioned files
     return maxmsp_zip if (maxmsp_zip and maxmsp_zip.exists()) else None
@@ -613,18 +700,15 @@ def find_maxmsp_zip(latest_version: str | None = None) -> Path | None:
 
 def upload_maxmsp_only(force: bool = False, force_files: set[str] | None = None):
     """Upload only the MaxMSP patch zip file."""
+    ftp_holder: list = []
     try:
         print("\n🔌 Connecting to FTP...")
-        ftp = ftplib.FTP(DEFAULT_HOST)
-        ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
-        
-        ensure_dir(ftp, TARGET_DIR)
-        ftp.cwd(TARGET_DIR)
+        ftp_holder.append(connect_ftp_session())
         print(f"✓ Connected and changed to {TARGET_DIR}")
         
         # Get list of existing files on server
         print("\n📋 Checking existing files on server...")
-        existing_files = get_existing_files(ftp)
+        existing_files = get_existing_files(ftp_holder[0])
         if existing_files:
             print(f"  Found {len(existing_files)} existing file(s)")
         else:
@@ -634,7 +718,7 @@ def upload_maxmsp_only(force: bool = False, force_files: set[str] | None = None)
         maxmsp_zip = find_maxmsp_zip()
         if maxmsp_zip:
             print(f"\n📤 Uploading MaxMSP patch zip: {maxmsp_zip.name}")
-            upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force, force_files=force_files)
+            upload_file_if_needed(ftp_holder, maxmsp_zip, existing_files, force=force, force_files=force_files)
             print("\n✅ MaxMSP patch upload complete!")
         else:
             print("\n❌ MaxMSP patch zip not found!")
@@ -642,7 +726,6 @@ def upload_maxmsp_only(force: bool = False, force_files: set[str] | None = None)
             print("  Expected filename pattern: MuscleMonitor-maxmsp-patch-{version}.zip")
             return False
         
-        ftp.quit()
         return True
         
     except Exception as e:
@@ -650,15 +733,21 @@ def upload_maxmsp_only(force: bool = False, force_files: set[str] | None = None)
         import traceback
         traceback.print_exc()
         return False
+    finally:
+        if ftp_holder and ftp_holder[0]:
+            try:
+                ftp_holder[0].quit()
+            except Exception:
+                pass
 
 
-def upload_auxiliary_files(ftp: ftplib.FTP, existing_files: dict[str, int], include_test: bool = False, latest_version: str | None = None, force: bool = False, force_files: set[str] | None = None):
+def upload_auxiliary_files(ftp_holder: list, existing_files: dict[str, int], include_test: bool = False, latest_version: str | None = None, force: bool = False, force_files: set[str] | None = None):
     """Upload auxiliary/non-release files (PHP scripts, etc.)."""
     # Upload PHP tracking script
     php_tracker = REPO_ROOT / "track_download.php"
     if php_tracker.exists():
         print(f"\n📤 Uploading download tracker: track_download.php")
-        upload_file_if_needed(ftp, php_tracker, existing_files, force=force, force_files=force_files)
+        upload_file_if_needed(ftp_holder, php_tracker, existing_files, force=force, force_files=force_files)
     else:
         print(f"⚠️  Warning: track_download.php not found")
     
@@ -667,13 +756,13 @@ def upload_auxiliary_files(ftp: ftplib.FTP, existing_files: dict[str, int], incl
         test_tracker = REPO_ROOT / "test_track_download.php"
         if test_tracker.exists():
             print(f"\n📤 Uploading test script: test_track_download.php")
-            upload_file_if_needed(ftp, test_tracker, existing_files, force=force, force_files=force_files)
+            upload_file_if_needed(ftp_holder, test_tracker, existing_files, force=force, force_files=force_files)
     
     # Upload MaxMSP patch zip if it exists
     maxmsp_zip = find_maxmsp_zip(latest_version)
     if maxmsp_zip:
         print(f"\n📤 Uploading MaxMSP patch zip: {maxmsp_zip.name}")
-        upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force, force_files=force_files)
+        upload_file_if_needed(ftp_holder, maxmsp_zip, existing_files, force=force, force_files=force_files)
 
 
 def upload_to_ftp(
@@ -688,19 +777,15 @@ def upload_to_ftp(
     lts_version: str | None = None,
 ):
     """Upload all files to FTP server."""
-    ftp = None
+    ftp_holder: list = []
     try:
         print("\n🔌 Connecting to FTP...")
-        ftp = ftplib.FTP(DEFAULT_HOST)
-        ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
-        
-        ensure_dir(ftp, TARGET_DIR)
-        ftp.cwd(TARGET_DIR)
+        ftp_holder.append(connect_ftp_session())
         print(f"✓ Connected and changed to {TARGET_DIR}")
         
         # Get list of existing files on server
         print("\n📋 Checking existing files on server...")
-        existing_files = get_existing_files(ftp)
+        existing_files = get_existing_files(ftp_holder[0])
         if existing_files:
             print(f"  Found {len(existing_files)} existing file(s)")
         else:
@@ -710,7 +795,7 @@ def upload_to_ftp(
         logo_file = BUILD_BASE / logo_path
         if logo_file.exists():
             print(f"\n📤 Logo: {logo_path}")
-            upload_file_if_needed(ftp, logo_file, existing_files, force=force, force_files=force_files)
+            upload_file_if_needed(ftp_holder, logo_file, existing_files, force=force, force_files=force_files)
         else:
             print(f"⚠️  Warning: Logo file not found: {logo_path}")
         
@@ -724,7 +809,7 @@ def upload_to_ftp(
                 if "maxmsp" in f.name.lower() and f.name.endswith(".zip"):
                     maxmsp_in_versions = True
                     print(f"  ✓ Found MaxMSP zip in scan: {f.name}")
-                upload_file_if_needed(ftp, f, existing_files, force=force, force_files=force_files)
+                upload_file_if_needed(ftp_holder, f, existing_files, force=force, force_files=force_files)
             
             # Also upload MaxMSP zip if it exists and wasn't already uploaded
             if not maxmsp_in_versions:
@@ -732,10 +817,10 @@ def upload_to_ftp(
                 maxmsp_zip = find_maxmsp_zip(latest_version)
                 if maxmsp_zip:
                     print(f"📤 MaxMSP patch zip: {maxmsp_zip.name}")
-                    upload_file_if_needed(ftp, maxmsp_zip, existing_files, force=force, force_files=force_files)
+                    upload_file_if_needed(ftp_holder, maxmsp_zip, existing_files, force=force, force_files=force_files)
                 else:
                     print(f"\n⚠️  MaxMSP patch zip not found for version {latest_version}")
-                    version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
+                    version_dir = resolve_licensed_version_dir(BUILD_BASE, latest_version)
                     expected_path = version_dir / f"MuscleMonitor-maxmsp-patch-{latest_version}.zip"
                     print(f"   Expected location: {expected_path}")
                     if version_dir.exists():
@@ -746,71 +831,71 @@ def upload_to_ftp(
                         print(f"   Version directory does not exist: {version_dir}")
             
             # Upload latest release notes
-            version_dir = BUILD_BASE / f"MVC_Calculator-{latest_version}"
+            version_dir = resolve_licensed_version_dir(BUILD_BASE, latest_version)
             notes_file = version_dir / "buildfiles" / f"RELEASE_NOTES-{latest_version}.txt"
             if not notes_file.exists():
                 notes_file = BUILD_BASE / f"RELEASE_NOTES-{latest_version}.txt"
             
             if notes_file.exists():
                 print(f"\n📤 Release notes: {notes_file.name}")
-                upload_file_if_needed(ftp, notes_file, existing_files, force=force, force_files=force_files)
+                upload_file_if_needed(ftp_holder, notes_file, existing_files, force=force, force_files=force_files)
             
             # Upload previous release files (if exists)
             if prev_version:
                 print(f"\n📤 Previous release ({prev_version}) files:")
                 for f in versions[prev_version]:
-                    upload_file_if_needed(ftp, f, existing_files, force=force, force_files=force_files)
+                    upload_file_if_needed(ftp_holder, f, existing_files, force=force, force_files=force_files)
                 
                 # Upload previous release notes
-                prev_version_dir = BUILD_BASE / f"MVC_Calculator-{prev_version}"
+                prev_version_dir = resolve_licensed_version_dir(BUILD_BASE, prev_version)
                 prev_notes_file = prev_version_dir / "buildfiles" / f"RELEASE_NOTES-{prev_version}.txt"
                 if not prev_notes_file.exists():
                     prev_notes_file = BUILD_BASE / f"RELEASE_NOTES-{prev_version}.txt"
                 
                 if prev_notes_file.exists():
                     print(f"\n📤 Release notes: {prev_notes_file.name}")
-                    upload_file_if_needed(ftp, prev_notes_file, existing_files, force=force, force_files=force_files)
+                    upload_file_if_needed(ftp_holder, prev_notes_file, existing_files, force=force, force_files=force_files)
 
             # Upload LTS release files (third newest; same layout as previous)
             if lts_version and lts_version in versions:
                 print(f"\n📤 LTS release ({lts_version}) files:")
                 for f in versions[lts_version]:
-                    upload_file_if_needed(ftp, f, existing_files, force=force, force_files=force_files)
-                lts_version_dir = BUILD_BASE / f"MVC_Calculator-{lts_version}"
+                    upload_file_if_needed(ftp_holder, f, existing_files, force=force, force_files=force_files)
+                lts_version_dir = resolve_licensed_version_dir(BUILD_BASE, lts_version)
                 lts_notes_file = lts_version_dir / "buildfiles" / f"RELEASE_NOTES-{lts_version}.txt"
                 if not lts_notes_file.exists():
                     lts_notes_file = BUILD_BASE / f"RELEASE_NOTES-{lts_version}.txt"
                 if lts_notes_file.exists():
                     print(f"\n📤 Release notes: {lts_notes_file.name}")
-                    upload_file_if_needed(ftp, lts_notes_file, existing_files, force=force, force_files=force_files)
+                    upload_file_if_needed(ftp_holder, lts_notes_file, existing_files, force=force, force_files=force_files)
         
         # Upload Development Release files (if exists)
         oa_version, oa_files = scan_oa_builds()
         if oa_version and oa_files:
             print(f"\n📤 Development Release ({oa_version}) files:")
             for f in oa_files:
-                upload_file_if_needed(ftp, f, existing_files, force=force, force_files=force_files)
+                upload_file_if_needed(ftp_holder, f, existing_files, force=force, force_files=force_files)
         
         # Upload index.html if it exists (may not exist if no builds found)
         if OUTPUT.exists():
             print(f"\n📤 Uploading index.html")
-            upload_file_if_needed(ftp, OUTPUT, existing_files, force=force, force_files=force_files)
+            upload_file_if_needed(ftp_holder, OUTPUT, existing_files, force=force, force_files=force_files)
         else:
             print(f"⚠️  Info: index.html not found - skipping (normal if no builds exist)")
         
         # Upload auxiliary files if requested
         if upload_auxiliary:
-            upload_auxiliary_files(ftp, existing_files, include_test=include_test, latest_version=latest_version, force=force, force_files=force_files)
+            upload_auxiliary_files(ftp_holder, existing_files, include_test=include_test, latest_version=latest_version, force=force, force_files=force_files)
         
         print("\n✅ FTP upload complete!")
     except Exception as e:
         print(f"❌ Error during FTP upload: {e}")
         raise
     finally:
-        if ftp:
+        if ftp_holder and ftp_holder[0]:
             try:
-                ftp.quit()
-            except:
+                ftp_holder[0].quit()
+            except Exception:
                 pass
 
 
@@ -895,26 +980,25 @@ def main():
                 logo_path = find_logo_path()
                 # Create a minimal FTP connection just for auxiliary files
                 try:
-                    ftp = ftplib.FTP(DEFAULT_HOST)
-                    ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
-                    ensure_dir(ftp, TARGET_DIR)
-                    ftp.cwd(TARGET_DIR)
-                    existing_files = get_existing_files(ftp)
+                    ftp_holder = [connect_ftp_session()]
+                    existing_files = get_existing_files(ftp_holder[0])
                     
                     # Upload index.html if it exists (always upload if available)
                     if OUTPUT.exists():
                         print(f"\n📤 Uploading index.html")
                         force_files = set(args.force_file) if args.force_file else None
-                        upload_file_if_needed(ftp, OUTPUT, existing_files, force=args.force, force_files=force_files)
+                        upload_file_if_needed(ftp_holder, OUTPUT, existing_files, force=args.force, force_files=force_files)
                     elif args.upload_html:
                         print(f"⚠️  index.html not found at {OUTPUT}")
                     
                     # Try to find latest version for MaxMSP zip lookup
-                    version_dirs = sorted(BUILD_BASE.glob("MVC_Calculator-*"), reverse=True)
-                    latest_ver = version_dirs[0].name.replace("MVC_Calculator-", "") if version_dirs else None
+                    latest_ver = _latest_licensed_internal_version(BUILD_BASE)
                     force_files = set(args.force_file) if args.force_file else None
-                    upload_auxiliary_files(ftp, existing_files, include_test=args.include_test, latest_version=latest_ver, force=args.force, force_files=force_files)
-                    ftp.quit()
+                    upload_auxiliary_files(ftp_holder, existing_files, include_test=args.include_test, latest_version=latest_ver, force=args.force, force_files=force_files)
+                    try:
+                        ftp_holder[0].quit()
+                    except Exception:
+                        pass
                     print("✓ Auxiliary files uploaded successfully")
                     
                     # Calculate duration for auxiliary-only upload
@@ -953,14 +1037,14 @@ def main():
             if OUTPUT.exists() and args.upload_html and args.upload:
                 print(f"\n📤 Found existing index.html, uploading...")
                 try:
-                    ftp = ftplib.FTP(DEFAULT_HOST)
-                    ftp.login(user=DEFAULT_USER, passwd=DEFAULT_PASS)
-                    ensure_dir(ftp, TARGET_DIR)
-                    ftp.cwd(TARGET_DIR)
-                    existing_files = get_existing_files(ftp)
+                    ftp_holder = [connect_ftp_session()]
+                    existing_files = get_existing_files(ftp_holder[0])
                     force_files = set(args.force_file) if args.force_file else None
-                    upload_file_if_needed(ftp, OUTPUT, existing_files, force=args.force, force_files=force_files)
-                    ftp.quit()
+                    upload_file_if_needed(ftp_holder, OUTPUT, existing_files, force=args.force, force_files=force_files)
+                    try:
+                        ftp_holder[0].quit()
+                    except Exception:
+                        pass
                     print("✓ index.html uploaded successfully")
                     
                     # Calculate duration for html-only upload
@@ -1055,7 +1139,7 @@ def main():
             
             if found_files:
                 # Create zip in the versioned directory with versioned filename
-                version_dir = BUILD_BASE / f"MVC_Calculator-{latest}"
+                version_dir = resolve_licensed_version_dir(BUILD_BASE, latest)
                 version_dir.mkdir(parents=True, exist_ok=True)
                 maxmsp_zip = version_dir / f"MuscleMonitor-maxmsp-patch-{latest}.zip"
                 if create_maxmsp_zip(maxmsp_zip, found_files):
@@ -1312,7 +1396,7 @@ def main():
             print(f"  3. {maxmsp_zip.name} ({maxmsp_zip.stat().st_size / (1024*1024):.2f} MB)")
         
         print(f"\n📁 Build files in version directory:")
-        version_dir = BUILD_BASE / f"MVC_Calculator-{latest}"
+        version_dir = resolve_licensed_version_dir(BUILD_BASE, latest)
         if version_dir.exists():
             for f in sorted(version_dir.iterdir()):
                 if f.is_file() and f.suffix in [".msi", ".zip", ".deb", ".AppImage"]:
